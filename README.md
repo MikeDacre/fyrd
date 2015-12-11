@@ -1,6 +1,6 @@
 # Python Slurm
 
-Depends on (pyslurm)[https://github.com/gingergeeks/pyslurm] by (Ginger Geeks)[gingergeeks.co.uk].
+Depends on [pyslurm](https://github.com/gingergeeks/pyslurm) by [Ginger Geeks](gingergeeks.co.uk).
 
 Allows the user to submit slurm jobs from a python script and monitor progress.
 
