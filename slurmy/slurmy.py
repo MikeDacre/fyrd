@@ -14,8 +14,14 @@ from pyslurm import job
 def submit_job(script_file, dependency=None):
     """ Submit a job with sbatch and return a job number (int)
         If dependency is provided, then '--dependency=afterok:'
-        is added to the submission string """
-    args = ['--dependency=afterok:' + str(dependency), script_file] if dependency else [script_file]
+        is added to the submission string
+        script_file is the path to a valid sbatch file
+        dependency is either an integer or a list of integers of
+        existing jobs already in the queue """
+    dependency = ':'.join([str(d) for d in dependency]) \
+        if type(dependency) == list else dependency
+    args = ['--dependency=afterok:' + str(dependency), script_file] \
+        if dependency else [script_file]
     return int(sub(['sbatch'] + args).decode().rstrip().split(' ')[-1])
 
 
