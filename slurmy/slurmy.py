@@ -15,8 +15,8 @@ def submit_job(script_file, dependency=None):
     """ Submit a job with sbatch and return a job number (int)
         If dependency is provided, then '--dependency=afterok:'
         is added to the submission string """
-    args = [script_file, '--dependency=afterok:' + str(dependency)] if dependency else [script_file]
-    return sub(args).decode().rstrip().split(' ')[-1]
+    args = ['--dependency=afterok:' + str(dependency), script_file] if dependency else [script_file]
+    return int(sub(['sbatch'] + args).decode().rstrip().split(' ')[-1])
 
 
 def create_job(commands, name, nodes=default_nodes, cores=default_cores,
