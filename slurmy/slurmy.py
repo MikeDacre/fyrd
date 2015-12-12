@@ -1,5 +1,8 @@
 """
-Submit a job to sbatch
+Description:   Submit a job to sbatch
+
+Created:       2015-12-11
+Last modified: 2015-12-11 22:24
 """
 from subprocess import check_output as sub
 from pyslurm import job
@@ -11,7 +14,7 @@ from pyslurm import job
  default_walltime) = (1, 1, '4GB', '12:00:00')
 
 
-def submit_job(script_file, dependency=None):
+def submit_file(script_file, dependency=None):
     """ Submit a job with sbatch and return a job number (int)
         If dependency is provided, then '--dependency=afterok:'
         is added to the submission string

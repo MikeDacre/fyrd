@@ -1,15 +1,19 @@
 """
-Submit job when the total number of jobs in the queue drops below the max
-provided by max= or defined in ~/.slurmy
+Description:   Submit job when the total number of jobs in the queue drops below the max
+               provided by max= or defined in ~/.slurmy
+
+Created:       2015-12-11
+Last modified: 2015-12-11 22:25
 """
-from pyslurm import job
-from .slurmy import submit_job
-from pwd import getpwnam
-from os import environ
 from time import time
 from time import sleep
+from pwd import getpwnam
+from os import environ
 from sys import stderr
-from .get_config import _get_config
+
+# Our imports
+from pyslurm import job
+from .slurmy import submit_file
 from . import _defaults
 
 # We only need the defaults for this section
@@ -48,7 +52,7 @@ def monitor_submit(script_file, dependency=None, max_count=int(_defaults['max_jo
     notify = True
     while True:
         if q.get_job_count() < int(max_count):
-            return submit_job(script_file, dependency)
+            return submit_file(script_file, dependency)
         else:
             if notify:
                 stderr.write('INFO --> Queue length is ' + str(q.job_count) +

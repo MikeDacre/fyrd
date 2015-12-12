@@ -1,5 +1,8 @@
 """
-Get and set global variables
+Description:   Get and set global variables
+
+Created:       2015-12-11
+Last modified: 2015-12-11 22:16
 """
 from os import path
 from os import environ
