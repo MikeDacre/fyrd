@@ -1,5 +1,5 @@
 # Regular functions
-from .submit_job import submit_job
+from .slurmy import *
 
 # Cython
 from .monitor_submit import monitor_submit
