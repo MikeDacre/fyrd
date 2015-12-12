@@ -9,10 +9,11 @@ from os import environ
 from time import time
 from time import sleep
 from sys import stderr
+from .get_config import _get_config
+from . import _defaults
 
-default_max_jobs     = 1000     # Max number of jobs in queue
-default_sleep_len    = 5        # Between submission attempts (in seconds)
-default_queue_update = 20       # Amount of time between getting fresh queue info (seconds)
+# We only need the defaults for this section
+_defaults = _defaults['queue']
 
 
 class queue():
@@ -32,7 +33,7 @@ class queue():
                 self.queue[k] = v
 
     def load(self):
-        if int(time()) - self.full_queue.lastUpdate() > default_queue_update:
+        if int(time()) - self.full_queue.lastUpdate() > int(_defaults['queue_update']):
             self._load()
 
     def get_job_count(self):
@@ -41,7 +42,7 @@ class queue():
         return self.job_count
 
 
-def monitor_submit(script_file, dependency=None, max_count=default_max_jobs):
+def monitor_submit(script_file, dependency=None, max_count=int(_defaults['max_jobs'])):
     """ Check length of queue and submit if possible """
     q = queue()
     notify = True
@@ -52,10 +53,10 @@ def monitor_submit(script_file, dependency=None, max_count=default_max_jobs):
             if notify:
                 stderr.write('INFO --> Queue length is ' + str(q.job_count) +
                              '. Max queue length is ' + str(max_count) +
-                             ' Will attempt to resubmit every ' + str(default_sleep_len) +
+                             ' Will attempt to resubmit every ' + str(_defaults['sleep_len']) +
                              ' seconds\n')
                 notify = False
-            sleep(default_sleep_len)
+            sleep(int(_defaults['sleep_len']))
 
 ##
 # The End #
