@@ -2,7 +2,7 @@
 Description:   Get and set global variables
 
 Created:       2015-12-11
-Last modified: 2015-12-11 22:52
+Last modified: 2015-12-11 23:17
 """
 from os import path
 from os import environ
@@ -14,19 +14,27 @@ config_file = environ['HOME'] + '/.slurmy'
 config      = configparser.ConfigParser()
 defaults    = {}
 
-# Starting defaults
-initial_defaults = {}
-initial_defaults['jobs']['small'] = {'nodes':        1,
-                                     'cores':        1,
-                                     'mem':          '4GB',
-                                     'time':         '00:02:00'}
-initial_defaults['jobs']['large'] = {'nodes':        1,
-                                     'cores':        16,
-                                     'mem':          '64GB',
-                                     'time':         '24:00:00'}
-initial_defaults['queue']         = {'max_jobs':     1000,  # Max number of jobs in queue
-                                     'sleep_len':    5,     # Between submission attempts (in seconds)
-                                     'queue_update': 20}    # Amount of time between getting fresh queue info (seconds)
+
+def get_initial_defaults():
+    """ Return a sane set of starting defaults for config file creation """
+    initial_defaults = {}
+
+    # Different job run options
+    initial_defaults['jobs']['small'] = {'nodes':        1,
+                                         'cores':        1,
+                                         'mem':          '4GB',
+                                         'time':         '00:02:00'}
+    initial_defaults['jobs']['large'] = {'nodes':        1,
+                                         'cores':        16,
+                                         'mem':          '64GB',
+                                         'time':         '24:00:00'}
+
+    # Other options
+    initial_defaults['queue']         = {'max_jobs':     1000,  # Max number of jobs in queue
+                                         'sleep_len':    5,     # Between submission attempts (in seconds)
+                                         'queue_update': 20}    # Amount of time between getting fresh queue info (seconds)
+
+    return initial_defaults
 
 
 def _config_to_dict(config):
@@ -42,7 +50,7 @@ def _create_config():
     """ Create a ~/.slurmy file """
     global defaults, config
     # Use defaults coded into this file
-    defaults = initial_defaults
+    defaults = get_initial_defaults()
     for k, v in defaults.items():
         config[k] = v
     with open(config_file, 'w') as outfile:

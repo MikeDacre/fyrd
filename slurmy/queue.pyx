@@ -3,7 +3,7 @@ Description:   Submit job when the total number of jobs in the queue drops below
                provided by max= or defined in ~/.slurmy
 
 Created:       2015-12-11
-Last modified: 2015-12-11 22:25
+Last modified: 2015-12-11 23:14
 """
 from time import time
 from time import sleep
@@ -46,7 +46,7 @@ class queue():
         return self.job_count
 
 
-def monitor_submit(script_file, dependency=None, max_count=int(_defaults['max_jobs'])):
+def monitor_submit_file(script_file, dependency=None, max_count=int(_defaults['max_jobs'])):
     """ Check length of queue and submit if possible """
     q = queue()
     notify = True
