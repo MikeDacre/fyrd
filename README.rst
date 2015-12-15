@@ -19,14 +19,14 @@ Simple Job Submission
 If you want to just submit a file, that can be done like this::
 
     from slurmy import submit_file
-    submit_file('/path/to/script', dependencies=007:009)
+    submit_file('/path/to/script', dependency=007:009)
 
 This will return the job number and will enter the job into the queue as dependant on jobs 007 and 009. The dependencies can be omitted.
 
 Alternatively, if your queue has a job limit on it, you can define that limit in ~/.slurmy under [queue] and max_jobs. By default this is 1000 jobs at a time. To submit jobs and block if the job limit is hit, run::
 
     from slurm import monitor_submit_file
-    monitor_submit_file('/path/to/script', dependencies=007:009)
+    monitor_submit_file('/path/to/script', dependency=007:009)
 
 All other syntax is the same as for submit_file.
 
