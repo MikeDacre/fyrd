@@ -2,16 +2,21 @@
 Description:   Submit a job to sbatch
 
 Created:       2015-12-11
-Last modified: 2015-12-11 22:24
+Last modified: 2015-12-11 23:03
 """
 from subprocess import check_output as sub
 from pyslurm import job
+from . import _defaults
 
-# Set defaults from config # Maybe use a config file?
-(default_nodes,
- default_cores,
- default_mem,
- default_walltime) = (1, 1, '4GB', '12:00:00')
+# File wide default
+_inifaults = _defaults['jobs']
+
+
+class run():
+    """ A structure to build a job for submission to the queue """
+    def __init__(commands, name, nodes=_inifaults['nodes'], cores=_inifaults['cores'],
+                 mem=_inifaults['mem'], walltime=_inifaults['time'], default_params='small'):
+        pass
 
 
 def submit_file(script_file, dependency=None):
@@ -28,7 +33,7 @@ def submit_file(script_file, dependency=None):
     return int(sub(['sbatch'] + args).decode().rstrip().split(' ')[-1])
 
 
-def create_job(commands, name, nodes=default_nodes, cores=default_cores,
-               mem=default_mem, walltime=default_walltime):
+def create_job(commands, name, nodes=_inifaults['nodes'], cores=_inifaults['cores'],
+               mem=_inifaults['mem'], walltime=_inifaults['time'], default_params='small'):
     """ Write a script file for submission """
     pass

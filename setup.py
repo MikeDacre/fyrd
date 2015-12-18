@@ -20,7 +20,7 @@ for i in listdir(here + '/bin'):
 
 setup(
     name='slurmy',
-    version='0.1',
+    version='0.2',
     description='Submit and monitor slurm jobs with python',
     long_description=long_description,
     url='https://github.com/MikeDacre/python_slurm',
@@ -30,7 +30,7 @@ setup(
 
     # See https://pypi.python.org/pypi?%3Aaction=list_classifiers
     classifiers=[
-        'Development Status :: 2 - Pre-Alpha',
+        'Development Status :: 1 - Planning',
         'Intended Audience :: Science/Research',
         'Environment :: Console',
         'Operating System :: Linux',
