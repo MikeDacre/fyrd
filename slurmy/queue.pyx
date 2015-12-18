@@ -3,7 +3,7 @@ Description:   Submit job when the total number of jobs in the queue drops below
                provided by max= or defined in ~/.slurmy
 
 Created:       2015-12-11
-Last modified: 2015-12-11 22:25
+Last modified: 2015-12-18 13:17
 """
 from time import time
 from time import sleep
@@ -22,12 +22,26 @@ _defaults = _defaults['queue']
 
 class queue():
     """ Functions that need to access the slurm queue """
-    def __init__(self):
-        super(queue, self).__init__()
-        self.uid = getpwnam(environ['USER']).pw_uid
-        self.full_queue = job()
-        self._load()
 
+    def load(self):
+        if int(time()) - self.full_queue.lastUpdate() > int(_defaults['queue_update']):
+            self._load()
+
+    def get_running_jobs(self):
+        """ Create a self.running dictionary from the self.queue dictionary """
+        self.load()
+        self.running = {}
+        for k, v in self.current_job_ids:
+
+
+    def get_job_count(self):
+        """ If job count not updated recently, update it """
+        self.load()
+        return self.job_count
+
+    #####################
+    # Private Functions #
+    #####################
     def _load(self):
         self.current_job_ids = self.full_queue.find('user_id', self.uid)
         self.job_count = len(self.current_job_ids)
@@ -36,14 +50,22 @@ class queue():
             if k in self.current_job_ids:
                 self.queue[k] = v
 
-    def load(self):
-        if int(time()) - self.full_queue.lastUpdate() > int(_defaults['queue_update']):
-            self._load()
+    def __init__(self):
+        super(queue, self).__init__()
+        self.uid = getpwnam(environ['USER']).pw_uid
+        self.full_queue = job()
+        self._load()
 
-    def get_job_count(self):
-        """ If job count not updated recently, update it """
-        self.load()
-        return self.job_count
+    def __getattr__(self, key):
+        try:
+            return self.queue[key]
+        except KeyError:
+            return None
+
+    def __repr__(self):
+        load()
+        for k, v in self.queue:
+            return "{0}:\t{1}".format(k, v)
 
 
 def monitor_submit(script_file, dependency=None, max_count=int(_defaults['max_jobs'])):

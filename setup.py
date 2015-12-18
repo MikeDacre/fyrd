@@ -12,6 +12,12 @@ here = path.abspath(path.dirname(__file__))
 with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
+# Generate a list of python scripts
+scpts = []
+for i in listdir(here + '/bin'):
+    if i.endswith('.py'):
+        scpts.append('bin/' + i)
+
 setup(
     name='slurmy',
     version='0.1',
@@ -39,12 +45,13 @@ setup(
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.3',
         'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
     ],
 
     keywords='slurm cluster job_management',
 
+    install_requires=['pyslurm', 'cython'],
     packages=['slurmy'],
-    install_requires=['pyslurm'],
-
+    scripts=scpts,
     ext_modules=cythonize("slurmy/*.pyx")
 )
