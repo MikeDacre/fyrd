@@ -9,7 +9,7 @@
 #       LICENSE: MIT License, property of Stanford, use as you wish          #
 #       VERSION: 0.1                                                         #
 #       CREATED: 2015-12-18 12:43                                            #
-# Last modified: 2015-12-18 13:08                                            #
+# Last modified: 2015-12-18 15:01                                            #
 #                                                                            #
 #   DESCRIPTION: Uses slurmpy and pyslurm to check the job queue for only    #
 #                one user's jobs. Produces a very simple display, for full   #
@@ -31,11 +31,31 @@ import slurmy
 
 def main(running=False, queued=False, count=False, list=False):
     """ Run everything """
+    # Check that the user isn't a dumbass
+    if running and queued:
+        sys.stderr.write("ERROR --> You can't specify both 'running' and 'queued'\n")
+        sys.exit(1)
+    if count and list:
+        sys.stderr.write("ERROR --> You can't specify both 'count' and 'list'\n")
+
     # Create queue object
     queue = slurmy.queue()
     if running:
+        jobs = queue.running
+    elif queued:
+        jobs = queue.queued
+    else:
+        jobs = queue.queue
 
-
+    # Print requested output
+    if count:
+        sys.stdout.write(str(len(jobs)) + '\n')
+    elif list:
+        sys.stdout.write(' '.join(list(jobs.keys())) + '\n')
+    else:
+        for k, v in jobs.items():
+            #  sys.stdout.write('{0}\t{1}\n'.format(k, v['name']))
+            print(type(v['name']))
 
 if __name__ == '__main__' and '__file__' in globals():
     """Command Line Argument Parsing"""

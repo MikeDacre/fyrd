@@ -7,7 +7,7 @@
 #       LICENSE: MIT License, property of Stanford, use as you wish          #
 #       VERSION: 0.2                                                         #
 #       CREATED: 2015-12-11 22:19                                            #
-# Last modified: 2015-12-11 22:27                                            #
+# Last modified: 2015-12-18 16:24                                            #
 #                                                                            #
 #   DESCRIPTION: Submit jobs easily to SLURM, monitor the queue, control     #
 #                job dependencies.                                           @
@@ -18,13 +18,10 @@
 #                                                                            #
 #============================================================================#
 """
-
-##
-# The End #
 # Load config file
-from ._get_config import _get_config
+from .config_file import get_config
 
-_defaults = _get_config()
+defaults = get_config()
 
 # Regular functions
 from .slurmy import *

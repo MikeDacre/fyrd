@@ -2,20 +2,25 @@
 Description:   Submit a job to sbatch
 
 Created:       2015-12-11
-Last modified: 2015-12-11 23:03
+Last modified: 2015-12-18 16:24
 """
-from subprocess import check_output as sub
+from subprocess import check_output as _sub
+
+# Our imports
 from pyslurm import job
-from . import _defaults
+from . import defaults
 
-# File wide default
-_inifaults = _defaults['jobs']
+# Get job options
+job_defaults = defaults['jobs']
+
+# Funtions to import if requested
+__all__ = ['submit_file', 'run']
 
 
-class run():
+class run(object):
     """ A structure to build a job for submission to the queue """
-    def __init__(commands, name, nodes=_inifaults['nodes'], cores=_inifaults['cores'],
-                 mem=_inifaults['mem'], walltime=_inifaults['time'], default_params='small'):
+    def __init__(commands, default_params='small', name='', nodes='', cores='',
+                 mem='', walltime='', ):
         pass
 
 
@@ -30,10 +35,4 @@ def submit_file(script_file, dependency=None):
         if type(dependency) == list else dependency
     args = ['--dependency=afterok:' + str(dependency), script_file] \
         if dependency else [script_file]
-    return int(sub(['sbatch'] + args).decode().rstrip().split(' ')[-1])
-
-
-def create_job(commands, name, nodes=_inifaults['nodes'], cores=_inifaults['cores'],
-               mem=_inifaults['mem'], walltime=_inifaults['time'], default_params='small'):
-    """ Write a script file for submission """
-    pass
+    return int(_sub(['sbatch'] + args).decode().rstrip().split(' ')[-1])

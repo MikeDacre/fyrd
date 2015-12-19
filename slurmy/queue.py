@@ -4,7 +4,7 @@ Description:   Submit job when the total number of jobs in the queue drops below
                provided by max= or defined in ~/.slurmy
 
 Created:       2015-12-11
-Last modified: 2015-12-18 13:29
+Last modified: 2015-12-18 16:28
 """
 from time import time
 from time import sleep
@@ -12,16 +12,21 @@ from pwd import getpwnam
 from os import environ
 from sys import stderr
 
-# Our imports
+# pyslurm is required - https://github.com/gingergeeks/pyslurm
 from pyslurm import job
+
+# Our imports
 from .slurmy import submit_file
-from . import _defaults
+from . import defaults
 
 # We only need the defaults for this section
-_defaults = _defaults['queue']
+_defaults = defaults['queue']
+
+# Funtions to import if requested
+__all__ = ['queue', 'submit_file']
 
 
-class queue():
+class queue(object):
     """ Functions that need to access the slurm queue """
 
     def load(self):
@@ -30,10 +35,13 @@ class queue():
 
     def get_running_jobs(self):
         """ Create a self.running dictionary from the self.queue dictionary """
-        self.load()
-        self.running = {}
-        for k, v in self.current_job_ids:
+        self._update_running_jobs()
+        return self.running
 
+    def get_queued_jobs(self):
+        """ Create a self.running dictionary from the self.queue dictionary """
+        self._update_queued_jobs()
+        return self.queued
 
     def get_job_count(self):
         """ If job count not updated recently, update it """
@@ -43,8 +51,33 @@ class queue():
     #####################
     # Private Functions #
     #####################
+    def _update_running_jobs(self):
+        """ Update the self.running dictionary with only queued jobs """
+        self.load()
+        self.running = {}
+        j = b'RUNNING'
+        for k, v in self.queue.items():
+            if v['job_state'] == j:
+                self.running[k] = v
+
+    def _update_queued_jobs(self):
+        """ Update the self.queued dictionary with only queued jobs """
+        self.load()
+        self.queued = {}
+        j = b'PENDING'
+        for k, v in self.queue.items():
+            if v['job_state'] == j:
+                self.queued[k] = v
+
+    ###################
+    # Class Functions #
+    ###################
     def _load(self):
-        self.current_job_ids = self.full_queue.find('user_id', self.uid)
+        try:
+            self.current_job_ids = self.full_queue.find('user_id', self.uid)
+        except ValueError:
+            sleep(5)
+            self._load
         self.job_count = len(self.current_job_ids)
         self.queue = {}
         for k, v in self.full_queue.get().items():
@@ -52,21 +85,35 @@ class queue():
                 self.queue[k] = v
 
     def __init__(self):
-        super(queue, self).__init__()
         self.uid = getpwnam(environ['USER']).pw_uid
         self.full_queue = job()
         self._load()
 
     def __getattr__(self, key):
+        if key == 'running':
+            return self.get_running_jobs()
+        if key == 'queued':
+            return self.get_queued_jobs()
+
+    def __getitem__(self, key):
+        self.load()
         try:
             return self.queue[key]
         except KeyError:
             return None
 
+    def __len__(self):
+        self.load()
+        return self.get_job_count()
+
     def __repr__(self):
-        load()
-        for k, v in self.queue:
-            return "{0}:\t{1}".format(k, v)
+        self.load()
+        r = []
+        for k, v in self.queue.items():
+            r.append(str(k) + ':')
+            for i, j in v.items():
+                r.append('\t{0:>20}:\t{1:<}'.format(repr(i), repr(j)))
+        return '\n'.join(r)
 
 
 def monitor_submit(script_file, dependency=None, max_count=int(_defaults['max_jobs'])):

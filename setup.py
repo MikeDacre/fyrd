@@ -5,6 +5,7 @@ from setuptools import setup, find_packages
 from Cython.Build import cythonize
 from codecs import open
 from os import path
+from os import listdir
 
 here = path.abspath(path.dirname(__file__))
 
@@ -53,5 +54,5 @@ setup(
     install_requires=['pyslurm', 'cython'],
     packages=['slurmy'],
     scripts=scpts,
-    ext_modules=cythonize("slurmy/*.pyx")
+    #  ext_modules=cythonize("slurmy/*.pyx")
 )
