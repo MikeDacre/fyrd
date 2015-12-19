@@ -16,8 +16,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 # Generate a list of python scripts
 scpts = []
 for i in listdir(here + '/bin'):
-    if i.endswith('.py'):
-        scpts.append('bin/' + i)
+    scpts.append('bin/' + i)
 
 setup(
     name='slurmy',
