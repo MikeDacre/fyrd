@@ -9,7 +9,7 @@
 #       LICENSE: MIT License, property of Stanford, use as you wish          #
 #       VERSION: 0.1                                                         #
 #       CREATED: 2015-12-18 12:43                                            #
-# Last modified: 2015-12-18 15:01                                            #
+# Last modified: 2015-12-18 16:49                                            #
 #                                                                            #
 #   DESCRIPTION: Uses slurmpy and pyslurm to check the job queue for only    #
 #                one user's jobs. Produces a very simple display, for full   #
@@ -49,13 +49,12 @@ def main(running=False, queued=False, count=False, list=False):
 
     # Print requested output
     if count:
-        sys.stdout.write(str(len(jobs)) + '\n')
+        sys.stdout.write("{0}\n".format(str(len(jobs))))
     elif list:
-        sys.stdout.write(' '.join(list(jobs.keys())) + '\n')
+        sys.stdout.write("{0}\n".format(' '.join(list(jobs.keys()))))
     else:
         for k, v in jobs.items():
-            #  sys.stdout.write('{0}\t{1}\n'.format(k, v['name']))
-            print(type(v['name']))
+            sys.stdout.write('{0}\t{1}\n'.format(k, str(v['name']).strip("b'")))
 
 if __name__ == '__main__' and '__file__' in globals():
     """Command Line Argument Parsing"""

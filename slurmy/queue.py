@@ -4,7 +4,7 @@ Description:   Submit job when the total number of jobs in the queue drops below
                provided by max= or defined in ~/.slurmy
 
 Created:       2015-12-11
-Last modified: 2015-12-18 16:28
+Last modified: 2015-12-18 16:55
 """
 from time import time
 from time import sleep
@@ -23,7 +23,7 @@ from . import defaults
 _defaults = defaults['queue']
 
 # Funtions to import if requested
-__all__ = ['queue', 'submit_file']
+__all__ = ['queue', 'monitor_submit']
 
 
 class queue(object):
