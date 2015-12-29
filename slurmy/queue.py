@@ -4,7 +4,7 @@ Description:   Submit job when the total number of jobs in the queue drops below
                provided by max= or defined in ~/.slurmy
 
 Created:       2015-12-11
-Last modified: 2015-12-18 16:55
+Last modified: 2015-12-29 12:27
 """
 from time import time
 from time import sleep
@@ -77,12 +77,16 @@ class queue(object):
             self.current_job_ids = self.full_queue.find('user_id', self.uid)
         except ValueError:
             sleep(5)
-            self._load
+            self._load()
         self.job_count = len(self.current_job_ids)
         self.queue = {}
-        for k, v in self.full_queue.get().items():
-            if k in self.current_job_ids:
-                self.queue[k] = v
+        try:
+            for k, v in self.full_queue.get().items():
+                if k in self.current_job_ids:
+                    self.queue[k] = v
+        except ValueError:
+            sleep(5)
+            self._load()
 
     def __init__(self):
         self.uid = getpwnam(environ['USER']).pw_uid
