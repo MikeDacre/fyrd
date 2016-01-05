@@ -9,7 +9,7 @@
 #       LICENSE: MIT License, property of Stanford, use as you wish          #
 #       VERSION: 0.1                                                         #
 #       CREATED: 2015-12-18 12:43                                            #
-# Last modified: 2015-12-18 16:49                                            #
+# Last modified: 2015-12-30 19:22                                            #
 #                                                                            #
 #   DESCRIPTION: Uses slurmpy and pyslurm to check the job queue for only    #
 #                one user's jobs. Produces a very simple display, for full   #
@@ -29,13 +29,13 @@ import sys
 import slurmy
 
 
-def main(running=False, queued=False, count=False, list=False):
+def main(running=False, queued=False, outputcount=False, outputlist=False):
     """ Run everything """
     # Check that the user isn't a dumbass
     if running and queued:
         sys.stderr.write("ERROR --> You can't specify both 'running' and 'queued'\n")
         sys.exit(1)
-    if count and list:
+    if outputcount and outputlist:
         sys.stderr.write("ERROR --> You can't specify both 'count' and 'list'\n")
 
     # Create queue object
@@ -48,10 +48,10 @@ def main(running=False, queued=False, count=False, list=False):
         jobs = queue.queue
 
     # Print requested output
-    if count:
+    if outputcount:
         sys.stdout.write("{0}\n".format(str(len(jobs))))
-    elif list:
-        sys.stdout.write("{0}\n".format(' '.join(list(jobs.keys()))))
+    elif outputlist:
+        sys.stdout.write("{0}\n".format(' '.join(list([str(i) for i in jobs.keys()]))))
     else:
         for k, v in jobs.items():
             sys.stdout.write('{0}\t{1}\n'.format(k, str(v['name']).strip("b'")))
@@ -81,5 +81,5 @@ if __name__ == '__main__' and '__file__' in globals():
     # Run the script
     main(running=args.running,
          queued=args.queued,
-         count=args.count,
-         list=args.list)
+         outputcount=args.count,
+         outputlist=args.list)
