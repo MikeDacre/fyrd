@@ -2,28 +2,28 @@
 # -*- coding: utf-8 -*-
 # vim:fenc=utf-8 tabstop=4 expandtab shiftwidth=4 softtabstop=4
 """
-#============================================================================#
-#                                                                            #
-#        AUTHOR: Michael D Dacre, mike.dacre@gmail.com                       #
-#  ORGANIZATION: Stanford University                                         #
-#       LICENSE: MIT License, property of Stanford, use as you wish          #
-#       VERSION: 0.1                                                         #
-#       CREATED: 2015-12-18 12:43                                            #
-# Last modified: 2015-12-30 19:22                                            #
-#                                                                            #
-#   DESCRIPTION: Uses slurmpy and pyslurm to check the job queue for only    #
-#                one user's jobs. Produces a very simple display, for full   #
-#                job information, the regular tools can be used (e.g squeue) #
-#                Output:                                                     #
-#                    Job_number\\tJob_name                                   #
-#                The output can be modified by the following flags:          #
-#                    -c count only                                           #
-#                    -l space separated job number list                      #
-#                In addition, only running or queued jobs can be obtained:   #
-#                    -r running jobs                                         #
-#                    -q queued jobs                                          #
-#                                                                            #
-#============================================================================#
+============================================================================
+
+        AUTHOR: Michael D Dacre, mike.dacre@gmail.com
+  ORGANIZATION: Stanford University
+       LICENSE: MIT License, property of Stanford, use as you wish
+       VERSION: 0.1
+       CREATED: 2015-12-18 12:43
+ Last modified: 2016-01-07 13:12
+
+   DESCRIPTION: Uses slurmpy and pyslurm to check the job queue for only
+                one user's jobs. Produces a very simple display, for full
+                job information, the regular tools can be used (e.g squeue)
+                Output:
+                    Job_number Job_name (tab-delimited)
+                The output can be modified by the following flags:
+                    -c count only
+                    -l space separated job number list
+                In addition, only running or queued jobs can be obtained:
+                    -r running jobs
+                    -q queued jobs
+
+============================================================================
 """
 import sys
 import slurmy
@@ -33,10 +33,12 @@ def main(running=False, queued=False, outputcount=False, outputlist=False):
     """ Run everything """
     # Check that the user isn't a dumbass
     if running and queued:
-        sys.stderr.write("ERROR --> You can't specify both 'running' and 'queued'\n")
+        sys.stderr.write("ERROR --> You can't specify both " +
+                         "'running' and 'queued'\n")
         sys.exit(1)
     if outputcount and outputlist:
-        sys.stderr.write("ERROR --> You can't specify both 'count' and 'list'\n")
+        sys.stderr.write("ERROR --> You can't specify both " +
+                         "'count' and 'list'\n")
 
     # Create queue object
     queue = slurmy.queue()
@@ -51,13 +53,14 @@ def main(running=False, queued=False, outputcount=False, outputlist=False):
     if outputcount:
         sys.stdout.write("{0}\n".format(str(len(jobs))))
     elif outputlist:
-        sys.stdout.write("{0}\n".format(' '.join(list([str(i) for i in jobs.keys()]))))
+        sys.stdout.write("{0}\n".format(
+            ' '.join(list([str(i) for i in jobs.keys()]))))
     else:
         for k, v in jobs.items():
-            sys.stdout.write('{0}\t{1}\n'.format(k, str(v['name']).strip("b'")))
+            sys.stdout.write('{0}\t{1}\n'.format(
+                k, str(v['name']).strip("b'")))
 
 if __name__ == '__main__' and '__file__' in globals():
-    """Command Line Argument Parsing"""
     import argparse
 
     f_class = argparse.RawDescriptionHelpFormatter
