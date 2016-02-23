@@ -2,9 +2,10 @@
 Description:   Submit a job to sbatch
 
 Created:       2015-12-11
-Last modified: 2015-12-18 16:24
+Last modified: 2016-02-15 08:04
 """
 from subprocess import check_output as _sub
+from time import sleep
 
 # Our imports
 from pyslurm import job
@@ -35,4 +36,9 @@ def submit_file(script_file, dependency=None):
         if type(dependency) == list else dependency
     args = ['--dependency=afterok:' + str(dependency), script_file] \
         if dependency else [script_file]
-    return int(_sub(['sbatch'] + args).decode().rstrip().split(' ')[-1])
+    while 1:
+        try:
+            return int(_sub(['sbatch'] + args).decode().rstrip().split(' ')[-1])
+        except subprocess.CalledProcessError:
+            sleep(2)
+            continue

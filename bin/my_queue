@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# vim:fenc=utf-8 tabstop=4 expandtab shiftwidth=4 softtabstop=4
 """
+Print simple and fast queue information for only the current user.
 ============================================================================
 
         AUTHOR: Michael D Dacre, mike.dacre@gmail.com
@@ -9,7 +9,7 @@
        LICENSE: MIT License, property of Stanford, use as you wish
        VERSION: 0.1
        CREATED: 2015-12-18 12:43
- Last modified: 2016-01-07 13:12
+ Last modified: 2016-02-23 09:25
 
    DESCRIPTION: Uses slurmpy and pyslurm to check the job queue for only
                 one user's jobs. Produces a very simple display, for full
@@ -57,8 +57,11 @@ def main(running=False, queued=False, outputcount=False, outputlist=False):
             ' '.join(list([str(i) for i in jobs.keys()]))))
     else:
         for k, v in jobs.items():
-            sys.stdout.write('{0}\t{1}\n'.format(
-                k, str(v['name']).strip("b'")))
+            try:
+                sys.stdout.write('{0}\t{1}\n'.format(
+                    k, str(v['name']).strip("b'")))
+            except IOError:
+                break
 
 if __name__ == '__main__' and '__file__' in globals():
     import argparse
@@ -86,3 +89,5 @@ if __name__ == '__main__' and '__file__' in globals():
          queued=args.queued,
          outputcount=args.count,
          outputlist=args.list)
+
+# vim:fenc=utf-8 tabstop=4 expandtab shiftwidth=4 softtabstop=4

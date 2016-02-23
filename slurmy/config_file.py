@@ -2,7 +2,7 @@
 Description:   Get and set global variables
 
 Created:       2015-12-11
-Last modified: 2015-12-18 16:30
+Last modified: 2016-01-07 14:08
 """
 from os import path    as _path
 from os import environ as _environ
@@ -14,11 +14,92 @@ try:
 except ImportError:
     import ConfigParser as _configparser
 
+################################################################################
+#                            Configurable Defaults                             #
+################################################################################
+
 config_file = _environ['HOME'] + '/.slurmy'
 config      = _configparser.ConfigParser()
 defaults    = {}
 
 __all__ = ['get_config', 'write_config']
+initial_defaults = {}
+
+# Different job run options
+initial_defaults['jobs_small'] = {'nodes':        1,
+                                  'cores':        1,
+                                  'mem':          '4GB',
+                                  'time':         '00:02:00'}
+initial_defaults['jobs_large'] = {'nodes':        1,
+                                  'cores':        16,
+                                  'mem':          '64GB',
+                                  'time':         '24:00:00'}
+
+# Other options
+initial_defaults['queue']      = {'max_jobs':     1000,  # Max number of jobs in queue
+                                  'sleep_len':    5,     # Between submission attempts (in seconds)
+                                  'queue_update': 20}    # Amount of time between getting fresh queue info (seconds)
+
+#####################################################
+#         Possible job submission commands          #
+#  from: http://slurm.schedmd.com/pdfs/summary.pdf  #
+#####################################################
+commands = {'array': 'Job array spec',
+            'account': 'Account to be charged',
+            'begin': 'Start after this much time',
+            'clusters': 'Clusters to run on',
+            'constraint': 'Required node features',
+            'cpu_per_task': 'Number of cpus per task',
+            'dependency': 'Defer until specified ID completes',
+            'error': 'File in which to store errors',
+            'exclude': 'Host names to exclude',
+            'exclusive': 'No other jobs may run on node',
+            'export': 'Export these variables (dictionary)',
+            'gres': 'Generic resources required per node',
+            'input': 'File to read job input data from',
+            'job-name': 'Job name',
+            'licenses': 'Licenses required for job',
+            'mem': 'Memory required in MB (int)',
+            'mem_per_cpu': 'Memory per cpu in MB (int)',
+            'N': 'Number of nodes required',
+            'n': 'Number of tasks launched per node',
+            'nodelist': 'Hosts job allowed to run on',
+            'output': 'File where output will be writen',
+            'partition': 'Partition/queue to run in',
+            'qos': 'QOS specification (e.g. dev)',
+            'signal': 'Signal to send to job when approaching time',
+            'time': 'Time limit for job (d-HH:MM:SS)',
+            'wrap': 'Wrap specified command as shell script'}
+
+################################################################################
+#                         Do Not Edit Below This Point                         #
+################################################################################
+
+############################
+#  Profile Class Handling  #
+############################
+
+
+class Profile(object):
+    """ A profile for job submission """
+    nodes = None
+    cores = None
+    mem = None
+    time = None
+    def __init__(self):
+        """ Set up bare minimum attributes """
+
+
+
+#######################
+#  General Functions  #
+#######################
+
+
+def get_initial_defaults():
+    """ Return a sane set of starting defaults for config file creation """
+    # Defined file wide
+    return initial_defaults
 
 
 def get_config():
@@ -57,28 +138,6 @@ def delete_config(section, key=None):
     with open(config_file, 'w') as outfile:
         config.write(outfile)
     return get_config()
-
-
-def get_initial_defaults():
-    """ Return a sane set of starting defaults for config file creation """
-    initial_defaults = {}
-
-    # Different job run options
-    initial_defaults['jobs_small'] = {'nodes':        1,
-                                      'cores':        1,
-                                      'mem':          '4GB',
-                                      'time':         '00:02:00'}
-    initial_defaults['jobs_large'] = {'nodes':        1,
-                                      'cores':        16,
-                                      'mem':          '64GB',
-                                      'time':         '24:00:00'}
-
-    # Other options
-    initial_defaults['queue']      = {'max_jobs':     1000,  # Max number of jobs in queue
-                                      'sleep_len':    5,     # Between submission attempts (in seconds)
-                                      'queue_update': 20}    # Amount of time between getting fresh queue info (seconds)
-
-    return initial_defaults
 
 
 def create_config():
