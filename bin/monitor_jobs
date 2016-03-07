@@ -1,0 +1,162 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+Monitor the slurm queue for specific jobs and auto-resubmit jobs on fail.
+
+=============================================================================
+
+        AUTHOR: Michael D Dacre, mike.dacre@gmail.com
+  ORGANIZATION: Stanford University
+       LICENSE: MIT License, property of Stanford, use as you wish
+       VERSION: 0.1
+       CREATED: 2016-07-23 10:02
+ Last modified: 2016-02-23 11:53
+
+   DESCRIPTION:
+
+         USAGE: auto_resubmit -p <partition> -u <user> -j <job1,job2,...>
+                Note: Arguments are cumulative except user. For example::
+                    auto_resubmit -p bob -j 172436 172437
+                This command will monitor all jobs in the bob partition as
+                well as the two jobs specified directly.
+                However::
+                    auto_resubmit -p bob -u fred
+                This command will only submit fred's jobs in bob (the union).
+
+=============================================================================
+"""
+import os
+import sys
+import argparse
+
+from pwd import getpwnam
+from time import sleep
+
+import pyslurm
+
+# Logging function, MIN_LEVEL should be 'debug', 'info', or 'warn'.
+import logme as lm
+lm.MIN_LEVEL = 'info'
+
+
+def auto_resubmit(job_list):
+    """Check state of every job in job_list and resubmit killed jobs.
+
+    Uses pyslurm.job to get every running job, then loops through job_list
+    and looks for jobs with a 'Cancelled' state, and resubmits them.
+
+    Failed or timed out jobs are not resubmitted.
+
+    Note: Will silently ignore jobs that are not in the queue.
+
+    :job_list: TODO
+    :returns: TODO
+
+    """
+    # Lists for jobs
+    completed    = []
+    failed       = {}
+    resubmitted  = {}
+    non_existent = []
+
+    while 1:
+        queue = pyslurm.job()  # Must recreate this to update job list.
+        if not job_list:
+            break
+        for job in job_list:
+            info = queue.find_id(job)
+            if not info and (job not in failed or job not in completed):
+                log('{} not in queue'.format(job), level='warn')
+                non_existent.append(job)
+                job_list.remove(job)
+            if info['job_state'] == 'PENDING':
+                continue
+        sleep 1
+
+
+def make_job_list(user=None, partition=None, jobs=None ):
+    """Return a list of jobs for user or in partition.
+
+    Will return a job list that is the union of all jobs by user and all jobs
+    in partition. If only user or parition is provided, all jobs that match
+    are returned. If not, then all jobs by user(s) in partition(s) are
+    returned. Any jobs in 'jobs' are simply added to the list.
+
+    :user:    A username, can be a list of usernames.
+    :partion: The slurm partition, can be a list of partitions.
+    :jobs:    A list of jobs to start with (list).
+    :returns: A sorted list of jobs (list of ints).
+
+    """
+    if jobs:
+        if isinstance(jobs, (str, int)):
+            job_list = [jobs]
+        elif isinstance(jobs, (list, tuple)):
+            job_list = list(jobs)
+        else:
+            raise Exception('Invalid type for jobs: {}'.format(type(jobs)))
+    else:
+        job_list = []
+
+    queue = pyslurm.job()
+
+    user_list = []
+    if user:
+        if isinstance(user, (str, int)):
+            user = [user]
+        for i in user:
+            if isinstance(i, str):
+                i = int(i) if i.isdigit() else getpwnam(i).pw_uid
+            user_list = user_list + queue.find('user_id', i)
+
+    partition_list = []
+    if partition:
+        if isinstance(partition, str):
+            partition = [partition]
+        for i in partition:
+            partition_list = partition_list + queue.find('partition', i)
+
+    # Take the union of the user and partion lists
+    job_list = job_list + list(set(user_list) & set(partition_list))
+
+    # Make sure all job numbers are ints and the final list is sorted
+    job_list = sorted([int(i) for i in job_list])
+
+    return job_list
+
+
+def main(argv=None):
+    """ Run as a script """
+    if not argv:
+        argv = sys.argv[1:]
+
+    parser  = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+
+    # Jobs
+    jobs = parser.add_argument_group('Job List')
+    jobs.add_argument('-p', '--partition', nargs='+',
+                      help="All jobs in this partition.")
+    jobs.add_argument('-u', '--user',nargs='+',
+                      help="All jobs by this user.")
+    jobs.add_argument('-j', '--jobs', nargs='+',
+                      help="A list of additional jobs, optional.")
+
+    args = parser.parse_args(argv)
+
+    # Check that at least one option specified
+    if not args.partition and not args.user and not args.jobs:
+        sys.stderr.write("At least one argument required.\n\n")
+        parser.print_help()
+        return 1
+
+    job_list = make_job_list(jobs=args.jobs, user=args.user,
+                             partition=args.partition)
+
+    return auto_resubmit(job_list)
+
+if __name__ == '__main__' and '__file__' in globals():
+    sys.exit(main())
+
+#vim:set et sw=4 ts=4 tw=79:

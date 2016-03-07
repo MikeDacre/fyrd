@@ -2,8 +2,10 @@
 Description:   Get and set global variables
 
 Created:       2015-12-11
-Last modified: 2016-01-07 14:08
+Last modified: 2016-02-25 13:43
 """
+import os
+import sys
 from os import path    as _path
 from os import environ as _environ
 from os import system  as _system
@@ -147,12 +149,17 @@ def create_config():
     # Use defaults coded into this file
     defaults = get_initial_defaults()
     # Delete existing slurmy file
-    _system("rm {}".format(config_file))
+    if os.path.exists(config_file):
+        os.remove(config_file)
     for k, v in defaults.items():
         if not config.has_section(k):
             config.add_section(k)
         for i, j in v.items():
-            config.set(k, i, j)
+            try:
+                config.set(str(k), str(i), str(j))
+            except TypeError:
+                sys.stderr.write('{} {} {}\n'.format(k, i, j))
+                raise
     with open(config_file, 'w') as outfile:
         config.write(outfile)
     _stderr.write('Created the file ~/.slurmy with default variables. ' +
