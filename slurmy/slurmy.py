@@ -2,7 +2,7 @@
 Description:   Submit a job to sbatch
 
 Created:       2015-12-11
-Last modified: 2016-03-03 15:51
+Last modified: 2016-03-10 12:26
 """
 import os
 from subprocess import check_output as _sub
@@ -81,8 +81,14 @@ def make_job_file(command, name, time, cores, mem=None, partition='normal',
         outfile.write('echo "working directory = "$SLURM_SUBMIT_DIR\n')
         outfile.write('cd {}\n'.format(curdir))
         outfile.write('mkdir -p $LOCAL_SCRATCH\n')
+        outfile.write("date +'%d-%H:%M:%S'\n")
         outfile.write('echo "Running {}"\n'.format(name))
         outfile.write(command + '\n')
+        outfile.write('exitcode=$?\n')
+        outfile.write('echo Done\n')
+        outfile.write("date +'%d-%H:%M:%S'\n")
+        outfile.write('if [[ $exitcode != 0 ]]; then ' +
+                      'echo Exited with code: $? >&2; fi\n')
     return scrpt
 
 

@@ -4,7 +4,7 @@ Description:   Submit job when the total number of jobs in the queue drops below
                provided by max= or defined in ~/.slurmy
 
 Created:       2015-12-11
-Last modified: 2016-03-07 12:12
+Last modified: 2016-03-07 12:14
 """
 from time import time
 from time import sleep
@@ -90,7 +90,9 @@ class queue(object):
         j = 'RUNNING'
         running = {}
         for k, v in self.queue.items():
-            if v['job_state'].decode() == j:
+            if isinstance(v['job_state'], bytes):
+                v['job_state'] = v['job_state'].decode()
+            if v['job_state'] == j:
                 running[k] = v
         return running
 
