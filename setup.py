@@ -19,9 +19,9 @@ for i in listdir(here + '/bin'):
     scpts.append('bin/' + i)
 
 setup(
-    name='slurmy',
+    name='python-cluster',
     version='0.2',
-    description='Submit and monitor slurm jobs with python',
+    description='Submit and monitor slurm, torque, and threaded jobs',
     long_description=long_description,
     url='https://github.com/MikeDacre/python_slurm',
     author='Michael Dacre',
@@ -50,8 +50,6 @@ setup(
 
     keywords='slurm cluster job_management',
 
-    install_requires=['pyslurm', 'cython'],
-    packages=['slurmy'],
+    packages=['cluster'],
     scripts=scpts,
-    #  ext_modules=cythonize("slurmy/*.pyx")
 )
