@@ -6,15 +6,20 @@ Monitor the queue for torque or slurm.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-04-05 18:21
+ Last modified: 2016-04-11 08:56
 
 ============================================================================
 """
+import os
+import re
+import sys
+from os import environ
+from sys import stderr
 from time import time
 from time import sleep
 from pwd import getpwnam
-from os import environ
-from sys import stderr
+from subprocess import check_output, CalledProcessError
+from multiprocessing import Pool, pool
 
 ###############################################################################
 #                                Our functions                                #
@@ -22,6 +27,7 @@ from sys import stderr
 
 from . import run
 from . import logme
+from . import ClusterError
 
 #########################
 #  Which system to use  #
@@ -50,6 +56,37 @@ _defaults = DEFAULTS['queue']
 
 # Funtions to import if requested
 __all__ = ['get_cluster_environment', 'Queue']
+
+###########################################################
+#  Set the global cluster type: slurm, torque, or normal  #
+###########################################################
+
+def get_cluster_environment():
+    """Detect the local cluster environment and set QUEUE globally.
+
+    Uses which to search for sbatch first, then qsub. If neither is found,
+    QUEUE is set to local.
+
+    :returns: QUEUE variable ('torque', 'slurm', or 'local')
+    """
+    global QUEUE
+    if run.which('sbatch'):
+        QUEUE = 'slurm'
+    elif run.which('qsub'):
+        QUEUE = 'torque'
+    else:
+        QUEUE = 'local'
+    if QUEUE == 'slurm' or QUEUE == 'torque':
+        logme.log('{} detected, using for cluster submissions'.format(QUEUE),
+                  'debug')
+    else:
+        logme.log('No cluster environment detected, using multiprocessing',
+                  'debug')
+    return QUEUE
+
+
+# Actually run the above function on every import
+get_cluster_environment()
 
 ##############################
 #  Check if queue is usable  #
@@ -145,30 +182,6 @@ def wait(jobs):
             if len(jobs) == 0:
                 return
             sleep(2)
-
-
-def get_cluster_environment():
-    """Detect the local cluster environment and set QUEUE globally.
-
-    Uses which to search for sbatch first, then qsub. If neither is found,
-    QUEUE is set to local.
-
-    :returns: QUEUE variable ('torque', 'slurm', or 'local')
-    """
-    global QUEUE
-    if run.which('sbatch'):
-        QUEUE = 'slurm'
-    elif run.which('qsub'):
-        QUEUE = 'torque'
-    else:
-        QUEUE = 'local'
-    if QUEUE == 'slurm' or QUEUE == 'torque':
-        logme.log('{} detected, using for cluster submissions'.format(QUEUE),
-                  'debug')
-    else:
-        logme.log('No cluster environment detected, using multiprocessing',
-                  'debug')
-    return QUEUE
 
 
 class Queue(object):
