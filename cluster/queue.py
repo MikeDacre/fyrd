@@ -6,7 +6,7 @@ Monitor the queue for torque or slurm.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-04-11 08:56
+ Last modified: 2016-04-11 11:25
 
 ============================================================================
 """
@@ -55,11 +55,12 @@ from . import DEFAULTS
 _defaults = DEFAULTS['queue']
 
 # Funtions to import if requested
-__all__ = ['get_cluster_environment', 'Queue']
+__all__ = ['Queue', 'check_queue', 'get_cluster_environment']
 
 ###########################################################
 #  Set the global cluster type: slurm, torque, or normal  #
 ###########################################################
+
 
 def get_cluster_environment():
     """Detect the local cluster environment and set QUEUE globally.
@@ -85,12 +86,10 @@ def get_cluster_environment():
     return QUEUE
 
 
-# Actually run the above function on every import
-get_cluster_environment()
-
 ##############################
 #  Check if queue is usable  #
 ##############################
+
 
 def check_queue():
     """Raise exception if QUEUE is incorrect."""
@@ -102,6 +101,7 @@ def check_queue():
 #####################################
 #  Wait for cluster jobs to finish  #
 #####################################
+
 
 def wait(jobs):
     """Wait for jobs to finish.
