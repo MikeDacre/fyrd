@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-44-20 23:03
- Last modified: 2016-04-08 14:36
+ Last modified: 2016-04-08 14:42
 
    DESCRIPTION: Allows simple job submission with either torque, slurm, or
                 with the multiprocessing module.
@@ -199,6 +199,12 @@ class Job(object):
             exec_script.write_file()
         if function:
             function.write_file()
+
+    def clean(self):
+        """Delete all scripts created by this module, if they were written."""
+        for jobfile in [self.submission, self.exec_script, self.function]:
+            if jobfile.written and jobfile.exists:
+                os.remove(jobfile.file_name)
 
     def __init__(name, command, args=None, path=None, **KWARGS):
         """Create a job object will submission information.
@@ -594,7 +600,17 @@ def make_job_file(name, command, args=None, path=None, **KWARGS):
 ##############
 
 
-def clean(directory='.'):
+def clean(jobs):
+    """Delete all files in jobs list or single Job object."""
+    if isinstance(jobs, Job):
+        jobs = [jobs]
+    if not isinstance(jobs, (list, tuple)):
+        raise ClusterError('Job list must be a Job, list, or tuple')
+    for job in jobs:
+        job.clean()
+
+
+def clean_dir(directory='.', suffix='cluster'):
     """Delete all files made by this module in directory.
 
     CAUTION: The clean() function will delete **EVERY** file with
