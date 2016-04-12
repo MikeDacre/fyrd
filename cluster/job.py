@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-44-20 23:03
- Last modified: 2016-04-11 18:54
+ Last modified: 2016-04-11 19:01
 
    DESCRIPTION: Allows simple job submission with either torque, slurm, or
                 with the multiprocessing module.
@@ -637,93 +637,14 @@ def submit(name, command, args=None, path=None, **KWARGS):
 
     cores = cores if cores else 1
 
-    if QUEUE == 'slurm' or QUEUE == 'torque':
-        return submit_file(make_job_file(command, name, time, cores,
-                                         mem, partition, modules, path),
-                           dependencies=dependencies)
-    elif QUEUE == 'normal':
-        return submit_file(make_job_file(command, name), name=name,
-                           threads=cores)
+    job = Job(name, command, args=args, path=path, cores=cores, time=time,
+              mem=mem, partition=partition, modules=modules,
+              dependencies=dependencies, threads=threads)
 
+    job.write()
+    job.submit()
 
-def submit_file(script_file, name=None, dependencies=None, threads=None):
-    """Submit a job file to the cluster.
-
-    If QUEUE is torque, qsub is used; if QUEUE is slurm, sbatch is used;
-    if QUEUE is normal, the file is executed with subprocess.
-
-    :dependencies: A job number or list of job numbers.
-                   In slurm: `--dependency=afterok:` is used
-                   For torque: `-W depend=afterok:` is used
-
-    :threads:      Total number of threads to use at a time, defaults to all.
-                   ONLY USED IN NORMAL MODE
-
-    :name:         The name of the job, only used in normal mode.
-
-    :returns:      job number for torque or slurm
-                   multiprocessing job object for normal mode
-    """
-    queue.check_queue()  # Make sure the QUEUE is usable
-
-    # Sanitize arguments
-    name = str(name)
-
-    # Check dependencies
-    if dependencies:
-        if isinstance(dependencies, (str, int)):
-            dependencies = [dependencies]
-        if not isinstance(dependencies, (list, tuple)):
-            raise Exception('dependencies must be a list, int, or string.')
-        dependencies = [str(i) for i in dependencies]
-
-    if QUEUE == 'slurm':
-        if dependencies:
-            dependencies = '--dependency=afterok:{}'.format(
-                ':'.join([str(d) for d in dependencies]))
-            args = ['sbatch', dependencies, script_file]
-        else:
-            args = ['sbatch', script_file]
-        # Try to submit job 5 times
-        count = 0
-        while True:
-            try:
-                job = int(check_output(args).decode().rstrip().split(' ')[-1])
-            except CalledProcessError:
-                if count == 5:
-                    raise
-                count += 1
-                sleep(1)
-                continue
-            break
-        return job
-    elif QUEUE == 'torque':
-        if dependencies:
-            dependencies = '-W depend={}'.format(
-                ','.join(['afterok:' + d for d in dependencies]))
-            args = ['qsub', dependencies, script_file]
-        else:
-            args = ['qsub', script_file]
-        # Try to submit job 5 times
-        count = 0
-        while True:
-            try:
-                job = int(check_output(args).decode().rstrip().split('.')[0])
-            except CalledProcessError:
-                if count == 5:
-                    raise
-                count += 1
-                sleep(1)
-                continue
-            break
-        return job
-    elif QUEUE == 'normal':
-        global POOL
-        if not POOL:
-            POOL = Pool(threads) if threads else Pool()
-        command = 'bash {}'.format(script_file)
-        args = dict(stdout=name + '.cluster.out', stderr=name + '.cluster.err')
-        return POOL.apply_async(run.cmd, (command,), args)
+    return job
 
 
 #########################
@@ -804,6 +725,93 @@ def clean(jobs):
         job.clean()
 
 
+###############################################################################
+#                      Job Object Independent Functions                       #
+###############################################################################
+
+
+def submit_file(script_file, name=None, dependencies=None, threads=None):
+    """Submit a job file to the cluster.
+
+    If QUEUE is torque, qsub is used; if QUEUE is slurm, sbatch is used;
+    if QUEUE is normal, the file is executed with subprocess.
+
+    This function is independent of the job object and just submits a file.
+
+    :dependencies: A job number or list of job numbers.
+                   In slurm: `--dependency=afterok:` is used
+                   For torque: `-W depend=afterok:` is used
+
+    :threads:      Total number of threads to use at a time, defaults to all.
+                   ONLY USED IN NORMAL MODE
+
+    :name:         The name of the job, only used in normal mode.
+
+    :returns:      job number for torque or slurm
+                   multiprocessing job object for normal mode
+    """
+    queue.check_queue()  # Make sure the QUEUE is usable
+
+    # Sanitize arguments
+    name = str(name)
+
+    # Check dependencies
+    if dependencies:
+        if isinstance(dependencies, (str, int)):
+            dependencies = [dependencies]
+        if not isinstance(dependencies, (list, tuple)):
+            raise Exception('dependencies must be a list, int, or string.')
+        dependencies = [str(i) for i in dependencies]
+
+    if QUEUE == 'slurm':
+        if dependencies:
+            dependencies = '--dependency=afterok:{}'.format(
+                ':'.join([str(d) for d in dependencies]))
+            args = ['sbatch', dependencies, script_file]
+        else:
+            args = ['sbatch', script_file]
+        # Try to submit job 5 times
+        count = 0
+        while True:
+            try:
+                job = int(check_output(args).decode().rstrip().split(' ')[-1])
+            except CalledProcessError:
+                if count == 5:
+                    raise
+                count += 1
+                sleep(1)
+                continue
+            break
+        return job
+    elif QUEUE == 'torque':
+        if dependencies:
+            dependencies = '-W depend={}'.format(
+                ','.join(['afterok:' + d for d in dependencies]))
+            args = ['qsub', dependencies, script_file]
+        else:
+            args = ['qsub', script_file]
+        # Try to submit job 5 times
+        count = 0
+        while True:
+            try:
+                job = int(check_output(args).decode().rstrip().split('.')[0])
+            except CalledProcessError:
+                if count == 5:
+                    raise
+                count += 1
+                sleep(1)
+                continue
+            break
+        return job
+    elif QUEUE == 'normal':
+        global POOL
+        if not POOL:
+            POOL = Pool(threads) if threads else Pool()
+        command = 'bash {}'.format(script_file)
+        args = dict(stdout=name + '.cluster.out', stderr=name + '.cluster.err')
+        return POOL.apply_async(run.cmd, (command,), args)
+
+
 def clean_dir(directory='.', suffix='cluster'):
     """Delete all files made by this module in directory.
 
@@ -820,13 +828,14 @@ def clean_dir(directory='.', suffix='cluster'):
     """
     queue.check_queue()  # Make sure the QUEUE is usable
 
-    extensions = ['.cluster.err', '.cluster.out']
+    extensions = ['.' + suffix + '.err', '.' + suffix + '.out']
     if QUEUE == 'normal':
-        extensions.append('.cluster')
+        extensions.append('.' + suffix)
     elif QUEUE == 'slurm':
-        extensions = extensions + ['.cluster.sbatch', '.cluster.script']
+        extensions = extensions + ['.' + suffix + '.sbatch',
+                                   '.' + suffix + '.script']
     elif QUEUE == 'torque':
-        extensions.append('.cluster.qsub')
+        extensions.append('.' + suffix + '.qsub')
 
     files = [i for i in os.listdir(os.path.abspath(directory))
              if os.path.isfile(i)]
