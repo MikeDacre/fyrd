@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-44-20 23:03
- Last modified: 2016-04-08 14:42
+ Last modified: 2016-04-11 18:54
 
    DESCRIPTION: Allows simple job submission with either torque, slurm, or
                 with the multiprocessing module.
@@ -78,6 +78,7 @@ from . import ALLOWED_QUEUES
 #########################################################
 
 from . import POOL
+from . import THREADS
 
 # Reset broken multithreading
 # Some of the numpy C libraries can break multithreading, this command
@@ -125,17 +126,22 @@ with open({out_file}, 'wb') as fout:
 
 # Global Job Submission Arguments
 KWARGS=dict(threads=None, cores=None, time=None, mem=None, partition=None,
-            modules=None, dependencies=None)
+            modules=None, dependencies=None, suffix=None)
 ARGINFO="""\
 :cores:        How many cores to run on or threads to use.
 :dependencies: A list of dependencies for this job, must be either
                 Job objects (required for normal mode) or job numbers.
+:suffix:       The name to use in the output and error files
 
 Used for function calls::
 :imports: A list of imports, if not provided, defaults to all current
             imports, which may not work if you use complex imports.
             The list can include the import call, or just be a name, e.g
             ['from os import path', 'sys']
+
+Used only in normal mode::
+:threads:   How many threads to use in the multiprocessing pool. Defaults to
+            all.
 
 Used for torque and slurm::
 :time:      The time to run for in HH:MM:SS.
@@ -184,6 +190,14 @@ class Job(object):
 
     """
 
+    id           = None
+    submitted    = False
+    written      = False
+    done         = False
+
+    # Holds a pool object if we are in normal mode
+    pool_job     = None
+
     # Scripts
     submission   = None
     exec_script  = None
@@ -192,19 +206,8 @@ class Job(object):
     # Dependencies
     dependencies = None
 
-    def write(self):
-        """Write all scripts."""
-        submission.write_file()
-        if exec_script:
-            exec_script.write_file()
-        if function:
-            function.write_file()
-
-    def clean(self):
-        """Delete all scripts created by this module, if they were written."""
-        for jobfile in [self.submission, self.exec_script, self.function]:
-            if jobfile.written and jobfile.exists:
-                os.remove(jobfile.file_name)
+    # Holds queue information in torque and slurm
+    queue_info   = None
 
     def __init__(name, command, args=None, path=None, **KWARGS):
         """Create a job object will submission information.
@@ -234,8 +237,14 @@ class Job(object):
         # Cores
         self.cores = cores
 
-        # Set dependencies
+        # Set output files
+        suffix = suffix if suffix else 'cluster'
+        self.outfile = '.'.join(name, suffix, 'out')
+        self.errfile = '.'.join(name, suffix, 'err')
+
+        # Check and set dependencies
         if dependencies:
+            self.dependencies = []
             if isinstance(dependencies, 'str'):
                 if not dependencies.isdigit():
                     raise ClusterError('Dependencies must be number or list')
@@ -250,6 +259,7 @@ class Job(object):
                     dependency  = int(dependency)
                 if not isinstance(dependency, (int, Job)):
                     raise ClusterError('Dependencies must be number or list')
+                self.dependencies.append(dependency)
 
         # Make functions run remotely
         if hasattr(command, '__call__'):
@@ -285,6 +295,7 @@ class Job(object):
         # Create queue-dependent scripts
         sub_script = []
         if QUEUE == 'slurm':
+            self.qtype = 'slurm'
             scrpt = os.path.join(usedir, '{}.cluster.sbatch'.format(name))
             sub_script.append('#!/bin/bash')
             if partition:
@@ -295,8 +306,8 @@ class Job(object):
                 sub_script.append('#SBATCH --time={}'.format(time))
             if mem:
                 sub_script.append('#SBATCH --mem={}'.format(mem))
-            sub_script.append('#SBATCH -o {}.cluster.out'.format(name))
-            sub_script.append('#SBATCH -e {}.cluster.err'.format(name))
+            sub_script.append('#SBATCH -o {}'.format(self.outfile))
+            sub_script.append('#SBATCH -e {}'.format(self.errfile))
             sub_script.append('cd {}'.format(usedir))
             sub_script.append('srun bash {}.script'.format(
                 os.path.join(usedir, name)))
@@ -308,6 +319,7 @@ class Job(object):
             exe_script.append(command + '\n')
             exe_script.append(pstcmd)
         elif QUEUE == 'torque':
+            self.qtype = 'torque'
             scrpt = os.path.join(usedir, '{}.cluster.qsub'.format(name))
             sub_script.append('#!/bin/bash')
             if partition:
@@ -324,6 +336,12 @@ class Job(object):
             sub_script.append(command + '')
             sub_script.append(pstcmd)
         elif QUEUE == 'normal':
+            self.qtype = 'normal'
+            # Create the pool
+            global POOL
+            if not POOL or POOL._state != 0:
+                threads == threads if threads else THREADS
+                POOL = Pool(threads)
             scrpt = os.path.join(usedir, '{}.cluster'.format(name))
             sub_script.append('#!/bin/bash\n')
             sub_script.append(precmd)
@@ -337,6 +355,181 @@ class Job(object):
             self.exec_script = Script(script='\n'.join(exe_script),
                                       file_name=exe_scrpt)
 
+    ####################
+    #  Public Methods  #
+    ####################
+
+    def write(self):
+        """Write all scripts."""
+        submission.write_file()
+        if exec_script:
+            exec_script.write_file()
+        if function:
+            function.write_file()
+        self.written = True
+
+    def clean(self):
+        """Delete all scripts created by this module, if they were written."""
+        for jobfile in [self.submission, self.exec_script, self.function]:
+            if jobfile.written and jobfile.exists:
+                os.remove(jobfile.file_name)
+
+    def submit(self, max_queue_len=None):
+        """Submit this job.
+
+        If max_queue_len is specified (or in defaults), then this method will
+        block until the queue is open enough to allow submission.
+
+        NOTE: In normal mode, dependencies will result in this function blocking
+              until the dependencies are satisfied, not idea behavior.
+
+        Returns self.
+        """
+        if not self.written:
+            self.write()
+        if self.qtype == 'normal':
+            if self.dependencies:
+                for depend in self.dependencies:
+                    if not isinsance(depend, (Job, pool.ApplyResult)):
+                        raise Exception('In normal mode, dependency tracking' +
+                                        'only works with Job objects.')
+                    # Block until tasks are done
+                    if not depend.done:
+                        depend.wait()
+            global POOL
+            if not POOL or POOL._state != 0:
+                threads == threads if threads else THREADS
+                POOL = Pool(threads)
+                command = 'bash {}'.format(script_file)
+                args = dict(stdout=self.stdout,
+                            stderr=self.stderr)
+                self.pool_job = POOL.apply_async(run.cmd, (command,), args)
+                self.submitted = True
+                return self
+        elif self.qtype == 'slurm':
+            if self.dependencies:
+                dependencies = []
+                for depend in self.dependencies:
+                    if isinstance(depend, Job):
+                        dependencies.append(str(depend.id))
+                    else:
+                        dependencies.append(str(depend))
+                    depends = '--dependency=afterok:{}'.format(
+                        ':'.join(dependencies))
+                    args = ['sbatch', depends, self.submission.file_name]
+            else:
+                args = ['sbatch', self.submission.file_name]
+            # Try to submit job 5 times
+            count = 0
+            while True:
+                try:
+                    self.id = int(check_output(args).decode().rstrip().split(' ')[-1])
+                except CalledProcessError:
+                    if count == 5:
+                        raise
+                    count += 1
+                    sleep(1)
+                    continue
+                break
+            self.submitted = True
+            return self
+
+        elif self.qtype == 'torque':
+            if self.dependencies:
+                dependencies = []
+                for depend in self.dependencies:
+                    if isinstance(depend, Job):
+                        dependencies.append(str(depend.id))
+                    else:
+                        dependencies.append(str(depend))
+                depends = '-W depend={}'.format(
+                    ','.join(['afterok:' + d for d in dependencies]))
+                args = ['qsub', depends, self.submission.file_name]
+            else:
+                args = ['qsub', self.submission.file_name]
+            # Try to submit job 5 times
+            count = 0
+            while True:
+                try:
+                    self.id = int(check_output(args).decode().rstrip().split('.')[0])
+                except CalledProcessError:
+                    if count == 5:
+                        raise
+                    count += 1
+                    sleep(1)
+                    continue
+                break
+            self.submitted = True
+            return self
+
+    def wait(self):
+        """Block until job completes."""
+        if self.qtype == 'normal' and self.pool_job:
+            self.pool_job.wait()
+        else:
+            job_list = queue.Queue()
+            job_list.wait(self)
+            self.queue_info = job_list[self.id]
+            assert self.id == self.queue_info.id
+        self.done = True
+
+    def get(self):
+        """Block until job completed and then return exit_code, stdout, stderr."""
+        self.wait()
+        if self.qtype == 'normal' and self.pool_job:
+            return self.pool_job.get()
+        else:
+            try:
+                with open(self.outfile, 'r') as fin:
+                    outstr = fin.read()
+            except OSError:
+                outstr = None
+            try:
+                with open(self.errfile, 'r') as fin:
+                    errstr = fin.read()
+            except OSError:
+                errstr = None
+            return self.queue_info.exitcode, outstr, errstr
+
+
+    ###############
+    #  Internals  #
+    ###############
+
+    def __getattr__(self, key):
+        """Handle dynamic attributes."""
+        if key == 'files':
+            files = [self.submission]
+            if self.exec_script:
+                files.append(self.exec_script)
+            if self.function:
+                files.append(self.function)
+            return files
+
+    def __repr__(self):
+        """Return simple job information."""
+        if self.submitted:
+            outstr = "Job<{id}".format(self.id)
+        else:
+            outstr = "Job<NOT_SUBMITTED"
+        outstr += "({name};command:{cmnd};args:{args};qtype=qtype)".format(
+            name=self.name, cmnd=self.command, args=self.args, qtype=self.qtype)
+        if done:
+            outstr += "COMPLETED"
+        elif written:
+            outstr += "WRITTEN"
+        return outstr
+
+    def __str__(self):
+        """Print job name and ID + status."""
+        if self.done:
+            state = 'complete'
+        elif self.written:
+            state = 'written'
+        else:
+            state = 'not written'
+        return "{name} ID: {id}, state: {state}".format(
+            name=self.name, id=self.id, state=state)
 
 class Script(object):
 
@@ -536,6 +729,7 @@ def submit_file(script_file, name=None, dependencies=None, threads=None):
 #########################
 #  Job file generation  #
 #########################
+
 
 def make_job(name, command, args=None, path=None, **KWARGS):
     """Make a job file compatible with the chosen cluster.
