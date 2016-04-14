@@ -8,6 +8,17 @@ def write_to_file(string, file):
         fout.write(string + '\n')
 
 
+def test_queue_inspection():
+    """Make sure that if qsub or sbatch are available, the queue is right."""
+    if cluster.run.which('sbatch'):
+        assert cluster.QUEUE == 'slurm'
+    elif cluster.run.which('qsub'):
+        assert cluster.QUEUE == 'torque'
+    else:
+        assert cluster.QUEUE == 'normal'
+    assert env == cluster.QUEUE
+
+
 def test_queue_creation():
     """Test Queue object creation."""
     assert env == 'torque' or env == 'slurm' or env == 'normal'

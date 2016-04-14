@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-44-20 23:03
- Last modified: 2016-04-14 14:32
+ Last modified: 2016-04-14 14:38
 
    DESCRIPTION: Allows simple job submission with either torque, slurm, or
                 with the multiprocessing module.
@@ -195,6 +195,9 @@ class Job(object):
         for arg in KWARGS:
             if arg not in kwargs:
                 kwargs[arg] = None
+
+        # Get environment
+
 
         # Sanitize arguments
         if not name:
