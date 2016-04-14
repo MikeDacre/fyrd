@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-44-20 23:03
- Last modified: 2016-04-11 20:10
+ Last modified: 2016-04-14 14:32
 
    DESCRIPTION: Allows simple job submission with either torque, slurm, or
                 with the multiprocessing module.
@@ -50,11 +50,15 @@ Submit jobs to slurm or torque, or with multiprocessing.
 """
 import os
 import sys
+import inspect
 from time import sleep
 from types import ModuleType
 from textwrap import dedent
 from subprocess import check_output, CalledProcessError
 from multiprocessing import Pool, pool
+
+# Pickle functions without defining module
+import dill
 
 ###############################################################################
 #                                Our functions                                #
@@ -172,23 +176,38 @@ class Job(object):
     # Holds queue information in torque and slurm
     queue_info   = None
 
-    def __init__(self, name, command, args=None, path=None, **kwargs):
+    def __init__(self, command, args=None, name=None, path=None, **kwargs):
         """Create a job object will submission information.
 
         Used in all modes::
-        :name:         The name of the job.
         :command:      The command or function to execute.
-        :path:         Where to create the script, if None, current dir used.
         :args:         Optional arguments to add to command, particularly
                        useful for functions.
+        :name:         The name of the job.
+        :path:         Where to create the script, if None, current dir used.
         {arginfo}
         """.format(arginfo=ARGINFO)
         # Check keyword arguments
         for arg in kwargs:
             if arg not in KWARGS:
                 raise Exception('Unrecognized argument {}'.format(arg))
+        # Make sure all defaults are set
+        for arg in KWARGS:
+            if arg not in kwargs:
+                kwargs[arg] = None
 
         # Sanitize arguments
+        if not name:
+            if hasattr(command, '__call__'):
+                parts = str(command).strip('<>').split(' ')
+                parts.remove('function')
+                try:
+                    parts.remove('built-in')
+                except ValueError:
+                    pass
+                name = parts[0]
+            else:
+                name = command.split(' ')[0].split('/')[-1]
         name    = str(name)
         modules = kwargs['modules'] if 'modules' in kwargs else None
         modules = [modules] if isinstance(modules, str) else modules
@@ -233,7 +252,7 @@ class Job(object):
         # Make functions run remotely
         if hasattr(command, '__call__'):
             self.function = Function(
-                file_name=os.path.join(usedir, name + 'func.py'),
+                file_name=os.path.join(usedir, name + '_func.py'),
                 function=command, args=args)
             command = 'python{} {}'.format(sys.version[0],
                                            self.function.file_name)
@@ -257,7 +276,7 @@ class Job(object):
             echo Done
             date +'%d-%H:%M:%S'
             if [[ $exitcode != 0 ]]; then
-                echo Exited with code: $? >&2
+                echo Exited with code: $exitcode >&2
             fi
             """)
 
@@ -320,7 +339,7 @@ class Job(object):
         # Create the Script objects
         self.submission = Script(script='\n'.join(sub_script),
                                  file_name=scrpt)
-        if exe_scrpt:
+        if self.exe_scrpt:
             self.exec_script = Script(script='\n'.join(exe_script),
                                       file_name=exe_scrpt)
 
@@ -328,20 +347,20 @@ class Job(object):
     #  Public Methods  #
     ####################
 
-    def write(self):
+    def write(self, overwrite=True):
         """Write all scripts."""
-        self.submission.write_file()
+        self.submission.write(overwrite)
         if self.exec_script:
-            self.exec_script.write_file()
+            self.exec_script.write(overwrite)
         if self.function:
-            self.function.write_file()
+            self.function.write(overwrite)
         self.written = True
 
     def clean(self):
         """Delete all scripts created by this module, if they were written."""
         for jobfile in [self.submission, self.exec_script, self.function]:
-            if jobfile.written and jobfile.exists:
-                os.remove(jobfile.file_name)
+            if jobfile:
+                jobfile.clean()
 
     def submit(self, max_queue_len=None):
         """Submit this job.
@@ -510,7 +529,7 @@ class Script(object):
         self.script    = script
         self.file_name = os.path.abspath(file_name)
 
-    def write_file(self, overwrite=False):
+    def write(self, overwrite=True):
         """Write the script file."""
         if overwrite or not os.path.exists(self.file_name):
             with open(self.file_name, 'w') as fout:
@@ -519,6 +538,11 @@ class Script(object):
             return self.file_name
         else:
             return None
+
+    def clean(self):
+        """Delete any files made by us."""
+        if self.written and self.exists:
+            os.remove(self.file_name)
 
     def __getattr__(self, attr):
         """Make sure boolean is up to date."""
@@ -546,12 +570,21 @@ class Function(Script):
         :function:    Function handle.
         :args:        Arguments to the function as a tuple.
         :imports:     A list of imports, if not provided, defaults to all current
-                    imports, which may not work if you use complex imports.
-                    The list can include the import call, or just be a name, e.g
-                    ['from os import path', 'sys']
+                      imports, which may not work if you use complex imports.
+                      The list can include the import call, or just be a name, e.g
+                      ['from os import path', 'sys']
         :pickle_file: The file to hold the function.
         :outfile:     The file to hold the output.
+        :path:        The path to the calling script, used for importing self.
         """
+        self.function = function
+        self.parent   = inspect.getmodule(self.function).__name__
+        self.args     = args
+        # Get the module path
+        rootmod  = inspect.getmodule(function)
+        imppath  = os.path.split(rootmod.__file__)[0]
+        rootname = rootmod.__name__
+
         script = '#!/usr/bin/env python{}\n'.format(sys.version[0])
         if imports:
             if not isinstance(imports, (list, tuple)):
@@ -563,22 +596,47 @@ class Function(Script):
                     imports.append(module.__name__)
             imports = list(set(imports))
 
+        filtered_imports = []
         for imp in imports:
             if imp.startswith('import') or imp.startswith('from'):
-                imp = imp
+                filtered_imports.append(imp.rstrip())
             else:
-                imp = 'import {}\n'.format(imp)
-            script += imp
+                if '.' in imp:
+                    rootimp = imp.split('.')[0]
+                    if not rootimp == 'dill' and not rootimp == 'sys':
+                        filtered_imports.append('import {}'.format(rootimp))
+                if imp == 'dill' or imp == 'sys':
+                    continue
+                filtered_imports.append('import {}'.format(imp))
+        # Get rid of duplicates and sort imports
+        script += '\n'.join(sorted(set(filtered_imports)))
 
         # Set file names
         self.pickle_file = pickle_file if pickle_file else file_name + '.pickle.in'
         self.outfile     = outfile if outfile else file_name + '.pickle.out'
 
         # Create script text
-        script += '\n\n' + run.FUNC_RUNNER.format(pickle_file=self.pickle_file,
+        script += '\n\n' + run.FUNC_RUNNER.format(path=imppath,
+                                                  module=rootname,
+                                                  pickle_file=self.pickle_file,
                                                   out_file=self.outfile)
 
         super(Function, self).__init__(file_name, script)
+
+    def write(self, overwrite=True):
+        """Write the pickle file and call the parent Script write function."""
+        with open(self.pickle_file, 'wb') as fout:
+            dill.dump((self.function, self.args), fout)
+        super(Function, self).write(overwrite)
+
+    def clean(self):
+        """Delete any files made by us."""
+        if self.written:
+            if os.path.isfile(self.pickle_file):
+                os.remove(self.pickle_file)
+            if os.path.isfile(self.outfile):
+                os.remove(self.outfile)
+        super(Function, self).clean()
 
 
 ###############################################################################
@@ -586,15 +644,15 @@ class Function(Script):
 ###############################################################################
 
 
-def submit(name, command, args=None, path=None, **kwargs):
+def submit(command, args=None, name=None, path=None, **kwargs):
     """Submit a script to the cluster.
 
     Used in all modes::
-    :name:      The name of the job.
     :command:   The command or function to execute.
-    :path:         Where to create the script, if None, current dir used.
-    :args:         Optional arguments to add to command, particularly
-                    useful for functions.
+    :args:      Optional arguments to add to command, particularly
+                useful for functions.
+    :name:      The name of the job.
+    :path:      Where to create the script, if None, current dir used.
 
     {arginfo}
 
@@ -608,7 +666,7 @@ def submit(name, command, args=None, path=None, **kwargs):
 
     queue.check_queue()  # Make sure the QUEUE is usable
 
-    job = Job(name, command, args=args, path=path, **kwargs)
+    job = Job(command=command, args=args, name=name, path=path, **kwargs)
 
     job.write()
     job.submit()
@@ -621,17 +679,17 @@ def submit(name, command, args=None, path=None, **kwargs):
 #########################
 
 
-def make_job(name, command, args=None, path=None, **kwargs):
+def make_job(command, args=None, name=None, path=None, **kwargs):
     """Make a job file compatible with the chosen cluster.
 
     If mode is normal, this is just a simple shell script.
 
      Used in all modes::
-    :name:      The name of the job.
     :command:   The command or function to execute.
-    :path:         Where to create the script, if None, current dir used.
-    :args:         Optional arguments to add to command, particularly
-                    useful for functions.
+    :args:      Optional arguments to add to command, particularly
+                useful for functions.
+    :name:      The name of the job.
+    :path:      Where to create the script, if None, current dir used.
 
     {arginfo}
 
@@ -645,23 +703,23 @@ def make_job(name, command, args=None, path=None, **kwargs):
 
     queue.check_queue()  # Make sure the QUEUE is usable
 
-    job = Job(name, command, args=args, path=path, **kwargs)
+    job = Job(command=command, args=args, name=name, path=path, **kwargs)
 
     # Return the path to the script
     return job
 
 
-def make_job_file(name, command, args=None, path=None, **kwargs):
+def make_job_file(command, args=None, name=None, path=None, **kwargs):
     """Make a job file compatible with the chosen cluster.
 
     If mode is normal, this is just a simple shell script.
 
      Used in all modes::
-    :name:      The name of the job.
     :command:   The command or function to execute.
-    :path:         Where to create the script, if None, current dir used.
-    :args:         Optional arguments to add to command, particularly
-                    useful for functions.
+    :args:      Optional arguments to add to command, particularly
+                useful for functions.
+    :name:      The name of the job.
+    :path:      Where to create the script, if None, current dir used.
 
     {arginfo}
 
@@ -675,7 +733,7 @@ def make_job_file(name, command, args=None, path=None, **kwargs):
 
     queue.check_queue()  # Make sure the QUEUE is usable
 
-    job = Job(name, command, args=args, path=path, **kwargs)
+    job = Job(command=command, args=args, name=name, path=path, **kwargs)
 
     job = job.write()
 

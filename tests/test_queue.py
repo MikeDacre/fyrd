@@ -1,5 +1,12 @@
+import os
 import cluster
 env = cluster.get_cluster_environment()
+
+def write_to_file(string, file):
+    """Write a string to a file."""
+    with open(file, 'w') as fout:
+        fout.write(string + '\n')
+
 
 def test_queue_creation():
     """Test Queue object creation."""
@@ -7,6 +14,7 @@ def test_queue_creation():
     cluster.check_queue()
     queue = cluster.Queue()
     len(queue)
+
 
 def test_job_creation():
     """Make a job and print it."""
@@ -16,12 +24,34 @@ def test_job_creation():
         job = cluster.Job('echo hi', cores=2, time='00:02:00', mem='2000')
     return job
 
+
 def test_job_execution():
     """Run a job"""
     job = test_job_creation()
     job.submit()
     code, stdout, stderr = job.get()
     assert code == 0
-    assert stdout == 'hi'
+    assert stdout.split('\n')[1:4] == ['Running echo', 'hi', 'Done']
     assert stderr == ''
+    return job
 
+
+def test_job_cleaning():
+    """Delete intermediate files."""
+    job = test_job_execution()
+    job.clean()
+    assert 'echo.cluster' not in os.listdir('.')
+
+
+def test_function_submission():
+    """Submit a function."""
+    job = cluster.Job(write_to_file, ('42', 'bobfile'))
+    job.submit()
+    code, stdout, stderr = job.get()
+    print(code, stdout, stderr)
+    assert stdout.split('\n')[1:3] == ['Running write_to_file', 'Done']
+    assert stderr == ''
+    with open('bobfile') as fin:
+        assert fin.read().rstrip() == '42'
+    os.remove('bobfile')
+    job.clean()

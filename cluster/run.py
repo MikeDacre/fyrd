@@ -7,7 +7,7 @@ File management and execution functions.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-02-11 16:03
- Last modified: 2016-04-11 19:30
+ Last modified: 2016-04-14 14:32
 
 ============================================================================
 """
@@ -29,7 +29,11 @@ __all__ = ['cmd', 'which', 'open_zipped']
 
 
 FUNC_RUNNER = """\
-import pickle
+import sys
+import dill
+
+sys.path.append('{path}')
+import {module}
 
 
 def run_function(function_call, args=None):
@@ -48,16 +52,16 @@ def run_function(function_call, args=None):
         out = function_call()
     return out
 
-with open({pickle_file}, 'rb') as fin:
-    function_call, args = pickle.load(fin)
+with open('{pickle_file}', 'rb') as fin:
+    function_call, args = dill.load(fin)
 
 try:
     out = run_function(function_call, args)
 except Exception as e:
     out = e
 
-with open({out_file}, 'wb') as fout:
-    pickle.dump(out, fout)
+with open('{out_file}', 'wb') as fout:
+    dill.dump(out, fout)
 
 """
 
