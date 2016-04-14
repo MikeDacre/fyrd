@@ -7,7 +7,7 @@ File management and execution functions.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-02-11 16:03
- Last modified: 2016-03-30 21:30
+ Last modified: 2016-04-11 19:30
 
 ============================================================================
 """
@@ -21,6 +21,45 @@ from subprocess import PIPE
 from . import logme
 
 __all__ = ['cmd', 'which', 'open_zipped']
+
+
+###############################################################################
+#                           Function Running Script                           #
+###############################################################################
+
+
+FUNC_RUNNER = """\
+import pickle
+
+
+def run_function(function_call, args=None):
+    '''Run a function with args and return output.'''
+    if not hasattr(function_call, '__call__'):
+        raise FunctionError('{{}} is not a callable function.'.format(
+            function_call))
+    if args:
+        if isinstance(args, (tuple, list)):
+            out = function_call(*args)
+        elif isinstance(args, dict):
+            out = function_call(**args)
+        else:
+            out = function_call(args)
+    else:
+        out = function_call()
+    return out
+
+with open({pickle_file}, 'rb') as fin:
+    function_call, args = pickle.load(fin)
+
+try:
+    out = run_function(function_call, args)
+except Exception as e:
+    out = e
+
+with open({out_file}, 'wb') as fout:
+    pickle.dump(out, fout)
+
+"""
 
 
 ###############################################################################

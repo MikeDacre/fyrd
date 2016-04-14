@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-44-20 23:03
- Last modified: 2016-04-11 19:01
+ Last modified: 2016-04-11 20:10
 
    DESCRIPTION: Allows simple job submission with either torque, slurm, or
                 with the multiprocessing module.
@@ -49,7 +49,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
 ============================================================================
 """
 import os
-import re
+import sys
 from time import sleep
 from types import ModuleType
 from textwrap import dedent
@@ -71,11 +71,10 @@ from . import ClusterError
 
 # Default is normal, change to 'slurm' or 'torque' as needed.
 from . import QUEUE
-from . import ALLOWED_QUEUES
 
-#########################################################
-#  The multiprocessing pool, only used in 'local' mode  #
-#########################################################
+##########################################################
+#  The multiprocessing pool, only used in 'normal' mode  #
+##########################################################
 
 from . import POOL
 from . import THREADS
@@ -83,51 +82,15 @@ from . import THREADS
 # Reset broken multithreading
 # Some of the numpy C libraries can break multithreading, this command
 # fixes the issue.
-check_output("taskset -p 0xff %d &>/dev/null" % os.getpid(), shell=True)
-
-
-###############################################################################
-#                           Function Running Script                           #
-###############################################################################
-
-
-FUNC_RUNNER = """\
-import pickle
-
-
-def run_function(function_call, args=None):
-    '''Run a function with args and return output.'''
-    if not hasattr(function_call, '__call__'):
-        raise FunctionError('{{}} is not a callable function.'.format(
-            function_call))
-    if args:
-        if isinstance(args, (tuple, list)):
-            out = function_call(*args)
-        elif isinstance(args, dict):
-            out = function_call(**args)
-        else:
-            out = function_call(args)
-    else:
-        out = function_call()
-    return out
-
-with open({pickle_file}, 'rb') as fin:
-    function_call, args = pickle.load(fin)
-
 try:
-    out = run_function(function_call, args)
-except Exception as e:
-    out = e
-
-with open({out_file}, 'wb') as fout:
-    pickle.dump(out, fout)
-
-"""
+    check_output("taskset -p 0xff %d &>/dev/null" % os.getpid(), shell=True)
+except CalledProcessError:
+    pass  # This doesn't work on Macs or Windows
 
 # Global Job Submission Arguments
-KWARGS=dict(threads=None, cores=None, time=None, mem=None, partition=None,
-            modules=None, dependencies=None, suffix=None)
-ARGINFO="""\
+KWARGS = ('threads', 'cores', 'time', 'mem', 'partition', 'modules',
+          'dependencies', 'suffix')
+ARGINFO = """\
 :cores:        How many cores to run on or threads to use.
 :dependencies: A list of dependencies for this job, must be either
                 Job objects (required for normal mode) or job numbers.
@@ -209,7 +172,7 @@ class Job(object):
     # Holds queue information in torque and slurm
     queue_info   = None
 
-    def __init__(name, command, args=None, path=None, **KWARGS):
+    def __init__(self, name, command, args=None, path=None, **kwargs):
         """Create a job object will submission information.
 
         Used in all modes::
@@ -219,10 +182,15 @@ class Job(object):
         :args:         Optional arguments to add to command, particularly
                        useful for functions.
         {arginfo}
-        """.format(ARGINFO)
+        """.format(arginfo=ARGINFO)
+        # Check keyword arguments
+        for arg in kwargs:
+            if arg not in KWARGS:
+                raise Exception('Unrecognized argument {}'.format(arg))
+
         # Sanitize arguments
         name    = str(name)
-        cores   = cores if cores else 1  # In case cores are passed as None
+        modules = kwargs['modules'] if 'modules' in kwargs else None
         modules = [modules] if isinstance(modules, str) else modules
         usedir  = os.path.abspath(path) if path else os.path.abspath('.')
 
@@ -234,23 +202,24 @@ class Job(object):
                 else:
                     args = (args,)
 
-        # Cores
-        self.cores = cores
+        # In case cores are passed as None
+        self.cores = kwargs['cores'] if 'cores' in kwargs else 1
 
         # Set output files
-        suffix = suffix if suffix else 'cluster'
-        self.outfile = '.'.join(name, suffix, 'out')
-        self.errfile = '.'.join(name, suffix, 'err')
+        suffix = kwargs['suffix'] if kwargs['suffix'] else 'cluster'
+        self.outfile = '.'.join([name, suffix, 'out'])
+        self.errfile = '.'.join([name, suffix, 'err'])
 
         # Check and set dependencies
-        if dependencies:
+        if kwargs['dependencies']:
+            dependencies = kwargs['dependencies']
             self.dependencies = []
             if isinstance(dependencies, 'str'):
                 if not dependencies.isdigit():
                     raise ClusterError('Dependencies must be number or list')
                 else:
                     dependencies = [int(dependencies)]
-            elif isinstance(dependencies, (int, job)):
+            elif isinstance(dependencies, (int, Job)):
                 dependencies = [dependencies]
             elif not isinstance(dependencies, (tuple, list)):
                 raise ClusterError('Dependencies must be number or list')
@@ -275,8 +244,8 @@ class Job(object):
 
         # Build execution wrapper with modules
         precmd  = ''
-        if modules:
-            for module in modules:
+        if kwargs['modules']:
+            for module in kwargs['modules']:
                 precmd += 'module load {}\n'.format(module)
         precmd += dedent("""\
             cd {}
@@ -298,14 +267,14 @@ class Job(object):
             self.qtype = 'slurm'
             scrpt = os.path.join(usedir, '{}.cluster.sbatch'.format(name))
             sub_script.append('#!/bin/bash')
-            if partition:
-                sub_script.append('#SBATCH -p {}'.format(partition))
+            if 'partition' in kwargs:
+                sub_script.append('#SBATCH -p {}'.format(kwargs['partition']))
             sub_script.append('#SBATCH --ntasks 1')
-            sub_script.append('#SBATCH --cpus-per-task {}'.format(cores))
-            if time:
-                sub_script.append('#SBATCH --time={}'.format(time))
-            if mem:
-                sub_script.append('#SBATCH --mem={}'.format(mem))
+            sub_script.append('#SBATCH --cpus-per-task {}'.format(self.cores))
+            if 'time' in kwargs:
+                sub_script.append('#SBATCH --time={}'.format(kwargs['time']))
+            if 'mem' in kwargs:
+                sub_script.append('#SBATCH --mem={}'.format(kwargs['mem']))
             sub_script.append('#SBATCH -o {}'.format(self.outfile))
             sub_script.append('#SBATCH -e {}'.format(self.errfile))
             sub_script.append('cd {}'.format(usedir))
@@ -322,13 +291,13 @@ class Job(object):
             self.qtype = 'torque'
             scrpt = os.path.join(usedir, '{}.cluster.qsub'.format(name))
             sub_script.append('#!/bin/bash')
-            if partition:
-                sub_script.append('#PBS -q {}'.format(partition))
-            sub_script.append('#PBS -l nodes=1:ppn={}'.format(cores))
-            if time:
-                sub_script.append('#PBS -l walltime={}'.format(time))
-            if mem:
-                sub_script.append('#PBS mem={}MB'.format(mem))
+            if 'partition' in kwargs:
+                sub_script.append('#PBS -q {}'.format(kwargs['partition']))
+            sub_script.append('#PBS -l nodes=1:ppn={}'.format(self.cores))
+            if 'time' in kwargs:
+                sub_script.append('#PBS -l walltime={}'.format(kwargs['time']))
+            if 'mem' in kwargs:
+                sub_script.append('#PBS mem={}MB'.format(kwargs['mem']))
             sub_script.append('#PBS -o {}.cluster.out'.format(name))
             sub_script.append('#PBS -e {}.cluster.err\n'.format(name))
             sub_script.append('mkdir -p $LOCAL_SCRATCH')
@@ -340,7 +309,7 @@ class Job(object):
             # Create the pool
             global POOL
             if not POOL or POOL._state != 0:
-                threads == threads if threads else THREADS
+                threads = kwargs['threads'] if 'threads' in kwargs else THREADS
                 POOL = Pool(threads)
             scrpt = os.path.join(usedir, '{}.cluster'.format(name))
             sub_script.append('#!/bin/bash\n')
@@ -361,11 +330,11 @@ class Job(object):
 
     def write(self):
         """Write all scripts."""
-        submission.write_file()
-        if exec_script:
-            exec_script.write_file()
-        if function:
-            function.write_file()
+        self.submission.write_file()
+        if self.exec_script:
+            self.exec_script.write_file()
+        if self.function:
+            self.function.write_file()
         self.written = True
 
     def clean(self):
@@ -390,7 +359,7 @@ class Job(object):
         if self.qtype == 'normal':
             if self.dependencies:
                 for depend in self.dependencies:
-                    if not isinsance(depend, (Job, pool.ApplyResult)):
+                    if not isinstance(depend, (Job, pool.ApplyResult)):
                         raise Exception('In normal mode, dependency tracking' +
                                         'only works with Job objects.')
                     # Block until tasks are done
@@ -398,14 +367,13 @@ class Job(object):
                         depend.wait()
             global POOL
             if not POOL or POOL._state != 0:
-                threads == threads if threads else THREADS
-                POOL = Pool(threads)
-                command = 'bash {}'.format(script_file)
-                args = dict(stdout=self.stdout,
-                            stderr=self.stderr)
-                self.pool_job = POOL.apply_async(run.cmd, (command,), args)
-                self.submitted = True
-                return self
+                POOL = Pool(THREADS)
+            command = 'bash {}'.format(self.submission.file_name)
+            args = dict(stdout=self.stdout,
+                        stderr=self.stderr)
+            self.pool_job = POOL.apply_async(run.cmd, (command,), args)
+            self.submitted = True
+            return self
         elif self.qtype == 'slurm':
             if self.dependencies:
                 dependencies = []
@@ -491,7 +459,6 @@ class Job(object):
                 errstr = None
             return self.queue_info.exitcode, outstr, errstr
 
-
     ###############
     #  Internals  #
     ###############
@@ -509,14 +476,14 @@ class Job(object):
     def __repr__(self):
         """Return simple job information."""
         if self.submitted:
-            outstr = "Job<{id}".format(self.id)
+            outstr = "Job<{id}".format(id=self.id)
         else:
             outstr = "Job<NOT_SUBMITTED"
-        outstr += "({name};command:{cmnd};args:{args};qtype=qtype)".format(
+        outstr += "({name};command:{cmnd};args:{args};qtype={qtype})".format(
             name=self.name, cmnd=self.command, args=self.args, qtype=self.qtype)
-        if done:
+        if self.done:
             outstr += "COMPLETED"
-        elif written:
+        elif self.written:
             outstr += "WRITTEN"
         return outstr
 
@@ -531,6 +498,7 @@ class Job(object):
         return "{name} ID: {id}, state: {state}".format(
             name=self.name, id=self.id, state=state)
 
+
 class Script(object):
 
     """A script string plus a file name."""
@@ -540,7 +508,7 @@ class Script(object):
     def __init__(self, file_name, script):
         """Initialize the script and file name."""
         self.script    = script
-        self.file_name = os.path(abspath(file_name))
+        self.file_name = os.path.abspath(file_name)
 
     def write_file(self, overwrite=False):
         """Write the script file."""
@@ -590,8 +558,8 @@ class Function(Script):
                 imports = [imports]
         else:
             imports = []
-            for name, module in globals().items():
-                if isintsance(module, ModuleType):
+            for module in globals().values():
+                if isinstance(module, ModuleType):
                     imports.append(module.__name__)
             imports = list(set(imports))
 
@@ -607,8 +575,8 @@ class Function(Script):
         self.outfile     = outfile if outfile else file_name + '.pickle.out'
 
         # Create script text
-        script += '\n\n' + FUNC_RUNNER.format(pickle_file=self.pickle_file,
-                                            out_file=self.outfile)
+        script += '\n\n' + run.FUNC_RUNNER.format(pickle_file=self.pickle_file,
+                                                  out_file=self.outfile)
 
         super(Function, self).__init__(file_name, script)
 
@@ -618,7 +586,7 @@ class Function(Script):
 ###############################################################################
 
 
-def submit(name, command, args=None, path=None, **KWARGS):
+def submit(name, command, args=None, path=None, **kwargs):
     """Submit a script to the cluster.
 
     Used in all modes::
@@ -632,14 +600,15 @@ def submit(name, command, args=None, path=None, **KWARGS):
 
     Returns:
         Job object
-    """.format(ARGINFO)
+    """.format(arginfo=ARGINFO)
+    # Check keyword arguments
+    for arg in kwargs:
+        if arg not in KWARGS:
+            raise Exception('Unrecognized argument {}'.format(arg))
+
     queue.check_queue()  # Make sure the QUEUE is usable
 
-    cores = cores if cores else 1
-
-    job = Job(name, command, args=args, path=path, cores=cores, time=time,
-              mem=mem, partition=partition, modules=modules,
-              dependencies=dependencies, threads=threads)
+    job = Job(name, command, args=args, path=path, **kwargs)
 
     job.write()
     job.submit()
@@ -652,7 +621,7 @@ def submit(name, command, args=None, path=None, **KWARGS):
 #########################
 
 
-def make_job(name, command, args=None, path=None, **KWARGS):
+def make_job(name, command, args=None, path=None, **kwargs):
     """Make a job file compatible with the chosen cluster.
 
     If mode is normal, this is just a simple shell script.
@@ -668,19 +637,21 @@ def make_job(name, command, args=None, path=None, **KWARGS):
 
     Returns:
         A job object
-    """.format(ARGINFO)
+    """.format(arginfo=ARGINFO)
+    # Check keyword arguments
+    for arg in kwargs:
+        if arg not in KWARGS:
+            raise Exception('Unrecognized argument {}'.format(arg))
 
     queue.check_queue()  # Make sure the QUEUE is usable
 
-    job = Job(name, command, args=args, path=path, cores=cores, time=time,
-              mem=mem, partition=partition, modules=modules,
-              dependencies=dependencies)
+    job = Job(name, command, args=args, path=path, **kwargs)
 
     # Return the path to the script
     return job
 
 
-def make_job_file(name, command, args=None, path=None, **KWARGS):
+def make_job_file(name, command, args=None, path=None, **kwargs):
     """Make a job file compatible with the chosen cluster.
 
     If mode is normal, this is just a simple shell script.
@@ -696,13 +667,15 @@ def make_job_file(name, command, args=None, path=None, **KWARGS):
 
     Returns:
         Path to job script
-    """.format(ARGINFO)
+    """.format(arginfo=ARGINFO)
+    # Check keyword arguments
+    for arg in kwargs:
+        if arg not in KWARGS:
+            raise Exception('Unrecognized argument {}'.format(arg))
 
     queue.check_queue()  # Make sure the QUEUE is usable
 
-    job = Job(name, command, args=args, path=path, cores=cores, time=time,
-              mem=mem, partition=partition, modules=modules,
-              dependencies=dependencies)
+    job = Job(name, command, args=args, path=path, **kwargs)
 
     job = job.write()
 

@@ -6,16 +6,14 @@ Monitor the queue for torque or slurm.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-04-11 18:31
+ Last modified: 2016-04-11 20:11
 
 ============================================================================
 """
-import os
 import re
-import sys
 import pwd               # Used to get usernames for queue
+import os
 from os import environ   # Used to check current username
-from sys import stderr
 from time import time
 from time import sleep
 from subprocess import check_output, CalledProcessError
@@ -50,7 +48,10 @@ from . import THREADS
 # Reset broken multithreading
 # Some of the numpy C libraries can break multithreading, this command
 # fixes the issue.
-check_output("taskset -p 0xff %d &>/dev/null" % os.getpid(), shell=True)
+try:
+    check_output("taskset -p 0xff %d &>/dev/null" % os.getpid(), shell=True)
+except CalledProcessError:
+    pass  # This doesn't work on Macs or Windows
 
 # Our imports
 from . import DEFAULTS
@@ -70,7 +71,7 @@ def get_cluster_environment():
     """Detect the local cluster environment and set QUEUE globally.
 
     Uses which to search for sbatch first, then qsub. If neither is found,
-    QUEUE is set to local.
+    QUEUE is set to normal.
 
     :returns: QUEUE variable ('torque', 'slurm', or 'local')
     """
@@ -80,7 +81,7 @@ def get_cluster_environment():
     elif run.which('qsub'):
         QUEUE = 'torque'
     else:
-        QUEUE = 'local'
+        QUEUE = 'normal'
     if QUEUE == 'slurm' or QUEUE == 'torque':
         logme.log('{} detected, using for cluster submissions'.format(QUEUE),
                   'debug')
@@ -102,92 +103,6 @@ def check_queue():
                            'should be: normal, torque, or slurm')
 
 
-#####################################
-#  Wait for cluster jobs to finish  #
-#####################################
-
-
-def wait(jobs):
-    """Wait for jobs to finish.
-
-    :jobs:    A single job or list of jobs to wait for. With torque or slurm,
-              these should be job IDs, with normal mode, these are
-              multiprocessing job objects (returned by submit())
-    """
-    check_queue()  # Make sure the QUEUE is usable
-
-    # Sanitize argument
-    if not isinstance(jobs, (list, tuple)):
-        jobs = [jobs]
-    for job in jobs:
-        if not isinstance(job, (str, int, pool.ApplyResult)):
-            raise ClusterError('job must be int, string, or ApplyResult, ' +
-                               'is {}'.format(type(job)))
-
-    if QUEUE == 'normal':
-        for job in jobs:
-            if not isinstance(job, pool.ApplyResult):
-                raise ClusterError('jobs must be ApplyResult objects')
-            job.wait()
-    elif QUEUE == 'torque':
-        # Wait for 5 seconds before checking, as jobs take a while to be queued
-        # sometimes
-        sleep(5)
-
-        s = re.compile(r' +')  # For splitting qstat output
-        # Jobs must be strings for comparison operations
-        jobs = [str(j) for j in jobs]
-        while True:
-            c = 0
-            try:
-                q = check_output(['qstat', '-a']).decode().rstrip().split('\n')
-            except CalledProcessError:
-                if c == 5:
-                    raise
-                c += 1
-                sleep(2)
-                continue
-            # Check header
-            if not re.split(r' {2,100}', q[3])[9] == 'S':
-                raise ClusterError('Unrecognized torque qstat format')
-            # Build a list of completed jobs
-            complete = []
-            for j in q[5:]:
-                i = s.split(j)
-                if i[9] == 'C':
-                    complete.append(i[0].split('.')[0])
-            # Build a list of all jobs
-            all  = [s.split(j)[0].split('.')[0] for j in q[5:]]
-            # Trim down job list
-            jobs = [j for j in jobs if j in all]
-            jobs = [j for j in jobs if j not in complete]
-            if len(jobs) == 0:
-                return
-            sleep(2)
-    elif QUEUE == 'slurm':
-        # Wait for 2 seconds before checking, as jobs take a while to be queued
-        # sometimes
-        sleep(2)
-
-        # Jobs must be strings for comparison operations
-        jobs = [str(j) for j in jobs]
-        while True:
-            # Slurm allows us to get a custom output for faster parsing
-            q = check_output(
-                ['squeue', '-h', '-o', "'%A,%t'"]).decode().rstrip().split(',')
-            # Build a list of jobs
-            complete = [i[0] for i in q if i[1] == 'CD']
-            failed   = [i[0] for i in q if i[1] == 'F']
-            all      = [i[0] for i in q]
-            # Trim down job list, ignore failures
-            jobs = [i for i in jobs if i not in all]
-            jobs = [i for i in jobs if i not in complete]
-            jobs = [i for i in jobs if i not in failed]
-            if len(jobs) == 0:
-                return
-            sleep(2)
-
-
 class Queue(object):
 
     """Handle torque, slurm, or multiprocessing objects.
@@ -200,7 +115,6 @@ class Queue(object):
     to the queue directly with add().
 
     """
-
 
     def __init__(self, user=None, queue=None):
         """Create a queue object specific to a single queue and user.
@@ -270,6 +184,7 @@ class Queue(object):
         if QUEUE == 'normal':
             for job in jobs:
                 if isinstance(job, self._Job):
+                    job = job.pool_job
                 if not isinstance(job, pool.ApplyResult):
                     raise ClusterError('jobs must be ApplyResult objects')
                 job.wait()
@@ -587,4 +502,91 @@ class Queue(object):
         """ Simple Exception wrapper. """
 
         pass
+
+
+###############################################################################
+#                  Expose Queue Methods as Simple Functions                   #
+###############################################################################
+
+
+def wait(jobs):
+    """Wait for jobs to finish.
+
+    :jobs:    A single job or list of jobs to wait for. With torque or slurm,
+              these should be job IDs, with normal mode, these are
+              multiprocessing job objects (returned by submit())
+    """
+    check_queue()  # Make sure the QUEUE is usable
+
+    # Sanitize argument
+    if not isinstance(jobs, (list, tuple)):
+        jobs = [jobs]
+    for job in jobs:
+        if not isinstance(job, (str, int, pool.ApplyResult)):
+            raise ClusterError('job must be int, string, or ApplyResult, ' +
+                               'is {}'.format(type(job)))
+
+    if QUEUE == 'normal':
+        for job in jobs:
+            if not isinstance(job, pool.ApplyResult):
+                raise ClusterError('jobs must be ApplyResult objects')
+            job.wait()
+    elif QUEUE == 'torque':
+        # Wait for 5 seconds before checking, as jobs take a while to be queued
+        # sometimes
+        sleep(5)
+
+        s = re.compile(r' +')  # For splitting qstat output
+        # Jobs must be strings for comparison operations
+        jobs = [str(j) for j in jobs]
+        while True:
+            c = 0
+            try:
+                q = check_output(['qstat', '-a']).decode().rstrip().split('\n')
+            except CalledProcessError:
+                if c == 5:
+                    raise
+                c += 1
+                sleep(2)
+                continue
+            # Check header
+            if not re.split(r' {2,100}', q[3])[9] == 'S':
+                raise ClusterError('Unrecognized torque qstat format')
+            # Build a list of completed jobs
+            complete = []
+            for j in q[5:]:
+                i = s.split(j)
+                if i[9] == 'C':
+                    complete.append(i[0].split('.')[0])
+            # Build a list of all jobs
+            all  = [s.split(j)[0].split('.')[0] for j in q[5:]]
+            # Trim down job list
+            jobs = [j for j in jobs if j in all]
+            jobs = [j for j in jobs if j not in complete]
+            if len(jobs) == 0:
+                return
+            sleep(2)
+    elif QUEUE == 'slurm':
+        # Wait for 2 seconds before checking, as jobs take a while to be queued
+        # sometimes
+        sleep(2)
+
+        # Jobs must be strings for comparison operations
+        jobs = [str(j) for j in jobs]
+        while True:
+            # Slurm allows us to get a custom output for faster parsing
+            q = check_output(
+                ['squeue', '-h', '-o', "'%A,%t'"]).decode().rstrip().split(',')
+            # Build a list of jobs
+            complete = [i[0] for i in q if i[1] == 'CD']
+            failed   = [i[0] for i in q if i[1] == 'F']
+            all      = [i[0] for i in q]
+            # Trim down job list, ignore failures
+            jobs = [i for i in jobs if i not in all]
+            jobs = [i for i in jobs if i not in complete]
+            jobs = [i for i in jobs if i not in failed]
+            if len(jobs) == 0:
+                return
+            sleep(2)
+
 

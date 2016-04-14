@@ -1,5 +1,8 @@
-# Tests
-test/
+# Ipython
+.ipynb_checkpoints
+
+# Apple's junk
+.DS_Store
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
