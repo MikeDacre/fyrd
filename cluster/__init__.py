@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-44-20 23:03
- Last modified: 2016-04-14 14:41
+ Last modified: 2016-04-14 14:55
 
    DESCRIPTION: Allows simple job submission with either torque, slurm, or
                 with the multiprocessing module.
@@ -55,13 +55,13 @@ Submit jobs to slurm or torque, or with multiprocessing.
 from .config_file import get_config
 DEFAULTS = get_config()
 
-##########################
-#  Multiprocessing POOL  #
-##########################
+################################
+#  Normal Mode Multithreading  #
+################################
 
 from multiprocessing import cpu_count as _cnt
-POOL    = None
-THREADS = _cnt()
+JOBQUEUE = None  # This will hold a globally available JobQueue object.
+THREADS  = _cnt()
 
 #################################################
 #  Currently configured job submission systems  #

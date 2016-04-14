@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-44-20 23:03
- Last modified: 2016-04-14 14:38
+ Last modified: 2016-04-14 14:52
 
    DESCRIPTION: Allows simple job submission with either torque, slurm, or
                 with the multiprocessing module.
@@ -379,21 +379,22 @@ class Job(object):
         if not self.written:
             self.write()
         if self.qtype == 'normal':
+            # Normal mode dependency tracking uses only integer job numbers
+            dependencies = []
             if self.dependencies:
                 for depend in self.dependencies:
-                    if not isinstance(depend, (Job, pool.ApplyResult)):
-                        raise Exception('In normal mode, dependency tracking' +
-                                        'only works with Job objects.')
-                    # Block until tasks are done
-                    if not depend.done:
-                        depend.wait()
-            global POOL
-            if not POOL or POOL._state != 0:
-                POOL = Pool(THREADS)
+                    if isinstance(depend, Job):
+                        dependencies.append(int(depend.id))
+                    else:
+                        dependencies.append(int(depend))
             command = 'bash {}'.format(self.submission.file_name)
             args = dict(stdout=self.stdout,
                         stderr=self.stderr)
-            self.pool_job = POOL.apply_async(run.cmd, (command,), args)
+            # Make sure the global job pool exists
+            if not JOBQUEUE:
+                global JOBQUEUE
+                JOBQUEUE = jobqueue.JobQueue(cores=self.cores)
+            self.id = JOBQUEUE.add(run.cmd, (command,), args)
             self.submitted = True
             return self
         elif self.qtype == 'slurm':
