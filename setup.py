@@ -50,6 +50,7 @@ setup(
 
     keywords='slurm cluster job_management',
 
+    requires=['dill'],
     packages=['cluster'],
     scripts=scpts,
 )
