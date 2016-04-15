@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-44-20 23:03
- Last modified: 2016-04-14 14:52
+ Last modified: 2016-04-14 18:05
 
    DESCRIPTION: Allows simple job submission with either torque, slurm, or
                 with the multiprocessing module.
@@ -57,8 +57,14 @@ from textwrap import dedent
 from subprocess import check_output, CalledProcessError
 from multiprocessing import Pool, pool
 
-# Pickle functions without defining module
-import dill
+# Try to use dill, revert to pickle if not found
+try:
+    import dill as pickle
+except ImportError:
+    try:
+        import cPickle as pickle # For python2
+    except ImportError:
+        import pickle
 
 ###############################################################################
 #                                Our functions                                #
@@ -80,7 +86,7 @@ from . import QUEUE
 #  The multiprocessing pool, only used in 'normal' mode  #
 ##########################################################
 
-from . import POOL
+from . import jobqueue
 from . import THREADS
 
 # Reset broken multithreading
@@ -197,7 +203,7 @@ class Job(object):
                 kwargs[arg] = None
 
         # Get environment
-
+        self.qtype = QUEUE
 
         # Sanitize arguments
         if not name:
@@ -285,7 +291,7 @@ class Job(object):
 
         # Create queue-dependent scripts
         sub_script = []
-        if QUEUE == 'slurm':
+        if self.qtype == 'slurm':
             self.qtype = 'slurm'
             scrpt = os.path.join(usedir, '{}.cluster.sbatch'.format(name))
             sub_script.append('#!/bin/bash')
@@ -309,7 +315,7 @@ class Job(object):
             exe_script.append(precmd)
             exe_script.append(command + '\n')
             exe_script.append(pstcmd)
-        elif QUEUE == 'torque':
+        elif self.qtype == 'torque':
             self.qtype = 'torque'
             scrpt = os.path.join(usedir, '{}.cluster.qsub'.format(name))
             sub_script.append('#!/bin/bash')
@@ -326,13 +332,12 @@ class Job(object):
             sub_script.append(precmd)
             sub_script.append(command + '')
             sub_script.append(pstcmd)
-        elif QUEUE == 'normal':
+        elif self.qtype == 'normal':
             self.qtype = 'normal'
             # Create the pool
-            global POOL
-            if not POOL or POOL._state != 0:
+            if not jobqueue.QUEUE:
                 threads = kwargs['threads'] if 'threads' in kwargs else THREADS
-                POOL = Pool(threads)
+                jobqueue.QUEUE = jobqueue.JobQueue(cores=threads)
             scrpt = os.path.join(usedir, '{}.cluster'.format(name))
             sub_script.append('#!/bin/bash\n')
             sub_script.append(precmd)
@@ -388,13 +393,12 @@ class Job(object):
                     else:
                         dependencies.append(int(depend))
             command = 'bash {}'.format(self.submission.file_name)
-            args = dict(stdout=self.stdout,
-                        stderr=self.stderr)
+            kwargs  = dict(stdout=self.stdout,
+                           stderr=self.stderr)
             # Make sure the global job pool exists
-            if not JOBQUEUE:
-                global JOBQUEUE
-                JOBQUEUE = jobqueue.JobQueue(cores=self.cores)
-            self.id = JOBQUEUE.add(run.cmd, (command,), args)
+            if not jobqueue.QUEUE:
+                jobqueue.QUEUE = jobqueue.JobQueue(cores=self.cores)
+            self.id = jobqueue.QUEUE.add(run.cmd, (command,), kwargs)
             self.submitted = True
             return self
         elif self.qtype == 'slurm':
@@ -607,9 +611,9 @@ class Function(Script):
             else:
                 if '.' in imp:
                     rootimp = imp.split('.')[0]
-                    if not rootimp == 'dill' and not rootimp == 'sys':
+                    if not rootimp == 'pickle' and not rootimp == 'sys':
                         filtered_imports.append('import {}'.format(rootimp))
-                if imp == 'dill' or imp == 'sys':
+                if imp == 'pickle' or imp == 'sys':
                     continue
                 filtered_imports.append('import {}'.format(imp))
         # Get rid of duplicates and sort imports
@@ -630,7 +634,7 @@ class Function(Script):
     def write(self, overwrite=True):
         """Write the pickle file and call the parent Script write function."""
         with open(self.pickle_file, 'wb') as fout:
-            dill.dump((self.function, self.args), fout)
+            pickle.dump((self.function, self.args), fout)
         super(Function, self).write(overwrite)
 
     def clean(self):
@@ -839,12 +843,19 @@ def submit_file(script_file, name=None, dependencies=None, threads=None):
             break
         return job
     elif QUEUE == 'normal':
-        global POOL
-        if not POOL:
-            POOL = Pool(threads) if threads else Pool()
+        # Normal mode dependency tracking uses only integer job numbers
+        depends = []
+        if dependencies:
+            for depend in dependencies:
+                if isinstance(depend, Job):
+                    depends.append(int(depend.id))
+                else:
+                    depends.append(int(depend))
         command = 'bash {}'.format(script_file)
-        args = dict(stdout=name + '.cluster.out', stderr=name + '.cluster.err')
-        return POOL.apply_async(run.cmd, (command,), args)
+        # Make sure the global job pool exists
+        if not jobqueue.QUEUE:
+            jobqueue.QUEUE = jobqueue.JobQueue(cores=THREADS)
+        return jobqueue.QUEUE.add(run.cmd, (command,), dependencies=depends)
 
 
 def clean_dir(directory='.', suffix='cluster'):

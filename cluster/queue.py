@@ -6,7 +6,7 @@ Monitor the queue for torque or slurm.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-04-11 20:11
+ Last modified: 2016-04-14 19:44
 
 ============================================================================
 """
@@ -42,7 +42,7 @@ from . import ALLOWED_QUEUES
 #  The multiprocessing pool, only used in 'local' mode  #
 #########################################################
 
-from . import POOL
+from . import jobqueue
 from . import THREADS
 
 # Reset broken multithreading
@@ -239,12 +239,10 @@ class Queue(object):
 
         # Mode specific initialization
         if self.qtype == 'normal':
-            # We don't need to do anything for normal mode, just make sure
-            # the pool is set, jobs need to be added to the queue manually
-            global POOL
-            if not POOL or POOL._state != 0:
-                POOL = Pool(THREADS)
-            self.pool = POOL
+            if not jobqueue.QUEUE:
+                jobqueue.QUEUE = jobqueue.JobQueue(cores=THREADS)
+            self.jobqueue = jobqueue.QUEUE
+
 
         elif self.qtype == 'torque':
             try_count = 0

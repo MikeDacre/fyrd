@@ -24,6 +24,7 @@ def test_queue_creation():
     assert env == 'torque' or env == 'slurm' or env == 'normal'
     cluster.check_queue()
     queue = cluster.Queue()
+    assert queue.qtype == env
     len(queue)
 
 
@@ -33,6 +34,7 @@ def test_job_creation():
         job = cluster.Job('echo hi', threads=4)
     else:
         job = cluster.Job('echo hi', cores=2, time='00:02:00', mem='2000')
+    assert job.qtype == env
     return job
 
 

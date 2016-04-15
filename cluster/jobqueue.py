@@ -7,7 +7,7 @@ Manage job dependency tracking with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-56-14 14:04
- Last modified: 2016-04-14 15:38
+ Last modified: 2016-04-14 19:47
 
    DESCRIPTION: Runs jobs with a multiprocessing.Pool, but manages dependency
                 using an additional Process that loops through all submitted
@@ -15,10 +15,8 @@ Manage job dependency tracking with multiprocessing.
 
 ============================================================================
 """
-import sys
 import multiprocessing as mp
 from time import sleep
-from queue import Empty
 
 # Get threads from root
 from . import THREADS
@@ -29,6 +27,8 @@ from . import ClusterError
 # Get logging function
 from . import logme
 
+# A global placeholder for a single JobQueue instance
+QUEUE = None
 
 ###############################################################################
 #                      The JobQueue Class to Manage Jobs                      #
@@ -50,14 +50,65 @@ class JobQueue(object):
         assert self.runner.is_alive()
         self.jobs = {}
 
-    def update_jobs(self):
+    def update(self):
         """Get fresh job info from the runner."""
         sleep(2)  # This allows the queue time to flush
-        while not outqueue.empty():
+        while not self._outputs.empty():
             # We loop through the whole queue stack, updating the dictionary
             # every time so that we get the latest info
-            jobdict.update(outqueue.get_nowait())
-        return jobdict
+            self.jobs.update(self._outputs.get_nowait())
+
+    def add(self, function, args=None, kwargs=None, dependencies=None):
+        """Add function to local job queue.
+
+        :function:     A function object. To run a command, use the run.cmd
+                       function here.
+        :args:         A tuple of args to submit to the function.
+        :kwargs:       A dict of keyword arguments to submit to the function.
+        :dependencies: A list of job IDs that this job will depend on.
+        :returns:      A job ID
+        """
+        self.update()
+        lastjob = max(self.jobs.keys()) if self.jobs.keys() else 0
+        assert self.runner.is_alive()
+        self._jobqueue.put(((function, args, kwargs), dependencies))
+        sleep(0.5)
+        self.update()
+        newjob = max(self.jobs.keys())
+        assert newjob != lastjob
+        return newjob
+
+    def __len__(self):
+        """Length is the total job count."""
+        self.update()
+        return len(self.jobs)
+
+    def __getattr__(self, attr):
+        """Dynamic dictionary filtering."""
+        if attr == 'completed' or attr == 'started' or attr == 'waiting':
+            newdict = {}
+            for jobid, job_info in self.jobs.items():
+                if job_info['state'] == attr:
+                    newdict[jobid] = job_info
+            return newdict
+
+    def __getitem__(self, key):
+        """Allow direct job lookup by jobid."""
+        key = int(key)
+        if key in self.jobs:
+            return self.jobs[key]
+        else:
+            return None
+
+    def __repr__(self):
+        """Class information."""
+        return "JobQueue<jobs:{};completed{};waiting:{};started{}>".format(
+            len(self.jobs), len(self.completed), len(self.waiting),
+            len(self.started))
+
+    def __str__(self):
+        """Print jobs."""
+        return str(self.jobs)
 
 
 ###############################################################################
@@ -79,8 +130,9 @@ def job_runner(jobqueue, outputs, cores=None):
                tuples are required.
     :outputs:  A multiprocessing.Queue object that will take outputs. A
                dictionary of job objects will be output here with the format::
-                   {job_no => {func:function, args:args, started:True/False,
-                               done:True/False, out:returned object}}
+                   {job_no => {func:function, args:args,
+                               state:waiting,started,done,
+                               out:returned object}}
                **NOTE**: function return must be picklable otherwise this will
                          raise an exception when it is put into the Queue
                          object.
@@ -108,6 +160,7 @@ def job_runner(jobqueue, outputs, cores=None):
     jobs    = {} # This will hold job numbers
     runners = {} # This will hold the multiprocessing objects
     done    = [] # A list of completed jobs to check against
+    started = [] # A list of started jobs to check against
     cores   = cores if cores else THREADS
     pool    = mp.Pool(cores)
 
@@ -121,11 +174,11 @@ def job_runner(jobqueue, outputs, cores=None):
                 continue
             if isinstance(info[0], tuple):
                 if len(info) == 1:
-                    func_args = info[0]
-                    depends   = None
+                    fun_args = info[0]
+                    depends  = None
                 elif len(info) == 2:
-                    func_args = info[0]
-                    depends   = info[1]
+                    fun_args = info[0]
+                    depends  = info[1]
                 else:
                     logme.log('job information tuple must be in the format ' +
                               '((function, args, kwargs), depends). Your ' +
@@ -133,8 +186,8 @@ def job_runner(jobqueue, outputs, cores=None):
                               '((something), depends, ??)', 'error')
                     continue
             else:
-                func_args = info
-                depends   = None
+                fun_args = info
+                depends  = None
             if len(fun_args) == 1:
                 function = fun_args[0]
                 args     = None
@@ -149,7 +202,7 @@ def job_runner(jobqueue, outputs, cores=None):
                 if not isinstance(args, tuple):
                     args = (args,)
                 if not isinstance(kwargs, dict):
-                    logme.log('kwargs must be a dict'. 'error')
+                    logme.log('kwargs must be a dict', 'error')
                     continue
             else:
                 logme.log('Too many function arguments', 'error')
@@ -158,7 +211,7 @@ def job_runner(jobqueue, outputs, cores=None):
             # The arguments look good, so lets add this to the stack.
             jobs[jobno] = {'func': function, 'args': args,
                            'kwargs': kwargs, 'depends': depends,
-                           'out': None, 'started': False, 'done': False}
+                           'out': None, 'state': None}
             output(jobs)
             jobno += 1
 
@@ -175,27 +228,34 @@ def job_runner(jobqueue, outputs, cores=None):
                     for depend in job_info['depends']:
                         if not depend in done:
                             ready = False
+                            job_info['state'] = 'waiting'
 
                 # Start jobs if dependencies are met and they aren't started.
-                if ready and not job_info['started']:
-                    if job_info['args']:
+                if ready and not jobno in started:
+                    if job_info['args'] or job_info['kwargs']:
                         if job_info['kwargs']:
-                            runners[jobno] = pool.apply_async(
-                                job_info['func'], job_info['args'],
-                                job_info['kwargs'])
+                            if job_info['args']:
+                                runners[jobno] = pool.apply_async(
+                                    job_info['func'], job_info['args'],
+                                    job_info['kwargs'])
+                            else:
+                                runners[jobno] = pool.apply_async(
+                                    job_info['func'],
+                                    kwds=job_info['kwargs'])
                         else:
                             runners[jobno] = pool.apply_async(
                                 job_info['func'], job_info['args'])
                     else:
                         runners[jobno] = pool.apply_async(job_info['func'])
-                    job_info['started'] = True
+                    job_info['state'] = 'started'
+                    started.append(jobno)
                     output(jobs)
                     sleep(0.5)  # Wait for a second to allow job to start
 
                 # Check running jobs for completion
-                if job_info['started'] and not job_info['done'] and runners[jobno].ready():
-                    job_info['out'] = runners[jobno].get()
-                    job_info['done'] = True
+                if job_info['state'] == 'started' and runners[jobno].ready():
+                    job_info['out']   = runners[jobno].get()
+                    job_info['state'] = 'done'
                     done.append(jobno)
                     output(jobs)
 
