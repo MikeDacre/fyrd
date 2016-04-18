@@ -11,12 +11,12 @@ def write_to_file(string, file):
 def test_queue_inspection():
     """Make sure that if qsub or sbatch are available, the queue is right."""
     if cluster.run.which('sbatch'):
-        assert cluster.QUEUE == 'slurm'
+        assert cluster.queue.MODE == 'slurm'
     elif cluster.run.which('qsub'):
-        assert cluster.QUEUE == 'torque'
+        assert cluster.queue.MODE == 'torque'
     else:
-        assert cluster.QUEUE == 'normal'
-    assert env == cluster.QUEUE
+        assert cluster.queue.MODE == 'normal'
+    assert env == cluster.queue.MODE
 
 
 def test_queue_creation():
@@ -68,3 +68,16 @@ def test_function_submission():
         assert fin.read().rstrip() == '42'
     os.remove('bobfile')
     job.clean()
+
+
+def test_normal_mode():
+    """If we aren't in normal mode, switch and test that too."""
+    if cluster.queue.MODE == 'normal':
+        return
+    cluster.queue.MODE = 'normal'
+    env = 'normal'
+    test_queue_creation()
+    test_job_creation()
+    test_job_execution()
+    test_job_cleaning()
+    test_function_submission()

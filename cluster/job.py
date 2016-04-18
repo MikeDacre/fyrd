@@ -7,11 +7,11 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-44-20 23:03
- Last modified: 2016-04-14 18:05
+ Last modified: 2016-04-18 15:48
 
    DESCRIPTION: Allows simple job submission with either torque, slurm, or
                 with the multiprocessing module.
-                To set the environement, set QUEUE to one of ['torque',
+                To set the environement, set queue.MODE to one of ['torque',
                 'slurm', 'normal'], or run get_cluster_environment().
                 To submit a job, run submit().
 
@@ -55,7 +55,6 @@ from time import sleep
 from types import ModuleType
 from textwrap import dedent
 from subprocess import check_output, CalledProcessError
-from multiprocessing import Pool, pool
 
 # Try to use dill, revert to pickle if not found
 try:
@@ -73,14 +72,8 @@ except ImportError:
 from . import run
 from . import logme
 from . import queue
+from . import options
 from . import ClusterError
-
-#########################
-#  Which system to use  #
-#########################
-
-# Default is normal, change to 'slurm' or 'torque' as needed.
-from . import QUEUE
 
 ##########################################################
 #  The multiprocessing pool, only used in 'normal' mode  #
@@ -97,7 +90,6 @@ try:
 except CalledProcessError:
     pass  # This doesn't work on Macs or Windows
 
-# Global Job Submission Arguments
 KWARGS = ('threads', 'cores', 'time', 'mem', 'partition', 'modules',
           'dependencies', 'suffix')
 ARGINFO = """\
@@ -182,30 +174,39 @@ class Job(object):
     # Holds queue information in torque and slurm
     queue_info   = None
 
-    def __init__(self, command, args=None, name=None, path=None, **kwargs):
+    def __init__(self, command, args=None, name=None, path=None,
+                 qtype=None, **kwds):
         """Create a job object will submission information.
 
-        Used in all modes::
-        :command:      The command or function to execute.
-        :args:         Optional arguments to add to command, particularly
-                       useful for functions.
-        :name:         The name of the job.
-        :path:         Where to create the script, if None, current dir used.
+        :command: The command or function to execute.
+        :args:    Optional arguments to add to command, particularly
+                  useful for functions.
+        :name:    Optional name of the job.
+        :path:    Where to create the script, if None, current dir used.
+        :qtype:   Override the default queue type
+
+        Available Keywork Arguments
+        ---------------------------
         {arginfo}
-        """.format(arginfo=ARGINFO)
+        """.format(arginfo=options.option_help())
+
+        ########################
+        #  Sanitize arguments  #
+        ########################
+
+        # Make a copy of the keyword arguments, as we will delete arguments
+        # as we go
+        kwargs = kwds.copy()
+
         # Check keyword arguments
-        for arg in kwargs:
-            if arg not in KWARGS:
-                raise Exception('Unrecognized argument {}'.format(arg))
-        # Make sure all defaults are set
-        for arg in KWARGS:
-            if arg not in kwargs:
-                kwargs[arg] = None
+        kwargs = options.check_arguments(kwargs)
 
         # Get environment
-        self.qtype = QUEUE
+        self.qtype = qtype if qtype else queue.MODE
+        self.queue = queue.Queue(user='self', queue=self.qtype)
+        self.state = 'Not Submitted'
 
-        # Sanitize arguments
+        # Set name
         if not name:
             if hasattr(command, '__call__'):
                 parts = str(command).strip('<>').split(' ')
@@ -217,10 +218,23 @@ class Job(object):
                 name = parts[0]
             else:
                 name = command.split(' ')[0].split('/')[-1]
-        name    = str(name)
-        modules = kwargs['modules'] if 'modules' in kwargs else None
-        modules = [modules] if isinstance(modules, str) else modules
+        self.name = str(name)
+
+        # Set modules
+        self.modules = kwargs.pop('modules') if 'modules' in kwargs else None
+        if isinstance(self.modules, str):
+            if ',' in self.modules:
+                self.modules = self.modules.split(',')
+            elif ';' in self.modules:
+                self.modules = self.modules.split(';')
+            else:
+                self.modules = [self.modules]
+
+        # Path handling
         usedir  = os.path.abspath(path) if path else os.path.abspath('.')
+        if 'dir' in kwargs:
+            usedir = os.path.abspath(kwargs['dir'])
+        kwargs['dir'] = usedir
 
         # Make sure args are a tuple or dictionary
         if args:
@@ -231,16 +245,17 @@ class Job(object):
                     args = (args,)
 
         # In case cores are passed as None
-        self.cores = kwargs['cores'] if 'cores' in kwargs else 1
+        self.cores = kwargs.pop('cores') if 'cores' in kwargs else 1
+        self.nodes = kwargs.pop('nodes') if 'nodes' in kwargs else 1
 
         # Set output files
-        suffix = kwargs['suffix'] if kwargs['suffix'] else 'cluster'
+        suffix = kwargs.pop('suffix') if 'suffix' in kwargs else 'cluster'
         self.outfile = '.'.join([name, suffix, 'out'])
         self.errfile = '.'.join([name, suffix, 'err'])
 
         # Check and set dependencies
-        if kwargs['dependencies']:
-            dependencies = kwargs['dependencies']
+        if 'depends' in kwargs:
+            dependencies = kwargs.pop('depends')
             self.dependencies = []
             if isinstance(dependencies, 'str'):
                 if not dependencies.isdigit():
@@ -258,6 +273,10 @@ class Job(object):
                     raise ClusterError('Dependencies must be number or list')
                 self.dependencies.append(dependency)
 
+        ######################################
+        #  Command and Function Preparation  #
+        ######################################
+
         # Make functions run remotely
         if hasattr(command, '__call__'):
             self.function = Function(
@@ -270,10 +289,14 @@ class Job(object):
         # Collapse args into command
         command = command + ' '.join(args) if args else command
 
+        #####################
+        #  Script Creation  #
+        #####################
+
         # Build execution wrapper with modules
         precmd  = ''
-        if kwargs['modules']:
-            for module in kwargs['modules']:
+        if self.modules:
+            for module in self.modules:
                 precmd += 'module load {}\n'.format(module)
         precmd += dedent("""\
             cd {}
@@ -292,52 +315,48 @@ class Job(object):
         # Create queue-dependent scripts
         sub_script = []
         if self.qtype == 'slurm':
-            self.qtype = 'slurm'
             scrpt = os.path.join(usedir, '{}.cluster.sbatch'.format(name))
             sub_script.append('#!/bin/bash')
-            if 'partition' in kwargs:
-                sub_script.append('#SBATCH -p {}'.format(kwargs['partition']))
-            sub_script.append('#SBATCH --ntasks 1')
-            sub_script.append('#SBATCH --cpus-per-task {}'.format(self.cores))
-            if 'time' in kwargs:
-                sub_script.append('#SBATCH --time={}'.format(kwargs['time']))
-            if 'mem' in kwargs:
-                sub_script.append('#SBATCH --mem={}'.format(kwargs['mem']))
+
+            # Add all of the keyword arguments at once
+            sub_script.append(options.options_to_string(kwargs, self.qtype))
+
             sub_script.append('#SBATCH -o {}'.format(self.outfile))
             sub_script.append('#SBATCH -e {}'.format(self.errfile))
             sub_script.append('cd {}'.format(usedir))
-            sub_script.append('srun bash {}.script'.format(
-                os.path.join(usedir, name)))
+
+            # We use a separate script and a single srun command to avoid
+            # issues with multiple threads running at once
             exe_scrpt  = os.path.join(usedir, name + '.script')
+            sub_script.append('srun bash {}.script'.format(exe_scrpt))
+
             exe_script = []
             exe_script.append('#!/bin/bash')
             exe_script.append('mkdir -p $LOCAL_SCRATCH')
             exe_script.append(precmd)
             exe_script.append(command + '\n')
             exe_script.append(pstcmd)
+
         elif self.qtype == 'torque':
-            self.qtype = 'torque'
             scrpt = os.path.join(usedir, '{}.cluster.qsub'.format(name))
             sub_script.append('#!/bin/bash')
-            if 'partition' in kwargs:
-                sub_script.append('#PBS -q {}'.format(kwargs['partition']))
-            sub_script.append('#PBS -l nodes=1:ppn={}'.format(self.cores))
-            if 'time' in kwargs:
-                sub_script.append('#PBS -l walltime={}'.format(kwargs['time']))
-            if 'mem' in kwargs:
-                sub_script.append('#PBS mem={}MB'.format(kwargs['mem']))
+
+            # Add all of the keyword arguments at once
+            sub_script.append(options.options_to_string(kwargs, self.qtype))
+
             sub_script.append('#PBS -o {}.cluster.out'.format(name))
             sub_script.append('#PBS -e {}.cluster.err\n'.format(name))
             sub_script.append('mkdir -p $LOCAL_SCRATCH')
             sub_script.append(precmd)
             sub_script.append(command + '')
             sub_script.append(pstcmd)
+
         elif self.qtype == 'normal':
-            self.qtype = 'normal'
             # Create the pool
-            if not jobqueue.QUEUE:
+            if not jobqueue.JQUEUE or not jobqueue.JQUEUE.runner.is_alive():
                 threads = kwargs['threads'] if 'threads' in kwargs else THREADS
-                jobqueue.QUEUE = jobqueue.JobQueue(cores=threads)
+                jobqueue.JQUEUE = jobqueue.JobQueue(cores=threads)
+
             scrpt = os.path.join(usedir, '{}.cluster'.format(name))
             sub_script.append('#!/bin/bash\n')
             sub_script.append(precmd)
@@ -381,6 +400,9 @@ class Job(object):
 
         Returns self.
         """
+        if self.submitted:
+            sys.stderr.write('Already submitted.')
+            return
         if not self.written:
             self.write()
         if self.qtype == 'normal':
@@ -396,9 +418,11 @@ class Job(object):
             kwargs  = dict(stdout=self.stdout,
                            stderr=self.stderr)
             # Make sure the global job pool exists
-            if not jobqueue.QUEUE:
-                jobqueue.QUEUE = jobqueue.JobQueue(cores=self.cores)
-            self.id = jobqueue.QUEUE.add(run.cmd, (command,), kwargs)
+            if not jobqueue.JQUEUE or not jobqueue.JQUEUE.runner.is_alive():
+                jobqueue.JQUEUE = jobqueue.JobQueue(cores=self.cores)
+            self.id = jobqueue.JQUEUE.add(run.cmd, args=(command,),
+                                          kwargs=kwargs,
+                                          dependencies=dependencies)
             self.submitted = True
             return self
         elif self.qtype == 'slurm':
@@ -417,11 +441,18 @@ class Job(object):
             # Try to submit job 5 times
             count = 0
             while True:
-                try:
-                    self.id = int(check_output(args).decode().rstrip().split(' ')[-1])
-                except CalledProcessError:
+                code, stdout, stderr = run.cmd(args)
+                if code == 0:
+                    self.id = int(stdout.split(' ')[-1])
+                    break
+                else:
                     if count == 5:
-                        raise
+                        logme.log('sbatch failed with code {}\n'.format(code),
+                                  'stdout: {}\nstderr: {}'.format(stdout, stderr),
+                                  'critical')
+                        raise CalledProcessError(code, args, stdout, stderr)
+                    logme.log('sbatch failed with err {}. Resubmitting.'.format(
+                        stderr), 'debug')
                     count += 1
                     sleep(1)
                     continue
@@ -445,34 +476,55 @@ class Job(object):
             # Try to submit job 5 times
             count = 0
             while True:
-                try:
-                    self.id = int(check_output(args).decode().rstrip().split('.')[0])
-                except CalledProcessError:
-                    if count == 5:
-                        raise
-                    count += 1
-                    sleep(1)
-                    continue
-                break
+                code, stdout, stderr = run.cmd(args)
+                if code == 0:
+                    self.id = int(stdout.split('.')[0])
+                    break
+                else:
+                    if stderr.startswith('qsub: submit error ('):
+                        raise ClusterError('qsub submission failed with error: ' +
+                                           '{}, command: {}'.format(stderr, args))
+                    else:
+                        if count == 5:
+                            logme.log('qsub failed with code {}\n'.format(code),
+                                      'stdout: {}\nstderr: {}'.format(stdout,
+                                                                      stderr),
+                                      'critical')
+                            raise CalledProcessError(code, args, stdout,
+                                                     stderr)
+                        logme.log('qsub failed with err {}. Resubmitting.'
+                                  .format(stderr), 'debug')
+                        count += 1
+                        sleep(1)
+                        continue
             self.submitted = True
             return self
 
+    def update(self):
+        """Update status from the queue."""
+        self.queue.load()
+        if self.id:
+            queue_info = self.queue[self.id]
+            if queue_info:
+                assert self.id == queue_info.id
+                self.queue_info = queue_info
+                self.state = self.queue_info.state
+                if self.state == 'completed':
+                    self.done = True
+
     def wait(self):
         """Block until job completes."""
-        if self.qtype == 'normal' and self.pool_job:
-            self.pool_job.wait()
-        else:
-            job_list = queue.Queue()
-            job_list.wait(self)
-            self.queue_info = job_list[self.id]
-            assert self.id == self.queue_info.id
+        self.update()
+        if self.done:
+            return
+        self.queue.wait(self)
         self.done = True
 
     def get(self):
         """Block until job completed and then return exit_code, stdout, stderr."""
         self.wait()
-        if self.qtype == 'normal' and self.pool_job:
-            return self.pool_job.get()
+        if self.qtype == 'normal':
+            return jobqueue.JQUEUE.get(self.id)
         else:
             try:
                 with open(self.outfile, 'r') as fin:
@@ -502,6 +554,7 @@ class Job(object):
 
     def __repr__(self):
         """Return simple job information."""
+        self.update()
         if self.submitted:
             outstr = "Job<{id}".format(id=self.id)
         else:
@@ -512,10 +565,12 @@ class Job(object):
             outstr += "COMPLETED"
         elif self.written:
             outstr += "WRITTEN"
+        outstr += ">"
         return outstr
 
     def __str__(self):
         """Print job name and ID + status."""
+        self.update()
         if self.done:
             state = 'complete'
         elif self.written:
@@ -672,7 +727,7 @@ def submit(command, args=None, name=None, path=None, **kwargs):
         if arg not in KWARGS:
             raise Exception('Unrecognized argument {}'.format(arg))
 
-    queue.check_queue()  # Make sure the QUEUE is usable
+    queue.check_queue()  # Make sure the queue.MODE is usable
 
     job = Job(command=command, args=args, name=name, path=path, **kwargs)
 
@@ -709,7 +764,7 @@ def make_job(command, args=None, name=None, path=None, **kwargs):
         if arg not in KWARGS:
             raise Exception('Unrecognized argument {}'.format(arg))
 
-    queue.check_queue()  # Make sure the QUEUE is usable
+    queue.check_queue()  # Make sure the queue.MODE is usable
 
     job = Job(command=command, args=args, name=name, path=path, **kwargs)
 
@@ -739,7 +794,7 @@ def make_job_file(command, args=None, name=None, path=None, **kwargs):
         if arg not in KWARGS:
             raise Exception('Unrecognized argument {}'.format(arg))
 
-    queue.check_queue()  # Make sure the QUEUE is usable
+    queue.check_queue()  # Make sure the queue.MODE is usable
 
     job = Job(command=command, args=args, name=name, path=path, **kwargs)
 
@@ -772,8 +827,8 @@ def clean(jobs):
 def submit_file(script_file, name=None, dependencies=None, threads=None):
     """Submit a job file to the cluster.
 
-    If QUEUE is torque, qsub is used; if QUEUE is slurm, sbatch is used;
-    if QUEUE is normal, the file is executed with subprocess.
+    If queue.MODE is torque, qsub is used; if queue.MODE is slurm, sbatch is used;
+    if queue.MODE is normal, the file is executed with subprocess.
 
     This function is independent of the job object and just submits a file.
 
@@ -789,7 +844,7 @@ def submit_file(script_file, name=None, dependencies=None, threads=None):
     :returns:      job number for torque or slurm
                    multiprocessing job object for normal mode
     """
-    queue.check_queue()  # Make sure the QUEUE is usable
+    queue.check_queue()  # Make sure the queue.MODE is usable
 
     # Sanitize arguments
     name = str(name)
@@ -802,7 +857,7 @@ def submit_file(script_file, name=None, dependencies=None, threads=None):
             raise Exception('dependencies must be a list, int, or string.')
         dependencies = [str(i) for i in dependencies]
 
-    if QUEUE == 'slurm':
+    if queue.MODE == 'slurm':
         if dependencies:
             dependencies = '--dependency=afterok:{}'.format(
                 ':'.join([str(d) for d in dependencies]))
@@ -812,17 +867,25 @@ def submit_file(script_file, name=None, dependencies=None, threads=None):
         # Try to submit job 5 times
         count = 0
         while True:
-            try:
-                job = int(check_output(args).decode().rstrip().split(' ')[-1])
-            except CalledProcessError:
+            code, stdout, stderr = run.cmd(args)
+            if code == 0:
+                job = int(stdout.split(' ')[-1])
+                break
+            else:
                 if count == 5:
-                    raise
+                    logme.log('sbatch failed with code {}\n'.format(code),
+                              'stdout: {}\nstderr: {}'.format(stdout, stderr),
+                              'critical')
+                    raise CalledProcessError(code, args, stdout, stderr)
+                logme.log('sbatch failed with err {}. Resubmitting.'.format(
+                    stderr), 'debug')
                 count += 1
                 sleep(1)
                 continue
             break
         return job
-    elif QUEUE == 'torque':
+
+    elif queue.MODE == 'torque':
         if dependencies:
             dependencies = '-W depend={}'.format(
                 ','.join(['afterok:' + d for d in dependencies]))
@@ -832,17 +895,25 @@ def submit_file(script_file, name=None, dependencies=None, threads=None):
         # Try to submit job 5 times
         count = 0
         while True:
-            try:
-                job = int(check_output(args).decode().rstrip().split('.')[0])
-            except CalledProcessError:
+            code, stdout, stderr = run.cmd(args)
+            if code == 0:
+                job = int(stdout.split('.')[0])
+                break
+            else:
                 if count == 5:
-                    raise
+                    logme.log('qsub failed with code {}\n'.format(code),
+                              'stdout: {}\nstderr: {}'.format(stdout, stderr),
+                              'critical')
+                    raise CalledProcessError(code, args, stdout, stderr)
+                logme.log('qsub failed with err {}. Resubmitting.'.format(
+                    stderr), 'debug')
                 count += 1
                 sleep(1)
                 continue
             break
         return job
-    elif QUEUE == 'normal':
+
+    elif queue.MODE == 'normal':
         # Normal mode dependency tracking uses only integer job numbers
         depends = []
         if dependencies:
@@ -853,9 +924,9 @@ def submit_file(script_file, name=None, dependencies=None, threads=None):
                     depends.append(int(depend))
         command = 'bash {}'.format(script_file)
         # Make sure the global job pool exists
-        if not jobqueue.QUEUE:
-            jobqueue.QUEUE = jobqueue.JobQueue(cores=THREADS)
-        return jobqueue.QUEUE.add(run.cmd, (command,), dependencies=depends)
+        if not jobqueue.JQUEUE or not jobqueue.JQUEUE.runner.is_alive():
+            jobqueue.JQUEUE = jobqueue.JobQueue(cores=THREADS)
+        return jobqueue.JQUEUE.add(run.cmd, (command,), dependencies=depends)
 
 
 def clean_dir(directory='.', suffix='cluster'):
@@ -872,15 +943,15 @@ def clean_dir(directory='.', suffix='cluster'):
     :directory: The directory to run in, defaults to the current directory.
     :returns:   A set of deleted files
     """
-    queue.check_queue()  # Make sure the QUEUE is usable
+    queue.check_queue()  # Make sure the queue.MODE is usable
 
     extensions = ['.' + suffix + '.err', '.' + suffix + '.out']
-    if QUEUE == 'normal':
+    if queue.MODE == 'normal':
         extensions.append('.' + suffix)
-    elif QUEUE == 'slurm':
+    elif queue.MODE == 'slurm':
         extensions = extensions + ['.' + suffix + '.sbatch',
                                    '.' + suffix + '.script']
-    elif QUEUE == 'torque':
+    elif queue.MODE == 'torque':
         extensions.append('.' + suffix + '.qsub')
 
     files = [i for i in os.listdir(os.path.abspath(directory))

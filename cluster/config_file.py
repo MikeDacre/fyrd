@@ -2,7 +2,7 @@
 Description:   Get and set global variables
 
 Created:       2015-12-11
-Last modified: 2016-02-25 13:43
+Last modified: 2016-04-15 11:11
 """
 import os
 import sys
@@ -16,15 +16,17 @@ try:
 except ImportError:
     import ConfigParser as _configparser
 
+from . import logme
+
 ################################################################################
 #                            Configurable Defaults                             #
 ################################################################################
 
-config_file = _environ['HOME'] + '/.slurmy'
+CONFIG_FILE = _environ['HOME'] + '/.python-cluster'
 config      = _configparser.ConfigParser()
 defaults    = {}
 
-__all__ = ['get_config', 'write_config']
+__all__ = ['write', 'get', 'delete', 'get_config']
 initial_defaults = {}
 
 # Different job run options
@@ -42,40 +44,11 @@ initial_defaults['queue']      = {'max_jobs':     1000,  # Max number of jobs in
                                   'sleep_len':    5,     # Between submission attempts (in seconds)
                                   'queue_update': 20}    # Amount of time between getting fresh queue info (seconds)
 
-#####################################################
-#         Possible job submission commands          #
-#  from: http://slurm.schedmd.com/pdfs/summary.pdf  #
-#####################################################
-commands = {'array': 'Job array spec',
-            'account': 'Account to be charged',
-            'begin': 'Start after this much time',
-            'clusters': 'Clusters to run on',
-            'constraint': 'Required node features',
-            'cpu_per_task': 'Number of cpus per task',
-            'dependency': 'Defer until specified ID completes',
-            'error': 'File in which to store errors',
-            'exclude': 'Host names to exclude',
-            'exclusive': 'No other jobs may run on node',
-            'export': 'Export these variables (dictionary)',
-            'gres': 'Generic resources required per node',
-            'input': 'File to read job input data from',
-            'job-name': 'Job name',
-            'licenses': 'Licenses required for job',
-            'mem': 'Memory required in MB (int)',
-            'mem_per_cpu': 'Memory per cpu in MB (int)',
-            'N': 'Number of nodes required',
-            'n': 'Number of tasks launched per node',
-            'nodelist': 'Hosts job allowed to run on',
-            'output': 'File where output will be writen',
-            'partition': 'Partition/queue to run in',
-            'qos': 'QOS specification (e.g. dev)',
-            'signal': 'Signal to send to job when approaching time',
-            'time': 'Time limit for job (d-HH:MM:SS)',
-            'wrap': 'Wrap specified command as shell script'}
 
 ################################################################################
 #                         Do Not Edit Below This Point                         #
 ################################################################################
+
 
 ############################
 #  Profile Class Handling  #
@@ -83,74 +56,126 @@ commands = {'array': 'Job array spec',
 
 
 class Profile(object):
-    """ A profile for job submission """
+
+    """A job submission profile."""
+
     nodes = None
     cores = None
-    mem = None
-    time = None
-    def __init__(self):
-        """ Set up bare minimum attributes """
+    mem   = None
+    time  = None
+    def __init__(self, **kwds):
+        """Set up bare minimum attributes."""
 
 
 
-#######################
-#  General Functions  #
-#######################
+###############################################################################
+#                              Useful Functions                               #
+###############################################################################
+
+
+def get(section=None, key=None, default=None):
+    """Get a single key or section.
+
+    :section: The config section to use (e.g. queue, jobs)
+    :key:     The config key to get (e.g. 'max_jobs')
+    :default: If the key does not exist, create it with this default value.
+    Returns None if key does not exist.
+    """
+    defaults = get_config()
+    if not section:
+        return defaults
+    if not section in defaults:
+        if key and default:
+            write(section, key, default)
+            return get(section, key)
+        else:
+            return None
+    if key:
+        if key in defaults[section]:
+            return defaults[section][key]
+        else:
+            if default:
+                logme.log('Creating new config entry {}:{} with val {}'.format(
+                    section, key, default), 'debug')
+                write(section, key, default)
+                return get(section, key)
+            else:
+                return None
+    else:
+        return defaults[section]
+
+
+def write(section, key, value):
+    """Write a config key to the config file."""
+    # Sanitize arguments
+    section = str(section)
+    key     = str(key)
+    value   = str(value)
+
+    # Edit the globals in this file
+    global defaults, config
+    config.read(CONFIG_FILE)
+
+    if not config.has_section(section):
+        config.add_section(section)
+    config.set(section, key, value)
+
+    with open(CONFIG_FILE, 'w') as outfile:
+        config.write(outfile)
+
+    return get_config()
+
+
+def delete(section, key=None):
+    """Delete a config item.
+
+    If key is not provided deletes whole section.
+    """
+    global defaults, config
+    config.read(CONFIG_FILE)
+    if key:
+        config.remove_option(section, key)
+    else:
+        config.remove_section(section)
+    with open(CONFIG_FILE, 'w') as outfile:
+        config.write(outfile)
+    return get_config()
+
+
+###############################################################################
+#                             Internal Functions                              #
+###############################################################################
 
 
 def get_initial_defaults():
-    """ Return a sane set of starting defaults for config file creation """
+    """Return a sane set of starting defaults for config file creation."""
     # Defined file wide
     return initial_defaults
 
 
 def get_config():
-    """ Load defaults from ~/.slurmy """
+    """Load defaults from file."""
     global defaults, config
     defaults = {}
-    if _path.isfile(config_file):
-        config.read(config_file)
+    if _path.isfile(CONFIG_FILE):
+        config.read(CONFIG_FILE)
         defaults = _config_to_dict(config)
     else:
         defaults = create_config()
     return defaults
 
 
-def write_config(section, key, value):
-    """ Write a config key to the ~/.slurmy file"""
-    global defaults, config
-    config.read(config_file)
-    if not config.has_section(section):
-        config.add_section(section)
-    config.set(section, key, value)
-    with open(config_file, 'w') as outfile:
-        config.write(outfile)
-    return get_config()
-
-
-def delete_config(section, key=None):
-    """ Delete a config item
-        If key is not provided deletes whole section """
-    global defaults, config
-    config.read(config_file)
-    if key:
-        config.remove_option(section, key)
-    else:
-        config.remove_section(section)
-    with open(config_file, 'w') as outfile:
-        config.write(outfile)
-    return get_config()
-
-
 def create_config():
-    """ Create a ~/.slurmy file
-        Will clobber an existing ~/.slurmy file """
+    """Create a config file
+
+    Will clobber any existing file
+    """
     global defaults, config
     # Use defaults coded into this file
     defaults = get_initial_defaults()
-    # Delete existing slurmy file
-    if os.path.exists(config_file):
-        os.remove(config_file)
+    # Delete existing file
+    if os.path.exists(CONFIG_FILE):
+        os.remove(CONFIG_FILE)
     for k, v in defaults.items():
         if not config.has_section(k):
             config.add_section(k)
@@ -160,18 +185,20 @@ def create_config():
             except TypeError:
                 sys.stderr.write('{} {} {}\n'.format(k, i, j))
                 raise
-    with open(config_file, 'w') as outfile:
+    with open(CONFIG_FILE, 'w') as outfile:
         config.write(outfile)
-    _stderr.write('Created the file ~/.slurmy with default variables. ' +
-                  'Please review this file and edit your defaults\n')
+    logme.log('Created the file with default variables '.format(CONFIG_FILE) +
+              'Please review this file and edit your defaults', 'info')
     return get_config()
 
 
-#####################
-# Private Functions #
-#####################
+###############################################################################
+#                              Private Functions                              #
+###############################################################################
+
+
 def _config_to_dict(config):
-    """ Convert a config object into a dictionary """
+    """Convert a config object into a dictionary."""
     global defaults
     for section in config.sections():
         # Jobs become a sub-dictionary

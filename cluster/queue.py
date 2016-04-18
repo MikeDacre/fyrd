@@ -6,7 +6,7 @@ Monitor the queue for torque or slurm.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-04-14 19:44
+ Last modified: 2016-04-18 11:48
 
 ============================================================================
 """
@@ -17,7 +17,6 @@ from os import environ   # Used to check current username
 from time import time
 from time import sleep
 from subprocess import check_output, CalledProcessError
-from multiprocessing import Pool, pool
 
 # For parsing torque queues
 import xml.etree.ElementTree as ET
@@ -35,8 +34,8 @@ from . import ClusterError
 #########################
 
 # Default is normal, change to 'slurm' or 'torque' as needed.
-from . import QUEUE
-from . import ALLOWED_QUEUES
+MODE = 'normal'
+from . import ALLOWED_MODES
 
 #########################################################
 #  The multiprocessing pool, only used in 'local' mode  #
@@ -68,27 +67,27 @@ __all__ = ['Queue', 'check_queue', 'get_cluster_environment']
 
 
 def get_cluster_environment():
-    """Detect the local cluster environment and set QUEUE globally.
+    """Detect the local cluster environment and set MODE globally.
 
     Uses which to search for sbatch first, then qsub. If neither is found,
-    QUEUE is set to normal.
+    MODE is set to normal.
 
-    :returns: QUEUE variable ('torque', 'slurm', or 'local')
+    :returns: MODE variable ('torque', 'slurm', or 'local')
     """
-    global QUEUE
+    global MODE
     if run.which('sbatch'):
-        QUEUE = 'slurm'
+        MODE = 'slurm'
     elif run.which('qsub'):
-        QUEUE = 'torque'
+        MODE = 'torque'
     else:
-        QUEUE = 'normal'
-    if QUEUE == 'slurm' or QUEUE == 'torque':
-        logme.log('{} detected, using for cluster submissions'.format(QUEUE),
+        MODE = 'normal'
+    if MODE == 'slurm' or MODE == 'torque':
+        logme.log('{} detected, using for cluster submissions'.format(MODE),
                   'debug')
     else:
         logme.log('No cluster environment detected, using multiprocessing',
                   'debug')
-    return QUEUE
+    return MODE
 
 
 ##############################
@@ -96,10 +95,13 @@ def get_cluster_environment():
 ##############################
 
 
-def check_queue():
-    """Raise exception if QUEUE is incorrect."""
-    if QUEUE not in ALLOWED_QUEUES:
-        raise ClusterError('QUEUE value {} is not recognized, '.format(QUEUE) +
+def check_queue(qtype=None):
+    """Raise exception if MODE is incorrect."""
+    if qtype and qtype not in ALLOWED_MODES:
+        raise ClusterError('qtype value {} is not recognized, '.format(qtype) +
+                           'should be: normal, torque, or slurm')
+    if MODE not in ALLOWED_MODES:
+        raise ClusterError('MODE value {} is not recognized, '.format(MODE) +
                            'should be: normal, torque, or slurm')
 
 
@@ -129,7 +131,8 @@ class Queue(object):
             if user == 'self' or user == 'current':
                 self.uid = pwd.getpwnam(environ['USER']).pw_uid
             else:
-                if isinstance(user, int) or isinstance(user, str) and user.isdigit:
+                if isinstance(user, int) or isinstance(user, str) \
+                        and user.isdigit():
                     self.uid = pwd.getpwuid(int(user))
                 else:
                     self.uid = pwd.getpwnam(str(user)).pw_uid
@@ -139,10 +142,12 @@ class Queue(object):
 
         # Support python2, which hates reciprocal import
         from .job import Job
-        self._Job = Job
+        from .jobqueue import JobQueue
+        self._Job      = Job
+        self._JobQueue = JobQueue.Job
 
         # Set type
-        self.qtype = queue if queue else QUEUE
+        self.qtype = queue if queue else MODE
 
         # Will contain a dict of QueueJob objects indexed by ID
         self.jobs = {}
@@ -177,42 +182,46 @@ class Queue(object):
         if not isinstance(jobs, (list, tuple)):
             jobs = [jobs]
         for job in jobs:
-            if not isinstance(job, (str, int, pool.ApplyResult, self._Job)):
-                raise ClusterError('job must be int, string, or ApplyResult, ' +
+            if not isinstance(job, (str, int, self._Job, self._JobQueue)):
+                raise ClusterError('job must be int, string, or Job, ' +
                                 'is {}'.format(type(job)))
 
-        if QUEUE == 'normal':
-            for job in jobs:
+        # Wait for 1 second before checking, as jobs take a while to be
+        # queued sometimes
+        sleep(1)
+        for job in jobs:
+            qtype = job.qtype if isinstance(job, self._Job) else self.qtype
+            if isinstance(job, (self._Job, self._JobQueue)):
+                job = job.id
+            if qtype == 'normal':
+                try:
+                    job = int(job)
+                except TypeError:
+                    raise TypeError('Job must be a Job object or job #.')
+                if not jobqueue.JQUEUE or not jobqueue.JQUEUE.runner.is_alive():
+                    raise ClusterError('Cannot wait on job ' + str(job) +
+                                       'JobQueue does not exist')
+                jobqueue.JQUEUE.wait(job)
+            else:
                 if isinstance(job, self._Job):
-                    job = job.pool_job
-                if not isinstance(job, pool.ApplyResult):
-                    raise ClusterError('jobs must be ApplyResult objects')
-                job.wait()
-        else:
-            # Wait for 5 seconds before checking, as jobs take a while to be
-            # queued sometimes
-            sleep(5)
-
-            while True:
-                for jb in jobs:
-                    if isinstance(jb, self._Job):
-                        jb = jb.id
-                    while True:
-                        self.load()
-                        not_found = 0
-                        # Allow two seconds to elapse before job is found in queue,
-                        # if it is not in the queue by then, raise exception.
-                        if jb not in self.jobs:
-                            sleep(1)
-                            not_found += 1
-                            if not_found == 3:
-                                raise self.QueueError('{} not in queue'.format(jb))
-                            continue
-                        # Actually look for job in running/queued queues
-                        if jb in self.running.keys() or jb in self.queued.keys():
-                            sleep(2)
-                        else:
-                            break
+                    job = job.id
+                while True:
+                    self.load()
+                    not_found = 0
+                    # Allow two seconds to elapse before job is found in queue,
+                    # if it is not in the queue by then, raise exception.
+                    if job not in self.jobs:
+                        sleep(1)
+                        not_found += 1
+                        if not_found == 3:
+                            raise self.QueueError(
+                                '{} not in queue'.format(job))
+                        continue
+                    # Actually look for job in running/queued queues
+                    if job in self.running.keys() or job in self.queued.keys():
+                        sleep(2)
+                    else:
+                        break
 
         sleep(1)  # Sleep an extra second to allow post-run scripts to run.
         return True
@@ -239,9 +248,29 @@ class Queue(object):
 
         # Mode specific initialization
         if self.qtype == 'normal':
-            if not jobqueue.QUEUE:
-                jobqueue.QUEUE = jobqueue.JobQueue(cores=THREADS)
-            self.jobqueue = jobqueue.QUEUE
+            if not jobqueue.JQUEUE or not jobqueue.JQUEUE.runner.is_alive():
+                jobqueue.JQUEUE = jobqueue.JobQueue(cores=THREADS)
+            for job_id, job_info in jobqueue.JQUEUE:
+                if job_id in self.jobs:
+                    job = self.jobs[job_id]
+                else:
+                    job = self.QueueJob()
+                job.id    = job_id
+                job.name  = job_info.function.__name__
+                job.owner = self.user
+                if job_info.state == 'Not Submitted':
+                    job.state = 'pending'
+                elif job_info.state == 'waiting':
+                    job.state = 'pending'
+                elif job_info.state == 'started':
+                    job.state = 'running'
+                elif job_info.state == 'done':
+                    job.state = 'complete'
+                else:
+                    raise Exception('Unrecognized state')
+
+                # Assign the job to self.
+                self.jobs[job_id] = job
 
 
         elif self.qtype == 'torque':
@@ -255,52 +284,62 @@ class Queue(object):
                         qargs += ['-u', self.user]
                     xmlqueue = ET.fromstring(check_output(qargs))
                 except CalledProcessError:
-                    print(try_count)
+                    sleep(1)
                     if try_count == 5:
                         raise
+                    else:
+                        try_count += 1
+                except ET.ParseError:
+                    # ElementTree throws error when string is empty
+                    sleep(1)
+                    if try_count == 1:
+                        xmlqueue = None
+                        break
                     else:
                         try_count += 1
                 else:
                     break
 
             # Create QueueJob objects for all entries that match user
-            for xmljob in xmlqueue:
-                job_id = int(xmljob.find('Job_Id').text.split('.')[0])
-                if job_id not in self.jobs:
-                    job = self.QueueJob()
-                else:
-                    job = self.jobs[job_id]
-                jobs.append(job_id)
-                job.id    = job_id
-                job.name  = xmljob.find('Job_Name').text
-                job.owner = xmljob.find('Job_Owner').text.split('@')[0]
-                job.queue = xmljob.find('queue').text
-                job_state = xmljob.find('job_state').text
-                if job_state == 'Q':
-                    job.state = 'pending'
-                elif job_state == 'R' or job_state == 'E':
-                    job.state = 'running'
-                elif job_state == 'C':
-                    job.state = 'complete'
-                if job.state == 'pending':
-                    continue
-                nodes = xmljob.find('exec_host').text.split('+')
-                if nodes:
-                    job.nodes = []
-                    for node in nodes:
-                        node = node.split('/')[0]
-                        if node not in job.nodes:
-                            job.nodes.append(node)
-                    job.nodes = ','.join(job.nodes)  # Maintain slurm consistency
-                # I assume that every 'node' is a core, as that is the default
-                # for torque
-                job.threads  = len(nodes)
-                exitcode     = xmljob.find('exit_status')
-                if hasattr(exitcode, 'text'):
-                    job.exitcode = exitcode.text
+            if xmlqueue:
+                for xmljob in xmlqueue:
+                    job_id = int(xmljob.find('Job_Id').text.split('.')[0])
+                    if job_id not in self.jobs:
+                        job = self.QueueJob()
+                    else:
+                        job = self.jobs[job_id]
+                    jobs.append(job_id)
+                    job.id    = job_id
+                    job.name  = xmljob.find('Job_Name').text
+                    job.owner = xmljob.find('Job_Owner').text.split('@')[0]
+                    job.queue = xmljob.find('queue').text
+                    job_state = xmljob.find('job_state').text
+                    if job_state == 'Q':
+                        job.state = 'pending'
+                    elif job_state == 'R' or job_state == 'E':
+                        job.state = 'running'
+                    elif job_state == 'C':
+                        job.state = 'complete'
+                    if job.state == 'pending':
+                        continue
+                    nodes = xmljob.find('exec_host').text.split('+')
+                    # I assume that every 'node' is a core, as that is the
+                    # default for torque, but it isn't always true
+                    job.threads  = len(nodes)
+                    if nodes:
+                        job.nodes = []
+                        for node in nodes:
+                            node = node.split('/')[0]
+                            if node not in job.nodes:
+                                job.nodes.append(node)
+                        # Maintain slurm consistency
+                        job.nodes = ','.join(job.nodes)
+                    exitcode     = xmljob.find('exit_status')
+                    if hasattr(exitcode, 'text'):
+                        job.exitcode = exitcode.text
 
-                # Assign the job to self.
-                self.jobs[job_id] = job
+                    # Assign the job to self.
+                    self.jobs[job_id] = job
 
         elif self.qtype == 'slurm':
             try_count = 0
@@ -342,64 +381,67 @@ class Queue(object):
                     break
 
             # Loop through the queues
-            for sjob in squeue:
-                job_id = int(sjob[0])
-                if job_id not in self.jobs:
-                    job = self.QueueJob()
-                else:
-                    job = self.jobs[job_id]
-                jobs.append(job_id)
-                job.id = job_id
-                job.name, job.owner, job.queue = sjob[1:4]
-                job.state = sjob[5].lower()
-                if job.state == 'pending':
-                    continue
-                job.nodes = sjob[6]
+            if squeue:
+                for sjob in squeue:
+                    job_id = int(sjob[0])
+                    if job_id not in self.jobs:
+                        job = self.QueueJob()
+                    else:
+                        job = self.jobs[job_id]
+                    jobs.append(job_id)
+                    job.id = job_id
+                    job.name, job.owner, job.queue = sjob[1:4]
+                    job.state = sjob[5].lower()
+                    if job.state == 'pending':
+                        continue
+                    job.nodes = sjob[6]
 
-                # Threads is number of nodes * jobs per node
-                job.threads = int(sjob[7]) * int(sjob[8])
-                if job.state == 'completed' or job.state == 'failed':
-                    job.exitcode = int(sjob[9])
+                    # Threads is number of nodes * jobs per node
+                    job.threads = int(sjob[7]) * int(sjob[8])
+                    if job.state == 'completed' or job.state == 'failed':
+                        job.exitcode = int(sjob[9])
 
-                # Assign the job to self.
-                self.jobs[job_id] = job
+                    # Assign the job to self.
+                    self.jobs[job_id] = job
 
             # Add job info from sacct that isn't in the main queue
-            for sjob in sacct:
-                # Skip job steps, only index whole jobs
-                if '.' in sjob[0]:
-                    continue
-                job_id = int(sjob[0])
-                if job_id in jobs:
-                    continue
-                if job_id not in self.job:
-                    job = self.QueueJob()
-                else:
-                    job = self.jobs[job_id]
-                jobs.append(job_id)
-                job.id = job_id
-                if not job.name:
-                    job.name = sjob[1]
-                if not job.user:
-                    job.user = sjob[2]
-                if not job.queue:
-                    job.queue = sjob[3]
-                job.state = sjob[4].lower()
-                if not job.exitcode:
-                    job.exitcode = sjob[5].split(':')[-1]
-                if not job.threads:
-                    job.threads = int(sjob[6])
-                if not job.nodes:
-                    job.nodes = sjob[7]
+            if sacct:
+                for sjob in sacct:
+                    # Skip job steps, only index whole jobs
+                    if '.' in sjob[0]:
+                        continue
+                    job_id = int(sjob[0])
+                    if job_id in jobs:
+                        continue
+                    if job_id not in self.job:
+                        job = self.QueueJob()
+                    else:
+                        job = self.jobs[job_id]
+                    jobs.append(job_id)
+                    job.id = job_id
+                    if not job.name:
+                        job.name = sjob[1]
+                    if not job.user:
+                        job.user = sjob[2]
+                    if not job.queue:
+                        job.queue = sjob[3]
+                    job.state = sjob[4].lower()
+                    if not job.exitcode:
+                        job.exitcode = sjob[5].split(':')[-1]
+                    if not job.threads:
+                        job.threads = int(sjob[6])
+                    if not job.nodes:
+                        job.nodes = sjob[7]
 
-                # Assign the job to self.
-                self.jobs[job_id] = job
+                    # Assign the job to self.
+                    self.jobs[job_id] = job
 
         # We assume that if a job just disappeared it completed
-        for qjob in self.jobs.values():
-            if qjob.id not in jobs:
-                qjob.state = 'completed'
-                qjob.disappeared = True
+        if self.jobs:
+            for qjob in self.jobs.values():
+                if qjob.id not in jobs:
+                    qjob.state = 'completed'
+                    qjob.disappeared = True
 
     def _get_jobs(self, key):
         """Return a dict of jobs where state matches key."""
@@ -409,12 +451,6 @@ class Queue(object):
             if job.state == key.lower():
                 retjobs[jobid] = job
         return retjobs
-
-    def __iter__(self):
-        """Allow us to be iterable"""
-        self.load()
-        for jb in self.jobs.values():
-            yield jb
 
     def __getattr__(self, key):
         """Make running and queued attributes dynamic."""
@@ -432,6 +468,12 @@ class Queue(object):
         except KeyError:
             return None
 
+    def __iter__(self):
+        """Allow us to be iterable"""
+        self.load()
+        for jb in self.jobs.values():
+            yield jb
+
     def __len__(self):
         """Length is the total job count."""
         self.load()
@@ -441,15 +483,17 @@ class Queue(object):
         """ For debugging. """
         self.load()
         if self.user:
-            outstr = 'Queue<jobs:{};user={}>'.format(len(self), self.user)
+            outstr = 'Queue<jobs:{};completed:{};queued:{};user={}>'.format(
+                len(self), len(self.completed), len(self.queued), self.user)
         else:
-            outstr = 'Queue<jobs:{};user=ALL>'.format(len(self))
+            outstr = 'Queue<jobs:{};completed:{};queued:{};user=ALL>'.format(
+                len(self), len(self.completed), len(self.queued))
         return outstr
 
     def __str__(self):
         """A list of keys."""
         self.load()
-        return str(self.queue.keys())
+        return str(self.jobs.keys())
 
     ##############################################
     #  A simple class to hold jobs in the queue  #
@@ -514,22 +558,32 @@ def wait(jobs):
               these should be job IDs, with normal mode, these are
               multiprocessing job objects (returned by submit())
     """
-    check_queue()  # Make sure the QUEUE is usable
+    # Support python2, which hates reciprocal import for 80's reasons
+    from .job import Job
+    from .jobqueue import JobQueue
+
+    check_queue()  # Make sure the MODE is usable
 
     # Sanitize argument
     if not isinstance(jobs, (list, tuple)):
         jobs = [jobs]
     for job in jobs:
-        if not isinstance(job, (str, int, pool.ApplyResult)):
-            raise ClusterError('job must be int, string, or ApplyResult, ' +
+        if not isinstance(job, (str, int, Job, JobQueue)):
+            raise ClusterError('job must be int, string, or Job, ' +
                                'is {}'.format(type(job)))
 
-    if QUEUE == 'normal':
+    if MODE == 'normal':
         for job in jobs:
-            if not isinstance(job, pool.ApplyResult):
-                raise ClusterError('jobs must be ApplyResult objects')
-            job.wait()
-    elif QUEUE == 'torque':
+            try:
+                job = int(job)
+            except TypeError:
+                raise TypeError('Job must be a Job object or job #.')
+            if not jobqueue.JQUEUE or not jobqueue.JQUEUE.runner.is_alive():
+                raise ClusterError('Cannot wait on job ' + str(job) +
+                                   'JobQueue does not exist')
+            jobqueue.JQUEUE.wait(job)
+
+    elif MODE == 'torque':
         # Wait for 5 seconds before checking, as jobs take a while to be queued
         # sometimes
         sleep(5)
@@ -564,7 +618,7 @@ def wait(jobs):
             if len(jobs) == 0:
                 return
             sleep(2)
-    elif QUEUE == 'slurm':
+    elif MODE == 'slurm':
         # Wait for 2 seconds before checking, as jobs take a while to be queued
         # sometimes
         sleep(2)

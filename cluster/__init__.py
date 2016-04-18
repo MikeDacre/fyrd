@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-44-20 23:03
- Last modified: 2016-04-14 14:55
+ Last modified: 2016-04-18 15:40
 
    DESCRIPTION: Allows simple job submission with either torque, slurm, or
                 with the multiprocessing module.
@@ -48,6 +48,8 @@ Submit jobs to slurm or torque, or with multiprocessing.
 
 ============================================================================
 """
+import atexit
+
 ##########################
 #  Config File Defaults  #
 ##########################
@@ -60,16 +62,14 @@ DEFAULTS = get_config()
 ################################
 
 from multiprocessing import cpu_count as _cnt
-JOBQUEUE = None  # This will hold a globally available JobQueue object.
 THREADS  = _cnt()
 
 #################################################
 #  Currently configured job submission systems  #
 #################################################
 
-ALLOWED_QUEUES = ['normal', 'torque', 'slurm']
-# Initial QUEUE definition for imports, changed below
-QUEUE = 'normal'
+ALLOWED_MODES = ['normal', 'torque', 'slurm']
+# Current mode held in queue.MODE
 
 ###################
 #  House Keeping  #
@@ -86,6 +86,7 @@ class ClusterError(Exception):
 #########################################
 
 from .queue import Queue
+from .queue import MODE
 from .queue import check_queue
 from .queue import get_cluster_environment
 
@@ -96,6 +97,9 @@ from .job import make_job_file
 from .job import clean
 from .job import clean_dir
 
+from . import jobqueue
+from . import options
+
 __all__ = ['Job', 'Queue', 'submit', 'submit_file', 'clean', 'make_job_file',
            'check_queue']
 
@@ -103,5 +107,19 @@ __all__ = ['Job', 'Queue', 'submit', 'submit_file', 'clean', 'make_job_file',
 #  Set the cluster type  #
 ##########################
 
-QUEUE = get_cluster_environment()
+queue.MODE = get_cluster_environment()
 check_queue()
+
+###############################
+#  Kill the JobQueue on exit  #
+###############################
+def _kill_jobqueue():
+    try:
+        if jobqueue.JQUEUE:
+            if jobqueue.JQUEUE.runner.is_alive():
+                jobqueue.JQUEUE.runner.terminate()
+            del(jobqueue.JQUEUE)
+    except AssertionError:
+        pass
+
+atexit.register(_kill_jobqueue)
