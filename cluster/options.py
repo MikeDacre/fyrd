@@ -7,7 +7,7 @@ Available options for job submission.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-31-17 08:04
- Last modified: 2016-04-18 15:28
+ Last modified: 2016-06-10 17:30
 
 ============================================================================
 """
@@ -15,33 +15,48 @@ from itertools import groupby
 from textwrap import dedent
 
 from . import logme
+from . import THREADS
 
 ###############################################################################
 #                       Possible Job Submission Options                       #
 ###############################################################################
 
+# Defined by dictionaries:
+#      type: python type to convert option into
+#     slurm: the string to format args into for slurm
+#    torque: the string to format args into for torque
+# [s|t]join: used to join list types for slurm or torque
+#      help: Info for the user on the option
 
 # Options available in all modes
 COMMON  = {'modules':
            {'help': 'Modules to load with the `module load` command',
-            'default': None, 'type': 'list'},
+            'default': None, 'type': list},
            'imports':
            {'help': 'Imports to be used in function calls (e.g. sys, os)',
-            'default': None, 'type': 'list'}
+            'default': None, 'type': list},
            'dir':
            {'help': 'The working directory for the job',
-            'default': 'path argument', type: str,
+            'default': 'path argument', 'type': str,
             'slurm': '--workdir={}', 'torque': '-d {}'},
            'suffix':
            {'help': 'A suffix to append to job files (e.g. job.suffix.qsub)',
-            'default': 'cluster', type: str},
-           }
+            'default': 'cluster', 'type': str},
+           'outfile':
+           {'help': 'File to write STDOUT to',
+            'default': None, 'type': str,
+            'slurm': '-o {}', 'torque': '-o {}'},
+           'errfile':
+           {'help': 'File to write STDERR to',
+            'default': None, 'type': str,
+            'slurm': '-e {}', 'torque': '-e {}'},
+          }
 
 # Options used in only local runs
 NORMAL  = {'threads':
            {'help': 'Number of threads to use on the local machine',
-            'default': THREADS, 'type': 'int'}
-           }
+            'default': THREADS, 'type': int}
+          }
 
 # Options used in both torque and slurm
 CLUSTER_CORE = {'nodes':
@@ -52,7 +67,8 @@ CLUSTER_CORE = {'nodes':
                  'default': 1, 'type': int},
                 'features':
                 {'help': 'A comma-separated list of node features to require',
-                 'default': None, 'type': list},
+                 'slurm': '--constraint={}', # Torque in options_to_string()
+                 'default': None, 'type': list, 'sjoin': '&'},
                 'time':
                 {'help': 'Walltime in HH:MM:SS',
                  'default': '12:00:00', 'type': str,
@@ -60,23 +76,35 @@ CLUSTER_CORE = {'nodes':
                  'torque': 'walltime={}'},
                 'mem':
                 {'help': 'Memory to use in MB (e.g. 4000)',
-                 'default': 4000, type: (int, str),
+                 'default': 4000, 'type': (int, str),
                  'slurm': '--mem={}',
                  'torque': 'mem={}MB'},  # We explictly set MB in torque
                 'partition':
                 {'help': 'The partition/queue to run in (e.g. normal/batch)',
-                 'default': None, type: str,
+                 'default': None, 'type': str,
                  'slurm': '-p {}',
                  'torque': '-q {}'},
-                }
+               }
+
+### Note: There are many more options, as them as need to the following lists,
+###       CLUSTER_OPTS should be used for options that work on both systems,
+###       the TORQUE and SLURM dictionaries should be used for options that are
+###       unique to one.
+
+# Additional options shared between systems
 CLUSTER_OPTS = {'account':
-                {'help': 'Account to be charged', default: None, type: str,
+                {'help': 'Account to be charged', 'default': None, 'type': str,
                  'slurm': '--account={}', 'torque': '-A {}'},
                 'export':
                 {'help': 'Comma separated list of environmental variables to export',
                  'default': None, 'type': str,
                  'slurm': '--export={}', 'torque': '-v {}'}
-                }
+               }
+
+###############################################################################
+#                                Torque Options                               #
+#  from: adaptivecomputing.com/torque/4-0-2/Content/topics/commands/qsub.htm  #
+###############################################################################
 
 TORQUE =  {}
 
@@ -87,28 +115,8 @@ TORQUE =  {}
 
 SLURM  = {'begin':
           {'help': 'Start after this much time',
-           'slurm': '--begin={}'},
-          }
-
-
-old = {
-            'exclusive':    'No other jobs may run on node',
-            'export':       'Export these variables (dictionary)',
-            'gres':         'Generic resources required per node',
-            'input':        'File to read job input data from',
-            'job-name':     'Job name',
-            'licenses':     'Licenses required for job',
-            'mem':          'Memory required in MB (int)',
-            'mem_per_cpu':  'Memory per cpu in MB (int)',
-            'N':            'Number of nodes required',
-            'n':            'Number of tasks launched per node',
-            'nodelist':     'Hosts job allowed to run on',
-            'output':       'File where output will be writen',
-            'partition':    'Partition/queue to run in',
-            'qos':          'QOS specification (e.g. dev)',
-            'signal':       'Signal to send to job when approaching time',
-            'time':         'Time limit for job (d-HH:MM:SS)',
-            'wrap':         'Wrap specified command as shell script'}
+           'slurm': '--begin={}', 'type': str},
+         }
 
 
 ###############################################################################
@@ -117,24 +125,25 @@ old = {
 
 
 SLURM_KWDS = COMMON.copy()
-for kwds in [CLUSTER_CORE, CLUSTER_OPTS, SLURM]:
-    SLURM_KWDS.update(kwds)
+for kds in [CLUSTER_CORE, CLUSTER_OPTS, SLURM]:
+    SLURM_KWDS.update(kds)
 
 TORQUE_KWDS = COMMON.copy()
-for kwds in [CLUSTER_CORE, CLUSTER_OPTS, TORQUE]:
-    TORQUE_KWDS.update(kwds)
+for kds in [CLUSTER_CORE, CLUSTER_OPTS, TORQUE]:
+    TORQUE_KWDS.update(kds)
 
 CLUSTER_KWDS = SLURM_KWDS.copy()
 CLUSTER_KWDS.update(TORQUE_KWDS)
 
 NORMAL_KWDS = COMMON.copy()
-for kwds in [NORMAL]:
-    NORMAL_KWDS.update(kwds)
+for kds in [NORMAL]:
+    NORMAL_KWDS.update(kds)
 
 ALL_KWDS = CLUSTER_KWDS.copy()
 ALL_KWDS.update(NORMAL_KWDS)
 
 # Will be 'name' -> type
+ALLOWED_KWDS = {}
 for name, info in ALL_KWDS.items():
     ALLOWED_KWDS[name] = info['type'] if 'type' in info else None
 
@@ -149,18 +158,89 @@ def check_arguments(kwargs):
     Raises Exception on error, returns sanitized dictionary on success.
     """
     new_kwds = {}
-    for arg, opt in kwargs:
+    # Make sure types are correct
+    for arg, opt in kwargs.items():
         if arg not in ALLOWED_KWDS:
             raise Exception('Unrecognized argument {}'.format(arg))
         if opt is not None and not isinstance(opt, ALLOWED_KWDS[arg]):
             try:
-                opt2 = ALLOWED_KWDS[arg](opt)
+                newtype = ALLOWED_KWDS[arg]
+                if (newtype is list or newtype is tuple) \
+                        and not isinstance(arg, (list, tuple)):
+                    if newtype is list:
+                        opt2 = [opt]
+                    elif newtype is tuple:
+                        opt2 = (opt,)
+                    else:
+                        raise Exception("Shouldn't be here")
+                else:
+                    opt2 = newtype(opt)
             except:
                 raise TypeError('arg must be {}, is {}'.format(
                     ALLOWED_KWDS[arg], type(opt)))
             new_kwds[arg] = opt2
         else:
             new_kwds[arg] = opt
+
+    # Parse individual complex options
+    for arg, opt in new_kwds.items():
+        if arg == 'time':
+            try:
+                if '-' in opt:
+                    day, time = opt.split('-')
+                else:
+                    day = 0
+                    time = opt
+                time = [int(i) for i in time.split(':')]
+                if len(time) == 3:
+                    hours, mins, secs = time
+                elif len(time) == 2:
+                    hours = 0
+                    mins, secs = time
+                elif len(time) == 1:
+                    hours = mins = 0
+                    secs = time[0]
+                hours = (int(day)*24) + hours
+                opt = '{}:{}:{}'.format(str(hours).rjust(2, '0'),
+                                        str(mins).rjust(2, '0'),
+                                        str(secs).rjust(2, '0'))
+                new_kwds[arg] = opt
+            except:
+                raise Exception('time must be formatted as D-HH:MM:SS ' +
+                                'or a fragment of that (e.g. MM:SS) ' +
+                                'it is formatted as {}'.format(opt))
+
+        # Force memory into an integer of megabytes
+        elif arg == 'mem' and isinstance(opt, str):
+            if opt.isdigit():
+                opt = int(opt)
+            else:
+                # Try to guess unit by suffix
+                try:
+                    groups = groupby(opt, key=str.isdigit)
+                except ValueError:
+                    raise ValueError('mem is malformatted, should be a number of ' +
+                                    'MB or a string like 24MB or 10GB, ' +
+                                    'it is: {}'.format(opt))
+                sval  = int(''.join(next(groups)[1]))
+                sunit = ''.join(next(groups)[1]).lower()
+                if sunit == 'b':
+                    opt = int(float(sval)/float(1024)/float(1024))
+                elif sunit == 'kb' or sunit == 'k':
+                    opt = int(float(sval)/float(1024))
+                elif sunit == 'mb' or sunit == 'm':
+                    opt = sval
+                elif sunit == 'gb' or sunit == 'g':
+                    opt = sval*1024
+                elif sunit == 'tb' or sunit == 't':
+                    # Crazy people
+                    opt = sval*1024*1024
+                else:
+                    raise Exception('Unknown memory unit opt {}'.format(sunit))
+                # Don't allow 0, minimum memory req is 5MB
+                if opt < 5:
+                    opt = 5
+
     return new_kwds
 
 
@@ -176,6 +256,8 @@ def option_to_string(option, value=None, qtype=None):
     qtype = qtype if qtype else queue.MODE
     queue.check_queue(qtype)
 
+    option = option.rstrip()
+
     if option == 'cores' or option == 'nodes':
         raise Exception('Cannot handle cores or nodes here, use ' +
                         'options_to_string')
@@ -188,7 +270,7 @@ def option_to_string(option, value=None, qtype=None):
         return ''  # There is no need of this in normal mode
 
     # Make sure argument allowed
-    check_arguments({option: value})
+    option, value = list(check_arguments({option: value}).items())[0]
 
     # Fail with debug error if option not available in this mode
     if option in ALLOWED_KWDS and option not in kwds:
@@ -206,54 +288,21 @@ def option_to_string(option, value=None, qtype=None):
             else:
                 raise Exception('{} requires a value'.format(option))
 
-    # Handle time carefully
-    if option == 'time':
-        if not ':' in value or '-' in value:
-            raise Exception('time must be formatted as HH:MM:SS ' +
-                            'it is formatted as {}'.format(value))
-
-    # Sanitize memory argument
-    if option == 'mem' and isinstance(value, str):
-        if value.isdigit:
-            value = int(value)
-        else:
-            # Try to guess unit by suffix
-            parts = groupby(value, key=str.isdigit)
-            if len(parts) != 2:
-                raise TypeError('mem is malformatted, should be a number of ' +
-                                'MB or a string like 24MB or 10GB, ' +
-                                'it is: {}'.format(value))
-            sval  = int(parts[0])
-            sunit = parts[1].lower()
-            if sunit == 'b':
-                value = sval*1024*1024
-            elif sunit == 'kb' or sunit == 'k':
-                value = sval*1024
-            elif sunit == 'mb' or sunit == 'm':
-                value = sval
-            elif sunit == 'gb' or sunit == 'g':
-                value = int(sval/1024)
-            elif sunit == 'tb' or sunit == 't':
-                # Crazy people
-                value = int(sval/1024/1024)
-            else:
-                raise Exception('Unknown memory unit value {}'.format(sunit))
-
     # Return formatted string
     prefix = '#SBATCH' if qtype == 'slurm' else '#PBS'
     if '{}' in kwds[option][qtype]:
         if value is None:
             raise Exception('Cannot use None as an argument for option {}'
                             .format(option))
-        return '{prefix} {optarg}\n'.format(
+        return '{prefix} {optarg}'.format(
             prefix=prefix, optarg=kwds[option][qtype].format(value))
     else:
-        return '{prefix} {option}\n'.format(prefix=prefix,
-                                            option=kwds[option][qtype])
+        return '{prefix} {option}'.format(prefix=prefix,
+                                          option=kwds[option][qtype])
 
 
 def options_to_string(option_dict, qtype=None):
-    """Return a list with strings for slurm or torque job submission.
+    """Return a multi-line string for slurm or torque job submission.
 
     :option_dict: Dict in format {option: value} where value can be None.
                   If value is None, default used.
@@ -282,12 +331,17 @@ def options_to_string(option_dict, qtype=None):
         outlist.append('#SBATCH --ntasks {}'.format(nodes))
         outlist.append('#SBATCH --cpus-per-task {}'.format(cores))
     elif qtype == 'torque':
-        outlist.append('#PBS -l nodes={}:ppn={}'.format(nodes, cores))
+        outstring = '#PBS -l nodes={}:ppn={}'.format(nodes, cores)
+        if 'features' in option_dict:
+            outstring += ':' + ':'.join(
+                run.opt_split(option_dict.pop('features'), (',', ':')))
+        outlist.append(outstring)
 
     # Loop through all options
     for option, value in option_dict.items():
         outlist.append(option_to_string(option, value, qtype))
-    return outlist
+
+    return '\n'.join(outlist)
 
 
 def option_help(qtype=None):
@@ -333,22 +387,26 @@ def option_help(qtype=None):
                 Type: list; Default: None.
     """)
 
-    for option, info in cluster_opts.items():
-        c_help += "{opt:<10} {help}\nType: {type}; Default: {default}\n"
-            .format(opt=':{}:'.format(option), help=info['help'],
-            type=info['type'].__name__, default=info['default'])
+    for option, inf in CLUSTER_OPTS.items():
+        c_help += ("{opt:<10} {help}\nType: {type}; Default: {default}\n"
+                   .format(opt=':{}:'.format(option), help=inf['help'],
+                           type=inf['type'].__name__,
+                           default=inf['default']))
 
     t_help = "\nUsed for torque only::\n"
-    for option, info in torque.items():
-        c_help += "{opt:<10} {help}\nType: {type}; Default: {default}\n"
-            .format(opt=':{}:'.format(option), help=info['help'],
-            type=info['type'].__name__, default=info['default'])
+    for option, info in TORQUE.items():
+        c_help += ("{opt:<10} {help}\nType: {type}; Default: {default}\n"
+                   .format(opt=':{}:'.format(option), help=info['help'],
+                           type=info['type'].__name__,
+                           default=info['default']))
 
     s_help = "\nUsed for slurm only::\n"
-    for option, info in slurm.items():
-        c_help += "{opt:<10} {help}\nType: {type}; Default: {default}\n"
-            .format(opt=':{}:'.format(option), help=info['help'],
-            type=info['type'].__name__, default=info['default'])
+    for option, info in SLURM.items():
+        typ  = info['type'].__name__ if 'type' in info else None
+        dflt = info['default'] if 'default' in info else None
+        c_help += ("{opt:<10} {help}\nType: {typ}; Default: {default}\n"
+                   .format(opt=':{}:'.format(option), help=info['help'],
+                           typ=typ, default=dflt))
 
     outstr = core_help + func_help
 
@@ -358,7 +416,7 @@ def option_help(qtype=None):
         elif qtype == 'slurm':
             outstr += c_help + s_help
         elif qtype == 'torque':
-            outstr += c+help + t+help
+            outstr += c_help + t_help
         else:
             raise Exception('qtype must be "torque", "slurm", or "normal"')
     else:

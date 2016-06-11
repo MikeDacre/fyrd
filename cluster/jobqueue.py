@@ -7,7 +7,7 @@ Manage job dependency tracking with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-56-14 14:04
- Last modified: 2016-04-15 17:40
+ Last modified: 2016-04-19 09:45
 
    DESCRIPTION: Runs jobs with a multiprocessing.Pool, but manages dependency
                 using an additional Process that loops through all submitted
@@ -48,9 +48,11 @@ class JobQueue(object):
         self._jobqueue = mp.Queue()
         self._outputs  = mp.Queue()
         self.jobno     = int(config_file.get('jobqueue', 'jobno', str(1)))
+        self.cores     = int(cores) if cores else THREADS
         self.runner    = mp.Process(target=job_runner,
                                     args=(self._jobqueue, self._outputs,
-                                          cores, self.jobnumber))
+                                          self.cores, self.jobnumber),
+                                    name='Runner')
         self.runner.start()
         assert self.runner.is_alive()
         self.jobs = {}
@@ -80,7 +82,8 @@ class JobQueue(object):
             self.jobno = max(self.jobs.keys())
             config_file.write('jobqueue', 'jobno', str(self.jobno))
 
-    def add(self, function, args=None, kwargs=None, dependencies=None):
+    def add(self, function, args=None, kwargs=None, dependencies=None,
+            cores=1):
         """Add function to local job queue.
 
         :function:     A function object. To run a command, use the run.cmd
@@ -88,13 +91,23 @@ class JobQueue(object):
         :args:         A tuple of args to submit to the function.
         :kwargs:       A dict of keyword arguments to submit to the function.
         :dependencies: A list of job IDs that this job will depend on.
+        :cores:        The number of threads required by this job.
         :returns:      A job ID
         """
         self.update()
         assert self.runner.is_alive()
-        self._jobqueue.put(self.Job(function, args, kwargs, dependencies))
+        oldjob = self.jobno
+        cores = int(cores)
+        if cores > self.cores:
+            logme.log('Job core request exceeds resources, limiting to max',
+                      'warn')
+            cores = self.cores
+        self._jobqueue.put(self.Job(function, args, kwargs, dependencies,
+                                    cores))
         sleep(0.5)
         self.update()
+        newjob = self.jobno
+        assert newjob == oldjob + 1
         return self.jobno
 
     def wait(self, jobs=None):
@@ -117,10 +130,25 @@ class JobQueue(object):
         self.wait(job)
         return self.jobs[job].out
 
+    def restart(self, force=False):
+        """Kill the job queue and restart it."""
+        if not force:
+            self.update()
+            if len(self.done) != len(self.jobs):
+                logme.log('Cannot restart, incomplete jobs', 'error')
+                return
+        self.runner.terminate()
+        self.runner  = mp.Process(target=job_runner,
+                                  args=(self._jobqueue, self._outputs,
+                                        self.cores, self.jobnumber),
+                                  name='Runner')
+        self.runner.start()
+        assert self.runner.is_alive()
 
     def __getattr__(self, attr):
         """Dynamic dictionary filtering."""
-        if attr == 'done' or attr == 'started' or attr == 'waiting':
+        if attr == 'done' or attr == 'queued' or attr == 'waiting' \
+                or attr == 'running':
             newdict = {}
             for jobid, job_info in self.jobs.items():
                 if job_info.state == attr:
@@ -139,8 +167,8 @@ class JobQueue(object):
     def __iter__(self):
         """Allow us to be iterable"""
         self.update()
-        for id, job in self.jobs.items():
-            yield id, job
+        for jobno, job in self.jobs.items():
+            yield jobno, job
 
     def __len__(self):
         """Length is the total job count."""
@@ -149,19 +177,23 @@ class JobQueue(object):
 
     def __repr__(self):
         """Class information."""
-        return "JobQueue<jobs:{};completed:{};waiting:{};started:{}>".format(
-            len(self.jobs), len(self.done), len(self.waiting),
-            len(self.started))
+        self.update()
+        return ("JobQueue<({})jobs:{};completed:{};running:{};queued:{}>"
+                .format(self.cores, len(self.jobs), len(self.done),
+                        len(self.running),
+                        len(self.waiting) + len(self.queued)))
 
     def __str__(self):
         """Print jobs."""
+        self.update()
         return str(self.jobs)
 
     class Job(object):
 
         """An object to pass arguments to the runner."""
 
-        def __init__(self, function, args=None, kwargs=None, depends=None):
+        def __init__(self, function, args=None, kwargs=None, depends=None,
+                     cores=1):
             """Parse and save arguments."""
             if args and not isinstance(args, tuple):
                 args = (args,)
@@ -178,21 +210,26 @@ class JobQueue(object):
             self.args     = args
             self.kwargs   = kwargs
             self.depends  = depends
+            self.cores    = int(cores)
 
             # Assigned later
             self.id       = None
+            self.pid      = None
+            self.exitcode = None
             self.out      = None
             self.state    = 'Not Submitted'
 
         def __repr__(self):
             """Job Info."""
-            return "JobQueue.Job<{}(function:{},args:{},kwargs:{}) {}>".format(
-                self.id, self.function.__name__, self.args, self.kwargs,
-                self.state)
+            return ("JobQueue.Job<{} (function:{},args:{}," +
+                    "kwargs:{};cores:{}) {}>").format(
+                        self.id, self.function.__name__, self.args,
+                        self.kwargs, self.cores, self.state)
 
         def __str__(self):
             """Print Info and Output."""
-            outstr  = "Job #{}\n".format(self.id if self.id else 'NA')
+            outstr  = "Job #{}; Cores: {}\n".format(
+                self.id if self.id else 'NA', self.cores)
             outstr += "\tFunction: {}\n\targs: {}\n\tkwargs: {}\n\t".format(
                 self.function.__name__, self.args, self.kwargs)
             outstr += "State: {}\n\tOutput: {}\n".format(self.state, self.out)
@@ -245,18 +282,25 @@ def job_runner(jobqueue, outputs, cores=None, jobno=None):
     # Initialize job objects
     jobno   = int(jobno) if jobno \
               else int(config_file.get('jobqueue', 'jobno', str(1)))
-    jobno   = jobno-1 if jobno is not 0 else 0  # We increment first
     jobs    = {} # This will hold job numbers
-    runners = {} # This will hold the multiprocessing objects
-    done    = [] # A list of completed jobs to check against
     started = [] # A list of started jobs to check against
     cores   = cores if cores else THREADS
-    pool    = mp.Pool(cores)
+    queue   = [] # This will hold Processes that haven't started yet
+    running = [] # This will hold actively running jobs to manage core count
+    done    = [] # A list of completed jobs to check against
 
     # Actually loop through the jobs
     while True:
         if not jobqueue.empty():
+            oldjob = jobno
             jobno += 1
+            newjob = jobno
+            # Sometimes the thread stalls if it has been left a while and
+            # ends up reusing the same job number. I don't know why this
+            # happens, however explicitly getting the jobno seems to fix the
+            # issue. Just to be sure I also want to test that the job number is
+            # incremented, but this is a little redundant at this point.
+            assert newjob == oldjob + 1
             job = jobqueue.get_nowait()
             if not isinstance(job, JobQueue.Job):
                 logme.log('job information must be a job object, was {}'.format(
@@ -264,7 +308,7 @@ def job_runner(jobqueue, outputs, cores=None, jobno=None):
                 continue
 
             # The arguments look good, so lets add this to the stack.
-            job.state   = 'queued'
+            job.state   = 'submitted'
             job.id      = jobno
             jobs[jobno] = job
 
@@ -288,30 +332,63 @@ def job_runner(jobqueue, outputs, cores=None, jobno=None):
                             output(jobs)
 
                 # Start jobs if dependencies are met and they aren't started.
+                # We use daemon mode so that child jobs are killed on exit.
                 if ready and not jobno in started:
                     if job_info.args and job_info.kwargs:
-                        runners[jobno] = pool.apply_async(job_info.function,
-                                                          job_info.args,
-                                                          job_info.kwargs)
+                        queue.append((mp.Process(target=job_info.function,
+                                                 args=job_info.args,
+                                                 kwargs=job_info.kwargs,
+                                                 name=str(jobno),
+                                                 daemon=True),
+                                      job_info.cores))
                     elif job_info.args:
-                        runners[jobno] = pool.apply_async(job_info.function,
-                                                          job_info.args)
+                        queue.append((mp.Process(target=job_info.function,
+                                                 args=job_info.args,
+                                                 name=str(jobno),
+                                                 daemon=True),
+                                      job_info.cores))
                     elif job_info.kwargs:
-                        runners[jobno] = pool.apply_async(job_info.function,
-                                                          kwds=job_info.kwargs)
+                        queue.append((mp.Process(target=job_info.function,
+                                                 kwargs=job_info.kwargs,
+                                                 name=str(jobno),
+                                                 daemon=True),
+                                      job_info.cores))
                     else:
-                        runners[jobno] = pool.apply_async(job_info.function)
-                    job_info.state = 'started'
+                        queue.append((mp.Process(target=job_info.function,
+                                                 name=str(jobno),
+                                                 daemon=True),
+                                      job_info.cores))
+                    job_info.state = 'queued'
                     started.append(jobno)
                     output(jobs)
-                    sleep(0.5)  # Wait for a second to allow job to start
 
-                # Check running jobs for completion
-                if job_info.state == 'started' and not jobno in done \
-                        and runners[jobno].ready():
-                    job_info.out   = runners[jobno].get()
-                    job_info.state = 'done'
-                    done.append(jobno)
+        # Actually run jobs
+        if queue:
+            # Get currently used cores, ignore outself
+            running_cores = 0
+            for i in [i[1] for i in running]:
+                running_cores += i
+            # Look for a job to run
+            for j in queue:
+                if j[1] + running_cores <= cores:
+                    j[0].start()
+                    jobs[int(j[0].name)].state = 'running'
+                    jobs[int(j[0].name)].pid = j[0].pid
+                    running.append(queue.pop(queue.index(j)))
+                    output(jobs)
+                    sleep(0.5)  # Wait for a second to allow job to start
+                    break
+
+        # Clean out running jobs
+        if running:
+            for i in running:
+                j = i[0]
+                if not j.is_alive():
+                    jobs[int(j.name)].out = j.join()
+                    jobs[int(j.name)].state = 'done'
+                    jobs[int(j.name)].exitcode = j.exitcode
+                    done.append(int(j.name))
+                    running.pop(running.index(i))
                     output(jobs)
 
         # Wait for half a second before looping again

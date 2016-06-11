@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-44-20 23:03
- Last modified: 2016-04-18 15:48
+ Last modified: 2016-06-10 18:35
 
    DESCRIPTION: Allows simple job submission with either torque, slurm, or
                 with the multiprocessing module.
@@ -73,6 +73,7 @@ from . import run
 from . import logme
 from . import queue
 from . import options
+from . import config_file
 from . import ClusterError
 
 ##########################################################
@@ -90,30 +91,6 @@ try:
 except CalledProcessError:
     pass  # This doesn't work on Macs or Windows
 
-KWARGS = ('threads', 'cores', 'time', 'mem', 'partition', 'modules',
-          'dependencies', 'suffix')
-ARGINFO = """\
-:cores:        How many cores to run on or threads to use.
-:dependencies: A list of dependencies for this job, must be either
-                Job objects (required for normal mode) or job numbers.
-:suffix:       The name to use in the output and error files
-
-Used for function calls::
-:imports: A list of imports, if not provided, defaults to all current
-            imports, which may not work if you use complex imports.
-            The list can include the import call, or just be a name, e.g
-            ['from os import path', 'sys']
-
-Used only in normal mode::
-:threads:   How many threads to use in the multiprocessing pool. Defaults to
-            all.
-
-Used for torque and slurm::
-:time:      The time to run for in HH:MM:SS.
-:mem:       Memory to use in MB.
-:partition: Partition/queue to run on, default 'normal'.
-:modules:   Modules to load with the 'module load' command.
-"""
 
 ###############################################################################
 #                                The Job Class                                #
@@ -175,7 +152,7 @@ class Job(object):
     queue_info   = None
 
     def __init__(self, command, args=None, name=None, path=None,
-                 qtype=None, **kwds):
+                 qtype=None, profile=None, **kwds):
         """Create a job object will submission information.
 
         :command: The command or function to execute.
@@ -184,8 +161,9 @@ class Job(object):
         :name:    Optional name of the job.
         :path:    Where to create the script, if None, current dir used.
         :qtype:   Override the default queue type
+        :profile: An optional profile to define options
 
-        Available Keywork Arguments
+        Available Keyword Arguments
         ---------------------------
         {arginfo}
         """.format(arginfo=options.option_help())
@@ -196,10 +174,27 @@ class Job(object):
 
         # Make a copy of the keyword arguments, as we will delete arguments
         # as we go
-        kwargs = kwds.copy()
+        kwargs = options.check_arguments(kwds.copy())
 
-        # Check keyword arguments
-        kwargs = options.check_arguments(kwargs)
+        # Merge in profile
+        if profile:
+            prof = config_file.get_profile(profile)
+            if prof:
+                for k,v in prof.args():
+                    if k not in kwargs:
+                        kwargs[k] = v
+            else:
+                logme.log('No profile found for {}'.format(profile), 'warn')
+
+        # If no profile or keywords, use default profile
+        if not profile and not kwargs:
+            kwargs = config_file.get_profile('default').args
+
+        # Get required options
+        req_options = config_file.get('opts')
+        for k,v in req_options.items():
+            if k not in kwargs:
+                kwargs[k] = v
 
         # Get environment
         self.qtype = qtype if qtype else queue.MODE
@@ -222,13 +217,8 @@ class Job(object):
 
         # Set modules
         self.modules = kwargs.pop('modules') if 'modules' in kwargs else None
-        if isinstance(self.modules, str):
-            if ',' in self.modules:
-                self.modules = self.modules.split(',')
-            elif ';' in self.modules:
-                self.modules = self.modules.split(';')
-            else:
-                self.modules = [self.modules]
+        if self.modules:
+            self.modules = run.opt_split(self.modules, (',', ';'))
 
         # Path handling
         usedir  = os.path.abspath(path) if path else os.path.abspath('.')
@@ -245,13 +235,17 @@ class Job(object):
                     args = (args,)
 
         # In case cores are passed as None
-        self.cores = kwargs.pop('cores') if 'cores' in kwargs else 1
-        self.nodes = kwargs.pop('nodes') if 'nodes' in kwargs else 1
+        self.cores = kwargs['cores'] if 'cores' in kwargs else 1
+        self.nodes = kwargs['nodes'] if 'nodes' in kwargs else 1
 
         # Set output files
         suffix = kwargs.pop('suffix') if 'suffix' in kwargs else 'cluster'
-        self.outfile = '.'.join([name, suffix, 'out'])
-        self.errfile = '.'.join([name, suffix, 'err'])
+        if 'outfile' not in kwargs:
+            kwargs['outfile'] = '.'.join([name, suffix, 'out'])
+        if 'errfile' not in kwargs:
+            kwargs['errfile'] = '.'.join([name, suffix, 'err'])
+        self.outfile = kwargs['outfile']
+        self.errfile = kwargs['errfile']
 
         # Check and set dependencies
         if 'depends' in kwargs:
@@ -299,6 +293,7 @@ class Job(object):
             for module in self.modules:
                 precmd += 'module load {}\n'.format(module)
         precmd += dedent("""\
+            mkdir -p $LOCAL_SCRATCU
             cd {}
             date +'%d-%H:%M:%S'
             echo "Running {}"
@@ -321,8 +316,6 @@ class Job(object):
             # Add all of the keyword arguments at once
             sub_script.append(options.options_to_string(kwargs, self.qtype))
 
-            sub_script.append('#SBATCH -o {}'.format(self.outfile))
-            sub_script.append('#SBATCH -e {}'.format(self.errfile))
             sub_script.append('cd {}'.format(usedir))
 
             # We use a separate script and a single srun command to avoid
@@ -332,8 +325,7 @@ class Job(object):
 
             exe_script = []
             exe_script.append('#!/bin/bash')
-            exe_script.append('mkdir -p $LOCAL_SCRATCH')
-            exe_script.append(precmd)
+            exe_script.append(precmd.format(usedir, name))
             exe_script.append(command + '\n')
             exe_script.append(pstcmd)
 
@@ -344,10 +336,7 @@ class Job(object):
             # Add all of the keyword arguments at once
             sub_script.append(options.options_to_string(kwargs, self.qtype))
 
-            sub_script.append('#PBS -o {}.cluster.out'.format(name))
-            sub_script.append('#PBS -e {}.cluster.err\n'.format(name))
-            sub_script.append('mkdir -p $LOCAL_SCRATCH')
-            sub_script.append(precmd)
+            sub_script.append(precmd.format(usedir, name))
             sub_script.append(command + '')
             sub_script.append(pstcmd)
 
@@ -359,7 +348,7 @@ class Job(object):
 
             scrpt = os.path.join(usedir, '{}.cluster'.format(name))
             sub_script.append('#!/bin/bash\n')
-            sub_script.append(precmd)
+            sub_script.append(precmd.format(usedir, name))
             sub_script.append(command + '\n')
             sub_script.append(pstcmd)
 
@@ -486,9 +475,9 @@ class Job(object):
                                            '{}, command: {}'.format(stderr, args))
                     else:
                         if count == 5:
-                            logme.log('qsub failed with code {}\n'.format(code),
-                                      'stdout: {}\nstderr: {}'.format(stdout,
-                                                                      stderr),
+                            logme.log(('qsub failed with code {}\n'
+                                       'stdout: {}\nstderr: {}').format(
+                                           code, stdout, stderr),
                                       'critical')
                             raise CalledProcessError(code, args, stdout,
                                                      stderr)
@@ -502,6 +491,8 @@ class Job(object):
 
     def update(self):
         """Update status from the queue."""
+        if not self.submitted:
+            return
         self.queue.load()
         if self.id:
             queue_info = self.queue[self.id]
@@ -707,7 +698,8 @@ class Function(Script):
 ###############################################################################
 
 
-def submit(command, args=None, name=None, path=None, **kwargs):
+def submit(command, args=None, name=None, path=None, qtype=None,
+           profile=None, **kwargs):
     """Submit a script to the cluster.
 
     Used in all modes::
@@ -721,15 +713,12 @@ def submit(command, args=None, name=None, path=None, **kwargs):
 
     Returns:
         Job object
-    """.format(arginfo=ARGINFO)
-    # Check keyword arguments
-    for arg in kwargs:
-        if arg not in KWARGS:
-            raise Exception('Unrecognized argument {}'.format(arg))
+    """.format(arginfo=options.option_help())
 
     queue.check_queue()  # Make sure the queue.MODE is usable
 
-    job = Job(command=command, args=args, name=name, path=path, **kwargs)
+    job = Job(command=command, args=args, name=name, path=path, qtype=qtype,
+              profile=profile, **kwargs)
 
     job.write()
     job.submit()
@@ -742,7 +731,8 @@ def submit(command, args=None, name=None, path=None, **kwargs):
 #########################
 
 
-def make_job(command, args=None, name=None, path=None, **kwargs):
+def make_job(command, args=None, name=None, path=None, qtype=None,
+             profile=None, **kwargs):
     """Make a job file compatible with the chosen cluster.
 
     If mode is normal, this is just a simple shell script.
@@ -758,7 +748,7 @@ def make_job(command, args=None, name=None, path=None, **kwargs):
 
     Returns:
         A job object
-    """.format(arginfo=ARGINFO)
+    """.format(arginfo=options.option_help())
     # Check keyword arguments
     for arg in kwargs:
         if arg not in KWARGS:
@@ -766,7 +756,8 @@ def make_job(command, args=None, name=None, path=None, **kwargs):
 
     queue.check_queue()  # Make sure the queue.MODE is usable
 
-    job = Job(command=command, args=args, name=name, path=path, **kwargs)
+    job = Job(command=command, args=args, name=name, path=path, qtype=qtype,
+              profile=profile, **kwargs)
 
     # Return the path to the script
     return job
@@ -788,7 +779,7 @@ def make_job_file(command, args=None, name=None, path=None, **kwargs):
 
     Returns:
         Path to job script
-    """.format(arginfo=ARGINFO)
+    """.format(arginfo=options.option_help())
     # Check keyword arguments
     for arg in kwargs:
         if arg not in KWARGS:
@@ -796,7 +787,8 @@ def make_job_file(command, args=None, name=None, path=None, **kwargs):
 
     queue.check_queue()  # Make sure the queue.MODE is usable
 
-    job = Job(command=command, args=args, name=name, path=path, **kwargs)
+    job = Job(command=command, args=args, name=name, path=path, qtype=qtype,
+              profile=profile, **kwargs)
 
     job = job.write()
 

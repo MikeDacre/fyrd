@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-44-20 23:03
- Last modified: 2016-04-18 15:40
+ Last modified: 2016-04-18 16:33
 
    DESCRIPTION: Allows simple job submission with either torque, slurm, or
                 with the multiprocessing module.
@@ -85,8 +85,12 @@ class ClusterError(Exception):
 #  Make our functions easily available  #
 #########################################
 
+from . import jobqueue
+from . import options
+from . import queue
+from . import job
+
 from .queue import Queue
-from .queue import MODE
 from .queue import check_queue
 from .queue import get_cluster_environment
 
@@ -96,9 +100,6 @@ from .job import submit_file
 from .job import make_job_file
 from .job import clean
 from .job import clean_dir
-
-from . import jobqueue
-from . import options
 
 __all__ = ['Job', 'Queue', 'submit', 'submit_file', 'clean', 'make_job_file',
            'check_queue']

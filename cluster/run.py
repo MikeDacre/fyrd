@@ -7,7 +7,7 @@ File management and execution functions.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-02-11 16:03
- Last modified: 2016-04-14 17:58
+ Last modified: 2016-06-10 17:21
 
 ============================================================================
 """
@@ -120,6 +120,20 @@ def open_zipped(infile, mode='r'):
         return open(infile, mode)
 
 
+def opt_split(opt, split_on):
+    """Split opt by chars in split_on, merge all into single list."""
+    if not isinstance(opt, (list, tuple, set)):
+        opt = [opt]
+    if not isinstance(split_on, (list, tuple, set)):
+        split_on = [split_on]
+    for schar in split_on:
+        tmp_list = []
+        for i in opt:
+            tmp_list += i.split(schar)
+        opt = tmp_list
+    return list(set(opt)) # Return unique options only
+
+
 def cmd(command, args=None, stdout=None, stderr=None):
     """Run command and return status, output, stderr.
 
@@ -128,14 +142,18 @@ def cmd(command, args=None, stdout=None, stderr=None):
     :stdout:  File or open file like object to write STDOUT to.
     :stderr:  File or open file like object to write STDERR to.
     """
+    if isinstance(command, (list, tuple)):
+        if args:
+            raise Exception('Cannot submit list/tuple command as i' +
+                            'well as args argument')
+        command = ' '.join(command)
+    assert isinstance(command, str)
     if args:
-        if isinstance(args, list):
-            args = tuple(list)
-        if not isinstance(args, tuple):
-            raise CommandError('args must be tuple')
-        args = (command,) + args
+        if isinstance(args, (list, tuple)):
+            args = ' '.join(args)
+        args = command + args
     else:
-        args = (command,)
+        args = command
     logme.log('Running {} as {}'.format(command, args), 'debug')
     pp = Popen(args, shell=True, universal_newlines=True,
                stdout=PIPE, stderr=PIPE)
