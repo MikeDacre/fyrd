@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-44-20 23:03
- Last modified: 2016-04-18 16:33
+ Last modified: 2016-06-10 18:42
 
    DESCRIPTION: Allows simple job submission with either torque, slurm, or
                 with the multiprocessing module.
@@ -50,13 +50,6 @@ Submit jobs to slurm or torque, or with multiprocessing.
 """
 import atexit
 
-##########################
-#  Config File Defaults  #
-##########################
-
-from .config_file import get_config
-DEFAULTS = get_config()
-
 ################################
 #  Normal Mode Multithreading  #
 ################################
@@ -70,6 +63,13 @@ THREADS  = _cnt()
 
 ALLOWED_MODES = ['normal', 'torque', 'slurm']
 # Current mode held in queue.MODE
+
+##########################
+#  Config File Defaults  #
+##########################
+
+from .config_file import get_config
+DEFAULTS = get_config()
 
 ###################
 #  House Keeping  #

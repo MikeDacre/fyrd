@@ -7,10 +7,11 @@ Available options for job submission.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-31-17 08:04
- Last modified: 2016-06-10 17:30
+ Last modified: 2016-06-10 20:50
 
 ============================================================================
 """
+import os
 from itertools import groupby
 from textwrap import dedent
 
@@ -35,6 +36,9 @@ COMMON  = {'modules':
            'imports':
            {'help': 'Imports to be used in function calls (e.g. sys, os)',
             'default': None, 'type': list},
+           'filedir':
+           {'help': 'Folder to write cluster files to.',
+            'default': '.', 'type': str},
            'dir':
            {'help': 'The working directory for the job',
             'default': 'path argument', 'type': str,
@@ -327,6 +331,17 @@ def options_to_string(option_dict, qtype=None):
     # Handle cores separately
     nodes = int(option_dict.pop('nodes')) if 'nodes' in option_dict else 1
     cores = int(option_dict.pop('cores')) if 'cores' in option_dict else 1
+
+    # Set path if required
+    if 'filedir' in option_dict:
+        filedir = os.path.abspath(option_dict.pop('filedir'))
+        if 'outfile' in option_dict:
+            option_dict['outfile'] = os.path.join(
+                filedir, os.path.basename(option_dict['outfile']))
+        if 'errfile' in option_dict:
+            option_dict['errfile'] = os.path.join(
+                filedir, os.path.basename(option_dict['errfile']))
+
     if qtype == 'slurm':
         outlist.append('#SBATCH --ntasks {}'.format(nodes))
         outlist.append('#SBATCH --cpus-per-task {}'.format(cores))

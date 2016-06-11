@@ -2,7 +2,7 @@
 Description:   Get and set global variables
 
 Created:       2015-12-11
-Last modified: 2016-06-10 18:33
+Last modified: 2016-06-10 20:39
 """
 import os
 import sys
@@ -45,8 +45,8 @@ INITIAL_DEFAULTS['prof_large']   = {'nodes':        1,
 # Other options
 INITIAL_DEFAULTS['opts']         = {}  # Set options that must always be set (e.g. partition)
 INITIAL_DEFAULTS['queue']        = {'max_jobs':     1000,  # Max number of jobs in queue
-                                    'sleep_len':    5,     # Between submission attempts (in seconds)
-                                    'queue_update': 20}    # Amount of time between getting fresh queue info (seconds)
+                                    'sleep_len':    1,     # Between submission attempts (in seconds)
+                                    'queue_update': 2}     # Amount of time between getting fresh queue info (seconds)
 
 
 ################################################################################
@@ -144,7 +144,7 @@ def get(section=None, key=None, default=None):
         return defaults
     if not section in defaults:
         if key and default:
-            write(section, key, default)
+            set(section, key, default)
             return get(section, key)
         else:
             return None
@@ -247,8 +247,14 @@ def create_config():
                 raise
     with open(CONFIG_FILE, 'w') as outfile:
         config.write(outfile)
-    logme.log('Created the file with default variables '.format(CONFIG_FILE) +
-              'Please review this file and edit your defaults', 'info')
+    logme.log(('Created the config file {} with default variables. '
+               'This file contains the default profiles and can be used to '
+               'control your job submission options, potentially saving you '
+               'a lot of time. Please review this file and edit the defaults '
+               'to fit your cluster configuration. In particular, edit the '
+               '[opts] section to include and job submission options that '
+               'must be included every time on this cluster.')
+              .format(CONFIG_FILE), 'info')
     return get_config()
 
 

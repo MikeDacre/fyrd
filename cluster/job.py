@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-44-20 23:03
- Last modified: 2016-06-10 18:35
+ Last modified: 2016-06-10 20:49
 
    DESCRIPTION: Allows simple job submission with either torque, slurm, or
                 with the multiprocessing module.
@@ -187,8 +187,9 @@ class Job(object):
                 logme.log('No profile found for {}'.format(profile), 'warn')
 
         # If no profile or keywords, use default profile
+        default_args = config_file.get_profile('default').args
         if not profile and not kwargs:
-            kwargs = config_file.get_profile('default').args
+            kwargs = default_args
 
         # Get required options
         req_options = config_file.get('opts')
@@ -221,29 +222,45 @@ class Job(object):
             self.modules = run.opt_split(self.modules, (',', ';'))
 
         # Path handling
-        usedir  = os.path.abspath(path) if path else os.path.abspath('.')
-        if 'dir' in kwargs:
+        if path:
+            usedir = os.path.abspath(path)
+        elif 'dir' in kwargs:
             usedir = os.path.abspath(kwargs['dir'])
-        kwargs['dir'] = usedir
+        else:
+            usedir = os.path.abspath('.')
+
+        # Set runtime dir in arguments
+        if 'dir' not in kwargs:
+            kwargs['dir'] = usedir
+
+        # Set temp file path if different from runtime path
+        filedir = os.path.abspath(kwargs['filedir']) \
+            if 'filedir' in kwargs else usedir
 
         # Make sure args are a tuple or dictionary
         if args:
             if not isinstance(args, (tuple, dict)):
-                if isinstance(args, list, set):
+                if isinstance(args, (list, set)):
                     args = tuple(args)
                 else:
                     args = (args,)
 
         # In case cores are passed as None
-        self.cores = kwargs['cores'] if 'cores' in kwargs else 1
-        self.nodes = kwargs['nodes'] if 'nodes' in kwargs else 1
+        if 'nodes' not in kwargs:
+            kwargs['nodes'] = default_args['nodes']
+        if 'cores' not in kwargs:
+            kwargs['cores'] = default_args['cores']
+        self.nodes = kwargs['nodes']
+        self.cores = kwargs['cores']
 
         # Set output files
         suffix = kwargs.pop('suffix') if 'suffix' in kwargs else 'cluster'
         if 'outfile' not in kwargs:
-            kwargs['outfile'] = '.'.join([name, suffix, 'out'])
+            kwargs['outfile'] = os.path.join(filedir,
+                                             '.'.join([name, suffix, 'out']))
         if 'errfile' not in kwargs:
-            kwargs['errfile'] = '.'.join([name, suffix, 'err'])
+            kwargs['errfile'] = os.path.join(filedir,
+                                             '.'.join([name, suffix, 'err']))
         self.outfile = kwargs['outfile']
         self.errfile = kwargs['errfile']
 
@@ -274,7 +291,7 @@ class Job(object):
         # Make functions run remotely
         if hasattr(command, '__call__'):
             self.function = Function(
-                file_name=os.path.join(usedir, name + '_func.py'),
+                file_name=os.path.join(filedir, name + '_func.py'),
                 function=command, args=args)
             command = 'python{} {}'.format(sys.version[0],
                                            self.function.file_name)
@@ -293,7 +310,7 @@ class Job(object):
             for module in self.modules:
                 precmd += 'module load {}\n'.format(module)
         precmd += dedent("""\
-            mkdir -p $LOCAL_SCRATCU
+            mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
             cd {}
             date +'%d-%H:%M:%S'
             echo "Running {}"
@@ -310,7 +327,7 @@ class Job(object):
         # Create queue-dependent scripts
         sub_script = []
         if self.qtype == 'slurm':
-            scrpt = os.path.join(usedir, '{}.cluster.sbatch'.format(name))
+            scrpt = os.path.join(filedir, '{}.cluster.sbatch'.format(name))
             sub_script.append('#!/bin/bash')
 
             # Add all of the keyword arguments at once
@@ -320,7 +337,7 @@ class Job(object):
 
             # We use a separate script and a single srun command to avoid
             # issues with multiple threads running at once
-            exe_scrpt  = os.path.join(usedir, name + '.script')
+            exe_scrpt  = os.path.join(filedir, name + '.script')
             sub_script.append('srun bash {}.script'.format(exe_scrpt))
 
             exe_script = []
@@ -330,7 +347,7 @@ class Job(object):
             exe_script.append(pstcmd)
 
         elif self.qtype == 'torque':
-            scrpt = os.path.join(usedir, '{}.cluster.qsub'.format(name))
+            scrpt = os.path.join(filedir, '{}.cluster.qsub'.format(name))
             sub_script.append('#!/bin/bash')
 
             # Add all of the keyword arguments at once
@@ -346,7 +363,7 @@ class Job(object):
                 threads = kwargs['threads'] if 'threads' in kwargs else THREADS
                 jobqueue.JQUEUE = jobqueue.JobQueue(cores=threads)
 
-            scrpt = os.path.join(usedir, '{}.cluster'.format(name))
+            scrpt = os.path.join(filedir, '{}.cluster'.format(name))
             sub_script.append('#!/bin/bash\n')
             sub_script.append(precmd.format(usedir, name))
             sub_script.append(command + '\n')
@@ -358,6 +375,8 @@ class Job(object):
         if self.exe_scrpt:
             self.exec_script = Script(script='\n'.join(exe_script),
                                       file_name=exe_scrpt)
+
+        self.kwargs = kwargs
 
     ####################
     #  Public Methods  #
@@ -493,14 +512,14 @@ class Job(object):
         """Update status from the queue."""
         if not self.submitted:
             return
-        self.queue.load()
+        self.queue.update()
         if self.id:
             queue_info = self.queue[self.id]
             if queue_info:
                 assert self.id == queue_info.id
                 self.queue_info = queue_info
                 self.state = self.queue_info.state
-                if self.state == 'completed':
+                if self.state == 'complete':
                     self.done = True
 
     def wait(self):
@@ -542,6 +561,31 @@ class Job(object):
             if self.function:
                 files.append(self.function)
             return files
+        if key == 'stdout':
+            if not self.done:
+                self._update()
+            if os.path.isfile(self.kwargs['outfile']):
+                stdout = open(self.kwargs['outfile']).read()
+                if stdout:
+                    stdout = '\n'.join(stdout.split('\n')[2:-3]) + '\n'
+                if self.done:
+                    self.stdout = stdout
+                return stdout
+        if key == 'stderr':
+            if not self.done:
+                self._update()
+            if os.path.isfile(self.kwargs['errfile']):
+                stderr = open(self.kwargs['errfile']).read()
+                if self.done:
+                    self.stderr = stderr
+                return stderr
+
+    def __getattribute__(self, key):
+        """Make some attributes fully dynamic."""
+        if key == 'done':
+            self.update()
+        return object.__getattribute__(self, key)
+
 
     def __repr__(self):
         """Return simple job information."""
@@ -636,7 +680,10 @@ class Function(Script):
         self.args     = args
         # Get the module path
         rootmod  = inspect.getmodule(function)
-        imppath  = os.path.split(rootmod.__file__)[0]
+        if hasattr(rootmod, '__file__'):
+            imppath = os.path.split(rootmod.__file__)[0]
+        else:
+            imppath = '.'
         rootname = rootmod.__name__
 
         script = '#!/usr/bin/env python{}\n'.format(sys.version[0])
@@ -663,7 +710,9 @@ class Function(Script):
                     continue
                 filtered_imports.append('import {}'.format(imp))
         # Get rid of duplicates and sort imports
-        script += '\n'.join(sorted(set(filtered_imports)))
+        script += 'try:\n    '
+        script += '\n    '.join(sorted(set(filtered_imports)))
+        script += '\nexcept ImportError:\n    pass\n'
 
         # Set file names
         self.pickle_file = pickle_file if pickle_file else file_name + '.pickle.in'

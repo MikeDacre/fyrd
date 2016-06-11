@@ -6,7 +6,7 @@ Monitor the queue for torque or slurm.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-04-18 11:48
+ Last modified: 2016-06-10 20:12
 
 ============================================================================
 """
@@ -153,10 +153,10 @@ class Queue(object):
         self.jobs = {}
 
         # Load the queue, also sets the last update time
-        self._load()
+        self._update()
 
     ######################################
-    #  Public functions: load(), wait()  #
+    #  Public functions: update(), wait()  #
     ######################################
 
     def wait(self, jobs):
@@ -171,12 +171,12 @@ class Queue(object):
               the job exits.
 
         :jobs: A job or list of jobs to check. Can be one of:
-                    Job or multiprocessing.pool.ApplyResulti objects, job ID
+                    Job or multiprocessing.pool.ApplyResult objects, job ID
                     (int/str), or a object or a list/tuple of multiple Jobs or
                     job IDs.
         :returns:  True on success False or nothing on failure.
         """
-        self.load()
+        self.update()
 
         # Sanitize arguments
         if not isinstance(jobs, (list, tuple)):
@@ -206,7 +206,7 @@ class Queue(object):
                 if isinstance(job, self._Job):
                     job = job.id
                 while True:
-                    self.load()
+                    self.update()
                     not_found = 0
                     # Allow two seconds to elapse before job is found in queue,
                     # if it is not in the queue by then, raise exception.
@@ -226,16 +226,16 @@ class Queue(object):
         sleep(1)  # Sleep an extra second to allow post-run scripts to run.
         return True
 
-    def load(self):
+    def update(self):
         """Refresh the list of jobs from the server, limit queries."""
         if int(time()) - self.last_update > int(_defaults['queue_update']):
-            self._load()
+            self._update()
 
     ######################
     # Internal Functions #
     ######################
 
-    def _load(self):
+    def _update(self):
         """Refresh the list of jobs from the server.
 
         This is the core queue interaction function of this class.
@@ -280,8 +280,6 @@ class Queue(object):
                 try:
                     sleep(1)
                     qargs = ['qstat', '-x']
-                    if self.user:
-                        qargs += ['-u', self.user]
                     xmlqueue = ET.fromstring(check_output(qargs))
                 except CalledProcessError:
                     sleep(1)
@@ -308,10 +306,12 @@ class Queue(object):
                         job = self.QueueJob()
                     else:
                         job = self.jobs[job_id]
+                    job.owner = xmljob.find('Job_Owner').text.split('@')[0]
+                    if self.user != job.owner:
+                        continue
                     jobs.append(job_id)
                     job.id    = job_id
                     job.name  = xmljob.find('Job_Name').text
-                    job.owner = xmljob.find('Job_Owner').text.split('@')[0]
                     job.queue = xmljob.find('queue').text
                     job_state = xmljob.find('job_state').text
                     if job_state == 'Q':
@@ -445,7 +445,7 @@ class Queue(object):
 
     def _get_jobs(self, key):
         """Return a dict of jobs where state matches key."""
-        self.load()
+        self.update()
         retjobs = {}
         for jobid, job in self.jobs.items():
             if job.state == key.lower():
@@ -459,7 +459,7 @@ class Queue(object):
 
     def __getitem__(self, key):
         """Allow direct accessing of jobs by job id."""
-        self.load()
+        self.update()
         if isinstance(key, self._Job):
             key = key.jobid
         key = int(key)
@@ -470,18 +470,18 @@ class Queue(object):
 
     def __iter__(self):
         """Allow us to be iterable"""
-        self.load()
+        self.update()
         for jb in self.jobs.values():
             yield jb
 
     def __len__(self):
         """Length is the total job count."""
-        self.load()
+        self.update()
         return len(self.jobs)
 
     def __repr__(self):
         """ For debugging. """
-        self.load()
+        self.update()
         if self.user:
             outstr = 'Queue<jobs:{};completed:{};queued:{};user={}>'.format(
                 len(self), len(self.completed), len(self.queued), self.user)
@@ -492,7 +492,7 @@ class Queue(object):
 
     def __str__(self):
         """A list of keys."""
-        self.load()
+        self.update()
         return str(self.jobs.keys())
 
     ##############################################
