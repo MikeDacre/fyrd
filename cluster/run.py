@@ -7,13 +7,14 @@ File management and execution functions.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-02-11 16:03
- Last modified: 2016-06-10 17:21
+ Last modified: 2016-06-15 12:26
 
 ============================================================================
 """
 import os
-import gzip
+import re
 import bz2
+import gzip
 import argparse
 from subprocess import Popen
 from subprocess import PIPE
@@ -24,9 +25,72 @@ __all__ = ['cmd', 'which', 'open_zipped']
 
 
 ###############################################################################
-#                           Function Running Script                           #
+#                          Scripts to Write to File                           #
 ###############################################################################
 
+
+SCRP_RUNNER = """\
+#!/bin/bash
+{precmd}
+mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
+if [ -f {script}]:
+    {command}
+else:
+    echo "{script} does not exist, make sure you set your filepath to a "
+    echo "directory that is available to the compute nodes."
+    exit 1
+fi
+"""
+
+SCRP_RUNNER_TRACK = """\
+#!/bin/bash
+{precmd}
+mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
+if [ -f {script}]:
+    cd {usedir}
+    date +'%d-%H:%M:%S'
+    echo "Running {name}"
+    {command}
+    exitcode=$?
+    echo Done
+    date +'%d-%H:%M:%S'
+    if [[ $exitcode != 0 ]]; then
+        echo Exited with code: $exitcode >&2
+    fi
+else:
+    echo "{script} does not exist, make sure you set your filepath to a "
+    echo "directory that is available to the compute nodes."
+    exit 1
+fi
+"""
+
+CMND_RUNNER = """\
+#!/bin/bash
+{precmd}
+mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
+cd {usedir}
+{command}
+exitcode=$?
+if [[ $exitcode != 0 ]]; then
+    echo Exited with code: $exitcode >&2
+fi
+"""
+
+CMND_RUNNER_TRACK = """\
+#!/bin/bash
+{precmd}
+mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
+cd {usedir}
+date +'%d-%H:%M:%S'
+echo "Running {name}"
+{command}
+exitcode=$?
+echo Done
+date +'%d-%H:%M:%S'
+if [[ $exitcode != 0 ]]; then
+    echo Exited with code: $exitcode >&2
+fi
+"""
 
 FUNC_RUNNER = """\
 import sys
@@ -39,8 +103,9 @@ except ImportError:
     except ImportError:
         import pickle
 
+{imports}
 sys.path.append('{path}')
-import {module}
+{modimpstr}
 
 
 def run_function(function_call, args=None):
@@ -126,22 +191,24 @@ def opt_split(opt, split_on):
         opt = [opt]
     if not isinstance(split_on, (list, tuple, set)):
         split_on = [split_on]
-    for schar in split_on:
-        tmp_list = []
-        for i in opt:
-            tmp_list += i.split(schar)
-        opt = tmp_list
-    return list(set(opt)) # Return unique options only
+    final_list = []
+    for o in opt:
+        final_list += re.split('[{}]'.format(''.join(split_on)), o)
+    return list(set(final_list)) # Return unique options only, order lost.
 
 
-def cmd(command, args=None, stdout=None, stderr=None):
+def cmd(command, args=None, stdout=None, stderr=None, tries=1):
     """Run command and return status, output, stderr.
 
     :command: Path to executable.
     :args:    Tuple of arguments.
     :stdout:  File or open file like object to write STDOUT to.
     :stderr:  File or open file like object to write STDERR to.
+    :tries:   Int: Number of times to try to execute 1+
     """
+    tries = int(tries)
+    assert tries > 0
+    count = 1
     if isinstance(command, (list, tuple)):
         if args:
             raise Exception('Cannot submit list/tuple command as i' +
@@ -155,10 +222,21 @@ def cmd(command, args=None, stdout=None, stderr=None):
     else:
         args = command
     logme.log('Running {} as {}'.format(command, args), 'debug')
-    pp = Popen(args, shell=True, universal_newlines=True,
-               stdout=PIPE, stderr=PIPE)
-    out, err = pp.communicate()
-    code = pp.returncode
+    while True:
+        try:
+            pp = Popen(args, shell=True, universal_newlines=True,
+                       stdout=PIPE, stderr=PIPE)
+        except FileNotFountError:
+            logme.log('{} does not exist'.format(command), 'critical')
+            raise
+        out, err = pp.communicate()
+        code = pp.returncode
+        if code == 0 or count == tries:
+            break
+        logme.log('Command {} failed with code {}, retrying.'
+                  .format(command, code), 'warn')
+        sleep(1)
+        count += 1
     logme.log('{} completed with code {}'.format(command, code), 'debug')
     if stdout:
         with open_zipped(stdout, 'w') as fout:

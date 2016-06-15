@@ -1,16 +1,45 @@
 """
-Description:   Get and set global variables
+Get and set config file options.
 
-Created:       2015-12-11
-Last modified: 2016-06-10 20:39
+===============================================================================
+
+        AUTHOR: Michael D Dacre, mike.dacre@gmail.com
+  ORGANIZATION: Stanford University
+       LICENSE: MIT License, property of Stanford, use as you wish
+       CREATED: 2015-12-11
+ Last modified: 2016-06-15 13:14
+
+   DESCRIPTION: The functions defined here provide an easy way to access the
+                config file defined by CONFIG_FILE (default ~/.python-cluster).
+
+                Importantly, this config file uses the concept of profiles,
+                which is not built into python's configparser library. To get
+                around this, we write profiles as sections that begin with
+                'prof_' and the parse the whole config into a simple dictionary
+                to make it easier to use.
+
+                To work with profiles, use the get_profile() and set_profile()
+                functions. Note that all options must be allowed in the
+                options.py file before they can be added to a profile.
+
+                Options will also be pre-sanitized before being added to
+                profile. e.g. 'mem': '2GB' will become 'mem': 2000.
+
+                The other options of interest are in the 'queue' section,
+                specifically the max_jobs, sleep_len, and queue_update
+                variables. max_jobs sets the maximum number of queing and
+                running jobs allowed in the queue before submission will pause
+                and wait; sleep_len sets the default amount of time various
+                functions in this module wait when trying to run system calls;
+                and queue_update sets the amount of time to wait between
+                updating the queue from the system, to avoid overloading the
+                system with too many updates.
+
+===============================================================================
 """
+
 import os
 import sys
-from os import path    as _path
-from os import environ as _environ
-from os import system  as _system
-from re import findall as _findall
-from sys import stderr as _stderr
 try:
     import configparser as _configparser
 except ImportError:
@@ -23,7 +52,7 @@ from . import options
 #                            Configurable Defaults                             #
 ################################################################################
 
-CONFIG_FILE = _environ['HOME'] + '/.python-cluster'
+CONFIG_FILE = os.environ['HOME'] + '/.python-cluster'
 config      = _configparser.ConfigParser()
 defaults    = {}
 
@@ -32,7 +61,7 @@ DEFAULT_PROFILE = {'nodes': 1,
                    'mem':   4000,
                    'time':  '02:00:00'}
 
-__all__ = ['set', 'get', 'delete', 'get_config']
+__all__ = ['set', 'get', 'set_profile', 'get_profile', 'delete', 'get_config']
 INITIAL_DEFAULTS = {}
 
 # Pre-defined profiles, must begin with prof_. 'default' is required.
@@ -43,10 +72,13 @@ INITIAL_DEFAULTS['prof_large']   = {'nodes':        1,
                                     'time':         '24:00:00'}
 
 # Other options
-INITIAL_DEFAULTS['opts']         = {}  # Set options that must always be set (e.g. partition)
-INITIAL_DEFAULTS['queue']        = {'max_jobs':     1000,  # Max number of jobs in queue
-                                    'sleep_len':    1,     # Between submission attempts (in seconds)
-                                    'queue_update': 2}     # Amount of time between getting fresh queue info (seconds)
+INITIAL_DEFAULTS['opts']         = {}  # Set options that must always be set
+INITIAL_DEFAULTS['queue']        = {'max_jobs':     1000,  # Max jobs in queue
+                                    # Between submission attempts (in seconds)
+                                    'sleep_len':    1,
+                                    # Amount of time between getting fresh
+                                    # queue info (seconds)
+                                    'queue_update': 1}
 
 
 ################################################################################
@@ -64,7 +96,7 @@ class Profile(object):
     """A job submission profile. Just a thin wrapper around a dict."""
 
     name = None
-    args = None
+    args = {}
 
     def __init__(self, name, kwds):
         """Set up bare minimum attributes."""
@@ -155,7 +187,7 @@ def get(section=None, key=None, default=None):
             if default:
                 logme.log('Creating new config entry {}:{} with val {}'.format(
                     section, key, default), 'debug')
-                write(section, key, default)
+                set(section, key, default)
                 return get(section, key)
             else:
                 return None
@@ -168,10 +200,9 @@ def set(section, key, value):
     # Sanitize arguments
     section = str(section)
     key     = str(key)
-    value   = value
+    value   = str(value)
 
     # Edit the globals in this file
-    global defaults, config
     config.read(CONFIG_FILE)
 
     if not config.has_section(section):
@@ -189,7 +220,6 @@ def delete(section, key=None):
 
     If key is not provided deletes whole section.
     """
-    global defaults, config
     config.read(CONFIG_FILE)
     if key:
         config.remove_option(section, key)
@@ -213,9 +243,9 @@ def get_initial_defaults():
 
 def get_config():
     """Load defaults from file."""
-    global defaults, config
+    global defaults
     defaults = {}
-    if _path.isfile(CONFIG_FILE):
+    if os.path.isfile(CONFIG_FILE):
         config.read(CONFIG_FILE)
         defaults = _config_to_dict(config)
     else:
@@ -263,17 +293,16 @@ def create_config():
 ###############################################################################
 
 
-def _config_to_dict(config):
+def _config_to_dict(conf):
     """Convert a config object into a dictionary."""
-    global defaults
-    for section in config.sections():
+    for section in conf.sections():
         # Jobs become a sub-dictionary
         if section.startswith('prof_'):
             if 'prof' not in defaults.keys():
                 defaults['prof'] = {}
             name = '_'.join(section.split('_')[1:])
             defaults['prof'][name] = {}
-            for k, v in config.items(section):
+            for k, v in conf.items(section):
                 if v.isdigit():
                     v = int(v)
                 defaults['prof'][name][k] = v

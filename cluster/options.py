@@ -1,22 +1,43 @@
 """
 Available options for job submission.
 
-============================================================================
+===============================================================================
 
         AUTHOR: Michael D Dacre, mike.dacre@gmail.com
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-31-17 08:04
- Last modified: 2016-06-10 20:50
+ Last modified: 2016-06-15 13:44
 
-============================================================================
+   DESCRIPTION: All keyword arguments that can be used with Job() objects are
+                defined in this file. These can be editted by the end user to
+                increase functionality.
+
+                Options are defined in dictionaries with the syntax:
+                    'name': {'slurm': The command to be used for slurm
+                             'torque': The command to be used for torque
+                             'default': The default to use if not set
+                             'type': The python object type for the option
+                             'help': A string with help information
+
+                All of these fields are required except in the case that:
+                    1. The option is managed in options_to_string explicitly
+                    2. The option is in NORMAL, TORQUE, or SLURM dictionaries,
+                       in which case flags used by other queue systems can be
+                       skipped.
+
+===============================================================================
 """
 import os
+import sys
 from itertools import groupby
 from textwrap import dedent
 
+from . import run
 from . import logme
 from . import THREADS
+
+__all__ = ['option_help']
 
 ###############################################################################
 #                       Possible Job Submission Options                       #
@@ -37,7 +58,8 @@ COMMON  = {'modules':
            {'help': 'Imports to be used in function calls (e.g. sys, os)',
             'default': None, 'type': list},
            'filedir':
-           {'help': 'Folder to write cluster files to.',
+           {'help': 'Folder to write cluster files to, must be accessible ' +
+                    'to the compute nodes.',
             'default': '.', 'type': str},
            'dir':
            {'help': 'The working directory for the job',
@@ -224,8 +246,8 @@ def check_arguments(kwargs):
                     groups = groupby(opt, key=str.isdigit)
                 except ValueError:
                     raise ValueError('mem is malformatted, should be a number of ' +
-                                    'MB or a string like 24MB or 10GB, ' +
-                                    'it is: {}'.format(opt))
+                                     'MB or a string like 24MB or 10GB, ' +
+                                     'it is: {}'.format(opt))
                 sval  = int(''.join(next(groups)[1]))
                 sunit = ''.join(next(groups)[1]).lower()
                 if sunit == 'b':
@@ -359,24 +381,25 @@ def options_to_string(option_dict, qtype=None):
     return '\n'.join(outlist)
 
 
-def option_help(qtype=None):
-    """Return a sting displaying information on all options.
+def option_help(qtype=None, prnt=True):
+    """Print a sting to stdout displaying information on all options.
 
     :qtype: If provided only return info on that queue type.
+    :prnt:  If True, print to stdout, if False, return string.
     """
 
     core_help = dedent("""\
     Options available in all modes::
-    :cores:   How many cores to run on or threads to use.
-    :depends: A list of dependencies for this job, must be either
-              Job objects (required for normal mode) or job numbers.
-    :suffix:  The name to use in the output and error files
-    :dir:     The working directory to run in. Defaults to current.
+    :cores:     How many cores to run on or threads to use.
+    :depends:   A list of dependencies for this job, must be either
+                Job objects (required for normal mode) or job numbers.
+    :suffix:    The name to use in the output and error files
+    :dir:       The working directory to run in. Defaults to current.
     """)
 
     func_help = dedent("""\
     Used for function calls::
-    :imports: A list of imports, if not provided, defaults to all current
+    :imports:   A list of imports, if not provided, defaults to all current
                 imports, which may not work if you use complex imports.
                 The list can include the import call, or just be a name, e.g
                 ['from os import path', 'sys']
@@ -385,7 +408,7 @@ def option_help(qtype=None):
     norm_help = dedent("""\
     Used only in normal mode::
     :threads:   How many threads to use in the multiprocessing pool.
-                Defaults to all.
+                Defaults to all or cores if cores is provided.
     """)
 
     c_help = dedent("""\
@@ -403,38 +426,42 @@ def option_help(qtype=None):
     """)
 
     for option, inf in CLUSTER_OPTS.items():
-        c_help += ("{opt:<10} {help}\nType: {type}; Default: {default}\n"
+        c_help += (("{opt:<11} {help}\n{s:<12}Type: {type}; "
+                    'Default: {default}\n')
                    .format(opt=':{}:'.format(option), help=inf['help'],
                            type=inf['type'].__name__,
-                           default=inf['default']))
+                           default=inf['default'], s=' '))
 
-    t_help = "\nUsed for torque only::\n"
-    for option, info in TORQUE.items():
-        c_help += ("{opt:<10} {help}\nType: {type}; Default: {default}\n"
-                   .format(opt=':{}:'.format(option), help=info['help'],
-                           type=info['type'].__name__,
-                           default=info['default']))
+    t_help = "Used for torque only::\n"
+    for option, inf in TORQUE.items():
+        t_help += (("{opt:<11} {help}\n{s:<12}Type: {type}; "
+                    "Default: {default}\n")
+                   .format(opt=':{}:'.format(option), help=inf['help'],
+                           type=inf['type'].__name__,
+                           default=inf['default'], s=' '))
 
-    s_help = "\nUsed for slurm only::\n"
-    for option, info in SLURM.items():
-        typ  = info['type'].__name__ if 'type' in info else None
-        dflt = info['default'] if 'default' in info else None
-        c_help += ("{opt:<10} {help}\nType: {typ}; Default: {default}\n"
-                   .format(opt=':{}:'.format(option), help=info['help'],
-                           typ=typ, default=dflt))
+    s_help = "Used for slurm only::\n"
+    for option, inf in SLURM.items():
+        s_help += ("{opt:<11} {help}\n{s:<12}Type: {typ}; Default: {default}\n"
+                   .format(opt=':{}:'.format(option), help=inf['help'],
+                           typ=inf['type'].__name__,
+                           default=inf['default'], s=' '))
 
-    outstr = core_help + func_help
+    outstr = core_help + '\n' + func_help
 
     if qtype:
         if qtype == 'normal':
-            outstr += norm_help
+            outstr += '\n' + norm_help
         elif qtype == 'slurm':
-            outstr += c_help + s_help
+            outstr += '\n' + c_help + '\n' + s_help
         elif qtype == 'torque':
-            outstr += c_help + t_help
+            outstr += '\n' + c_help + '\n' + t_help
         else:
             raise Exception('qtype must be "torque", "slurm", or "normal"')
     else:
-        outstr += norm_help + c_help + t_help + s_help
+        outstr += '\n' + '\n'.join([norm_help, c_help, t_help, s_help])
 
-    return outstr
+    if prnt:
+        sys.stdout.write(outstr)
+    else:
+        return outstr
