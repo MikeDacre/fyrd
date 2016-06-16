@@ -2,6 +2,8 @@
 Python Cluster
 ##############
 
+.. image:: https://travis-ci.org/MikeDacre/python-cluster.svg?branch=master
+
 Submit jobs to slurm or torque, or with multiprocessing.
 
 Author:  Michael D Dacre <mike.dacre@gmail.com>
@@ -30,6 +32,11 @@ To install, use the standard python method::
 In general you want user level install even if you have sudo
 access, as most cluster environments share /home/<user> across
 the cluster, making this module available everywhere.
+
+*Note:* While the name is `python-cluster` you will import it
+just as `cluster`::
+
+    import cluster
 
 Prerequisites
 -------------
