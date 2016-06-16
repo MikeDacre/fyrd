@@ -20,7 +20,7 @@ for i in listdir(here + '/bin'):
 
 setup(
     name='python-cluster',
-    version='0.2',
+    version='0.6.1',
     description='Submit and monitor slurm, torque, and threaded jobs',
     long_description=long_description,
     url='https://github.com/MikeDacre/python_slurm',
@@ -30,7 +30,7 @@ setup(
 
     # See https://pypi.python.org/pypi?%3Aaction=list_classifiers
     classifiers=[
-        'Development Status :: 1 - Planning',
+        'Development Status :: 4 - Beta',
         'Intended Audience :: Science/Research',
         'Environment :: Console',
         'Operating System :: Linux',

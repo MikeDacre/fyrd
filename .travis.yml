@@ -1,0 +1,12 @@
+language: python
+python:
+  - "2.7"
+  - "3.3"
+  - "3.4"
+  - "3.5"
+  - "3.5-dev"
+  - "nightly"
+# command to install dependencies
+install: "pip install dill"
+# command to run tests
+script: py.test
