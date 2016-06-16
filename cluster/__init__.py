@@ -8,7 +8,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
        LICENSE: MIT License, property of Stanford, use as you wish
        VERSION: 0.6.1
        CREATED: 2015-12-11 22:19
- Last modified: 2016-06-15 13:18
+ Last modified: 2016-06-15 19:50
 
    DESCRIPTION: Allows simple job submission with *dependency tracking and
                 queue waiting* with either torque, slurm, or locally with the
@@ -34,6 +34,15 @@ Submit jobs to slurm or torque, or with multiprocessing.
                 To run with dependency tracking, run::
                     job  = submit(<command1>)
                     job2 = submit(<command2>, dependencies=job1)
+
+                ***NOTE*** To use this, the file that is calling submit must
+                           have all code inside a function or protected by
+                           if __name__ == '__main__'.
+                           In order to make function submission work, the file
+                           that calls this script must be importable, importing
+                           in python executes all code that isn't wrapped in
+                           an if __name__ == '__main__' clause. This can lead
+                           to infinite recursion!
 
                 Much more can be done though.
 

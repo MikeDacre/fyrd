@@ -7,7 +7,7 @@ Available options for job submission.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-31-17 08:04
- Last modified: 2016-06-15 13:44
+ Last modified: 2016-06-15 14:32
 
    DESCRIPTION: All keyword arguments that can be used with Job() objects are
                 defined in this file. These can be editted by the end user to
@@ -106,7 +106,7 @@ CLUSTER_CORE = {'nodes':
                  'slurm': '--mem={}',
                  'torque': 'mem={}MB'},  # We explictly set MB in torque
                 'partition':
-                {'help': 'The partition/queue to run in (e.g. normal/batch)',
+                {'help': 'The partition/queue to run in (e.g. local/batch)',
                  'default': None, 'type': str,
                  'slurm': '-p {}',
                  'torque': '-q {}'},
@@ -275,7 +275,7 @@ def option_to_string(option, value=None, qtype=None):
 
     :option: An allowed option definied in options.all_options
     :value:  A value for that option if required (if None, default used)
-    :qtype:  'torque', 'slurm', or 'normal': override queue.MODE
+    :qtype:  'torque', 'slurm', or 'local': override queue.MODE
     """
     # Import a couple of queue functions here
     from . import queue
@@ -292,8 +292,11 @@ def option_to_string(option, value=None, qtype=None):
         kwds = SLURM_KWDS
     elif qtype == 'torque':
         kwds = TORQUE_KWDS
-    elif qtype == 'normal':
-        return ''  # There is no need of this in normal mode
+    elif qtype == 'local':
+        return ''  # There is no need of this in local mode
+    else:
+        # This should never happen
+        raise Exception('Invalid qtype {}'.format(qtype))
 
     # Make sure argument allowed
     option, value = list(check_arguments({option: value}).items())[0]
@@ -332,7 +335,7 @@ def options_to_string(option_dict, qtype=None):
 
     :option_dict: Dict in format {option: value} where value can be None.
                   If value is None, default used.
-    :qtype:       'torque', 'slurm', or 'normal': override queue.MODE
+    :qtype:       'torque', 'slurm', or 'local': override queue.MODE
     """
     # Import a couple of queue functions here
     from . import queue
@@ -392,7 +395,7 @@ def option_help(qtype=None, prnt=True):
     Options available in all modes::
     :cores:     How many cores to run on or threads to use.
     :depends:   A list of dependencies for this job, must be either
-                Job objects (required for normal mode) or job numbers.
+                Job objects (required for local mode) or job numbers.
     :suffix:    The name to use in the output and error files
     :dir:       The working directory to run in. Defaults to current.
     """)
@@ -406,7 +409,7 @@ def option_help(qtype=None, prnt=True):
     """)
 
     norm_help = dedent("""\
-    Used only in normal mode::
+    Used only in local mode::
     :threads:   How many threads to use in the multiprocessing pool.
                 Defaults to all or cores if cores is provided.
     """)
@@ -420,7 +423,7 @@ def option_help(qtype=None, prnt=True):
     :mem:       Memory to use in MB.
                 Type: int; Default: 4000
     :partition: Partition/queue to run on
-                Type: str; Default: 'normal' in slurm, 'batch' in torque.
+                Type: str; Default: 'local' in slurm, 'batch' in torque.
     :modules:   Modules to load with the 'module load' command.
                 Type: list; Default: None.
     """)
@@ -450,14 +453,14 @@ def option_help(qtype=None, prnt=True):
     outstr = core_help + '\n' + func_help
 
     if qtype:
-        if qtype == 'normal':
+        if qtype == 'local':
             outstr += '\n' + norm_help
         elif qtype == 'slurm':
             outstr += '\n' + c_help + '\n' + s_help
         elif qtype == 'torque':
             outstr += '\n' + c_help + '\n' + t_help
         else:
-            raise Exception('qtype must be "torque", "slurm", or "normal"')
+            raise Exception('qtype must be "torque", "slurm", or "local"')
     else:
         outstr += '\n' + '\n'.join([norm_help, c_help, t_help, s_help])
 

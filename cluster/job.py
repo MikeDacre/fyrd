@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-04-20 23:03
- Last modified: 2016-06-15 13:31
+ Last modified: 2016-06-16 14:23
 
 ===============================================================================
 """
@@ -107,7 +107,7 @@ class Job(object):
     # Holds queue information in torque and slurm
     queue_info   = None
 
-    stdout = stderr = None
+    stdout = stderr = exitcode = None
 
     def __init__(self, command, args=None, name=None, path=None,
                  qtype=None, profile=None, **kwds):
@@ -161,13 +161,14 @@ class Job(object):
 
         # Get required options
         req_options = config_file.get('opts')
-        for k,v in req_options.items():
-            if k not in kwargs:
-                kwargs[k] = v
+        if req_options:
+            for k,v in req_options.items():
+                if k not in kwargs:
+                    kwargs[k] = v
 
         # Get environment
         self.qtype = qtype if qtype else queue.MODE
-        self.queue = queue.Queue(user='self', queue=self.qtype)
+        self.queue = queue.Queue(user='self', qtype=self.qtype)
         self.state = 'Not Submitted'
 
         # Set name
@@ -265,7 +266,8 @@ class Job(object):
         # Make functions run remotely
         if hasattr(command, '__call__'):
             self.function = Function(
-                file_name=os.path.join(filedir, name + '_func.py'),
+                file_name=os.path.join(filedir, '{}_func.{}.py'.format(
+                name, suffix)),
                 function=command, args=args)
             # Collapse the command into a python call to the function script
             command = 'python{} {}'.format(sys.version[0],
@@ -319,9 +321,6 @@ class Job(object):
                 threads = kwargs['threads'] if 'threads' in kwargs else THREADS
                 jobqueue.JQUEUE = jobqueue.JobQueue(cores=threads)
 
-            # Add all of the keyword arguments at once
-            precmd += options.options_to_string(kwargs, self.qtype)
-
             scrpt = os.path.join(filedir, '{}.cluster'.format(name))
             sub_script = run.CMND_RUNNER_TRACK.format(
                 precmd=precmd, usedir=usedir, name=name, command=command)
@@ -348,13 +347,21 @@ class Job(object):
             self.function.write(overwrite)
         self.written = True
 
-    def clean(self):
-        """Delete all scripts created by this module, if they were written."""
-        self.get_stdout()
-        self.get_stderr()
+    def clean(self, delete_outputs=False):
+        """Delete all scripts created by this module, if they were written.
+
+        If delete_outputs is True, also delete the stdout and stderr files,
+        but get their contents first.
+        """
         for jobfile in [self.submission, self.exec_script, self.function]:
             if jobfile:
                 jobfile.clean()
+        if delete_outputs:
+            self.get_stdout()
+            self.get_stderr()
+            for f in [self.outfile, self.errfile]:
+                if os.path.isfile(f):
+                    os.remove(f)
 
     def submit(self, max_queue_len=None):
         """Submit this job.
@@ -398,15 +405,16 @@ class Job(object):
                         dependencies.append(int(depend))
 
             command = 'bash {}'.format(self.submission.file_name)
-            #  kwargs  = dict(stdout=self.stdout,
-                           #  stderr=self.stderr)
+            fileargs  = dict(stdout=self.outfile,
+                             stderr=self.errfile)
 
             # Make sure the global job pool exists
             if not jobqueue.JQUEUE or not jobqueue.JQUEUE.runner.is_alive():
-                jobqueue.JQUEUE = jobqueue.JobQueue(cores=self.cores)
+                jobqueue.JQUEUE = jobqueue.JobQueue(cores=THREADS)
             self.id = jobqueue.JQUEUE.add(run.cmd, args=(command,),
-                                          #  kwargs=kwargs,
-                                          dependencies=dependencies)
+                                          kwargs=fileargs,
+                                          dependencies=dependencies,
+                                          cores=self.cores)
             self.submitted = True
             return self
 
@@ -467,11 +475,13 @@ class Job(object):
                     logme.log('qsub failed with err {}. Resubmitting.'
                               .format(stderr), 'debug')
             self.submitted = True
+
+            sleep(0.5)  # Give submission a chance
             return self
 
     def update(self):
         """Update status from the queue."""
-        if not self.submitted:
+        if object.__getattribute__(self, 'done') or not self.submitted:
             return
         self.queue.update()
         if self.id:
@@ -482,6 +492,9 @@ class Job(object):
                 self.state = self.queue_info.state
                 if self.state == 'complete':
                     self.done = True
+                    self.get_stdout(False)
+                    self.get_stderr(False)
+                    self.get_exitcode(False)
         return self
 
     def wait(self):
@@ -489,44 +502,88 @@ class Job(object):
         self.update()
         if self.done:
             return
+        sleep(1)
         self.queue.wait(self)
         self.done = True
 
     def get(self):
         """Block until job completed and return exit_code, stdout, stderr."""
+        if not self.submitted:
+            logme.log('Cannot wait for result as job has not been submitted',
+                      'warn')
+            return
+        sleep(0.1)
         self.wait()
-        if self.qtype == 'local':
-            return jobqueue.JQUEUE.get(self.id)
-        else:
-            return self.queue_info.exitcode, self.stdout, self.stderr
+        return self.exitcode, self.stdout, self.stderr
 
-    def get_stdout(self):
+    def get_stdout(self, update=True):
         """Read stdout file if exists and set self.stdout, return it."""
-        if not self.done:
-            self._update()
-        if self.done and hasattr(self, '_stdout'):
+        if update and not object.__getattribute__(self, 'done'):
+            self.update()
+        if object.__getattribute__(self, 'done') and hasattr(self, '_stdout'):
             return self._stdout
         if os.path.isfile(self.kwargs['outfile']):
             stdout = open(self.kwargs['outfile']).read()
             if stdout:
                 stdout = '\n'.join(stdout.split('\n')[2:-3]) + '\n'
-            if self.done:
+            if object.__getattribute__(self, 'done'):
                 self._stdout = stdout
                 self.stdout  = self._stdout
             return stdout
+        else:
+            logme.log('No file at {}, cannot get stdout'
+                      .format(self.kwargs['outfile']), 'debug')
 
-    def get_stderr(self):
+    def get_stderr(self, update=True):
         """Read stdout file if exists and set self.stdout, return it."""
-        if not self.done:
-            self._update()
-        if self.done and hasattr(self, '_stderr'):
+        if update and not object.__getattribute__(self, 'done'):
+            self.update()
+        if object.__getattribute__(self, 'done') and hasattr(self, '_stderr'):
             return self._stderr
         if os.path.isfile(self.kwargs['errfile']):
             stderr = open(self.kwargs['errfile']).read()
-            if self.done:
+            if object.__getattribute__(self, 'done'):
                 self._stderr = stderr
                 self.stderr  = self._stderr
             return stderr
+        else:
+            logme.log('No file at {}, cannot get stderr'
+                      .format(self.kwargs['errfile']), 'debug')
+
+    def get_exitcode(self, update=True):
+        """Try to get the exitcode."""
+        if update and not object.__getattribute__(self, 'done'):
+            self.update()
+        if not object.__getattribute__(self, 'done'):
+            logme.log('Job is not complete, no exit code yet', 'info')
+            return None
+        if self.done and hasattr(self, '_exitcode'):
+            return self._exitcode
+        if not self.queue_info:
+            self.queue_info = self.queue[self.id]
+        if hasattr(self.queue_info, 'exitcode'):
+            code = self.queue_info.exitcode
+        else:
+            code = None
+            logme.log('No exitcode even though the job is done, this ' +
+                      "shouldn't happen.", 'warn')
+        self._exitcode = code
+        self.exitcode  = self._exitcode
+        return code
+
+    def update_queue_info(self):
+        """Set queue_info from the queue even if done."""
+        queue_info1 = self.queue[self.id]
+        self.queue.update()
+        queue_info2 = self.queue[self.id]
+        if queue_info2:
+            self.queue_info = queue_info2
+        elif queue_info1:
+            self.queue_info = queue_info1
+        elif self.queue_info is None and self.submitted:
+            logme.log('Cannot find self in the queue and queue_info is empty',
+                      'warn')
+        return self.queue_info
 
     ###############
     #  Internals  #
@@ -548,6 +605,8 @@ class Job(object):
             return self.get_stdout()
         elif key == 'stderr':
             return self.get_stderr()
+        elif key == 'exitcode':
+            return self.get_exitcode()
         return object.__getattribute__(self, key)
 
     def __repr__(self):
@@ -632,6 +691,9 @@ class Function(Script):
                  pickle_file=None, outfile=None):
         """Create a function wrapper.
 
+        NOTE: Function submission will fail if the parent file's code is not
+        wrapped in an if __main__ wrapper.
+
         :function:    Function handle.
         :args:        Arguments to the function as a tuple.
         :imports:     A list of imports, if not provided, defaults to all current
@@ -643,25 +705,36 @@ class Function(Script):
         :path:        The path to the calling script, used for importing self.
         """
         self.function = function
-        self.parent   = inspect.getmodule(self.function).__name__
+        rootmod       = inspect.getmodule(self.function)
+        self.parent   = rootmod.__name__
         self.args     = args
 
         # Get the module path
-        rootmod  = inspect.getmodule(function)
+        rootname = self.parent
         if hasattr(rootmod, '__file__'):
-            imppath = os.path.split(rootmod.__file__)[0]
+            imppath, impt = os.path.split(rootmod.__file__)
+            impt = os.path.splitext(impt)[0]
         else:
             imppath = '.'
-        rootname = rootmod.__name__
+            impt = None
+
+        if impt and self.function.__module__ == '__main__':
+            self.function.__module__ = impt
 
         # Try to set a sane import string to make the function work
-        modstr = 'import {}'.format(rootname)
-        if rootname != self.function.__name__:
-            modstr  = 'try:\n    import {}.{}\n'.format(
+        if impt:
+            #  modstr  = 'try:\n    import {}\n'.format(impt)
+            #  modstr += 'except ImportError:\n    pass\n'
+            modstr  = 'try:\n    from {} import {}\n'.format(
+                impt, self.function.__name__)
+            modstr += 'except ImportError:\n    pass\n'
+        elif rootname != self.function.__name__ and rootname != '__main__':
+            modstr  = 'try:\n    from {} import {}\n'.format(
                 rootname, self.function.__name__)
             modstr += 'except ImportError:\n    pass\n'
-            modstr += 'from {} import {}'.format(
-                rootname, self.function.__name__)
+        else:
+            modstr  = 'try:\n    import {}'.format(self.function.__name__)
+            modstr += 'except ImportError:\n    pass\n'
 
         # Take care of imports, either use manual or all current imports
         if imports:
@@ -674,17 +747,30 @@ class Function(Script):
                     imports.append(module.__name__)
             imports = list(set(imports))
 
+        # Write a list of modules to ~/.python_module_list.txt
+        # This will work on standard linux systems only, and will silently fail
+        # on other systems.
+        ver = sys.version_info.major
+        modules = run.cmd("pip{} freeze --local | ".format(ver) +
+                          "grep -v '^\-e' | cut -d = -f 1 > " +
+                          "~/python_module_list")
         # Create a sane set of imports
         filtered_imports = []
         for imp in imports:
             if imp.startswith('import') or imp.startswith('from'):
-                filtered_imports.append(imp.rstrip())
+                filtered_imports.append('try:\n    ' + imp.rstrip() +
+                                        'except ImportError:\n    pass')
             else:
                 if '.' in imp:
                     rootimp = imp.split('.')[0]
-                    if not rootimp == 'pickle' and not rootimp == 'sys':
-                        filtered_imports.append('import {}'.format(rootimp))
-                if imp == 'pickle' or imp == 'sys':
+                    if not rootimp == 'pickle' and not rootimp == 'sys' \
+                            and not rootimp == 'dill':
+                        filtered_imports.append('try:\n    import {}\n'
+                                                .format(rootimp) +
+                                                'except ImportError:\n    ' +
+                                                'pass\n')
+
+                if imp == 'pickle' or imp == 'sys' or imp == 'dill':
                     continue
                 filtered_imports.append(('try:\n    import {}\n'
                                          'except ImportError:\n    pass\n')
@@ -697,7 +783,7 @@ class Function(Script):
         self.outfile     = outfile if outfile else file_name + '.pickle.out'
 
         # Create script text
-        script = '#!/usr/bin/env python{}\n'.format(sys.version[0])
+        script = '#!/usr/bin/env python{}\n'.format(ver)
         script += run.FUNC_RUNNER.format(path=imppath,
                                          modimpstr=modstr,
                                          imports=impts,
@@ -756,6 +842,7 @@ def submit(command, args=None, name=None, path=None, qtype=None,
 
     job.write()
     job.submit()
+    job._update()
 
     return job
 
@@ -873,9 +960,6 @@ def submit_file(script_file, dependencies=None, threads=None, qtype=None):
     """
     queue.check_queue()  # Make sure the queue.MODE is usable
 
-    # Sanitize arguments
-    name = str(name)
-
     if not qtype:
         qtype = queue.get_cluster_environment()
 
@@ -959,7 +1043,7 @@ def submit_file(script_file, dependencies=None, threads=None, qtype=None):
         return jobqueue.JQUEUE.add(run.cmd, (command,), dependencies=depends)
 
 
-def clean_dir(directory='.', suffix='cluster'):
+def clean_dir(directory='.', suffix='cluster', qtype=None, confirm=False):
     """Delete all files made by this module in directory.
 
     CAUTION: The clean() function will delete **EVERY** file with
@@ -969,19 +1053,39 @@ def clean_dir(directory='.', suffix='cluster'):
                  .<suffix>.sbatch & .cluster.script for slurm mode
                  .<suffix>.qsub for torque mode
                  .<suffix> for local mode
+                 _func.<suffix>.py
+                 _func.<suffix>.py.pickle.in
+                 _func.<suffix>.py.pickle.out
 
     :directory: The directory to run in, defaults to the current directory.
+    :qtype:     Only run on files of this qtype
+    :confirm:   Ask the user before deleting the files
     :returns:   A set of deleted files
     """
-    queue.check_queue()  # Make sure the queue.MODE is usable
+    queue.check_queue(qtype)  # Make sure the queue.MODE is usable
 
-    extensions = ['.' + suffix + '.err', '.' + suffix + '.out']
-    if queue.MODE == 'local':
+    # Sanitize arguments
+    if not directory:
+        directory = '.'
+    if not suffix:
+        suffix = 'cluster'
+
+    # Extension patterns to delete
+    extensions = ['.' + suffix + '.err', '.' + suffix + '.out',
+                  '_func.' + suffix + '.py',
+                  '_func.' + suffix + '.py.pickle.in',
+                  '_func.' + suffix + '.py.pickle.out']
+
+    if qtype:
+        if qtype == 'local':
+            extensions.append('.' + suffix)
+        elif qtype == 'slurm':
+            extensions += ['.' + suffix + '.sbatch', '.' + suffix + '.script']
+        elif qtype== 'torque':
+            extensions.append('.' + suffix + '.qsub')
+    else:
         extensions.append('.' + suffix)
-    elif queue.MODE == 'slurm':
-        extensions = extensions + ['.' + suffix + '.sbatch',
-                                   '.' + suffix + '.script']
-    elif queue.MODE == 'torque':
+        extensions += ['.' + suffix + '.sbatch', '.' + suffix + '.script']
         extensions.append('.' + suffix + '.qsub')
 
     files = [i for i in os.listdir(os.path.abspath(directory))
@@ -995,7 +1099,42 @@ def clean_dir(directory='.', suffix='cluster'):
     for f in files:
         for extension in extensions:
             if f.endswith(extension):
-                os.remove(f)
                 deleted.append(f)
+
+    deleted = sorted(deleted)
+    delete  = False
+
+    if confirm:
+        if deleted:
+            sys.stdout.write('Files to delete::\n\t')
+            sys.stdout.write('\n\t'.join(deleted) + '\n')
+            msg = "Do you want to delete these files? (y/n) "
+            while True:
+                if sys.version_info.major == 2:
+                    answer = raw_input(msg)
+                else:
+                    answer = input(msg)
+                if answer == 'y' or answer == 'n':
+                    break
+                else:
+                    sys.stdout.write('Invalid response {}, please try again\n'
+                                    .format(answer))
+            if answer == 'y':
+                delete  = True
+                sys.stdout.write('Deleting...\n')
+            else:
+                sys.stdout.write('Aborting\n')
+                delete  = False
+                deleted = []
+        else:
+            sys.stdout.write('No files to delete.\n')
+    else:
+        delete = True
+
+    if delete and deleted:
+        for f in deleted:
+            os.remove(f)
+        if confirm:
+            sys.stdout.write('Done\n')
 
     return deleted

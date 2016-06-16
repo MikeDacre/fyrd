@@ -7,7 +7,7 @@ Monitor the queue for torque or slurm.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-06-15 14:23
+ Last modified: 2016-06-15 19:43
 
    DESCRIPTION: Provides a class to monitor the torque, slurm, or local
                 jobqueue queues with identical syntax.
@@ -37,7 +37,8 @@ Monitor the queue for torque or slurm.
 """
 import os
 import re
-import pwd               # Used to get usernames for queue
+import pwd      # Used to get usernames for queue
+import socket   # Used to get the hostname
 from time import time, sleep
 from subprocess import check_output, CalledProcessError
 
@@ -149,10 +150,10 @@ class Queue(object):
 
     """
 
-    def __init__(self, user=None, queue=None):
+    def __init__(self, user=None, qtype=None):
         """Create a queue object specific to a single queue and user.
 
-        :queue: 'torque', 'slurm', or 'local', defaults to auto-detect.
+        :qtype: 'torque', 'slurm', or 'local', defaults to auto-detect.
         :user:  An optional username, if provided queue will only contain the
                 jobs of that user. Not required.
                 If user='self' or 'current', the current user will be used.
@@ -175,21 +176,20 @@ class Queue(object):
 
         # Support python2, which hates reciprocal import
         from .job import Job
-        from .jobqueue import JobQueue
+        from .jobqueue import Job as QJob
         self._Job      = Job
-        self._JobQueue = JobQueue.Job
+        self._JobQueue = QJob
 
         # Set type
-        if queue:
-            check_queue(queue)
+        if qtype:
+            check_queue(qtype)
         else:
             check_queue()
-        self.qtype = queue if queue else MODE
+        self.qtype = qtype if qtype else MODE
 
         # Will contain a dict of QueueJob objects indexed by ID
         self.jobs = {}
 
-        # Load the queue, also sets the last update time
         self._update()
 
     ########################################
@@ -334,17 +334,21 @@ class Queue(object):
                     job = self.jobs[job_id]
                 else:
                     job = self.QueueJob()
-                job.id    = job_id
-                job.name  = job_info.function.__name__
-                job.owner = self.user
+                job.id     = job_id
+                job.name   = job_info.function.__name__
+                job.owner  = self.user
+                self.nodes = socket.gethostname()
                 if job_info.state == 'Not Submitted':
                     job.state = 'pending'
-                elif job_info.state == 'waiting':
+                elif job_info.state == 'waiting' \
+                    or job_info.state == 'submitted':
                     job.state = 'pending'
-                elif job_info.state == 'started':
+                elif job_info.state == 'started' \
+                    or job_info.state == 'running':
                     job.state = 'running'
                 elif job_info.state == 'done':
                     job.state = 'complete'
+                    job.exitcode = int(job_info.exitcode)
                 else:
                     raise Exception('Unrecognized state')
 
@@ -377,7 +381,7 @@ class Queue(object):
                     break
 
             # Create QueueJob objects for all entries that match user
-            if xmlqueue:
+            if xmlqueue is not None:
                 for xmljob in xmlqueue:
                     job_id = int(xmljob.find('Job_Id').text.split('.')[0])
                     job_owner = xmljob.find('Job_Owner').text.split('@')[0]
@@ -421,7 +425,7 @@ class Queue(object):
                         job.nodes = ','.join(job.nodes)
                     exitcode     = xmljob.find('exit_status')
                     if hasattr(exitcode, 'text'):
-                        job.exitcode = exitcode.text
+                        job.exitcode = int(exitcode.text)
 
                     # Assign the job to self.
                     self.jobs[job_id] = job
@@ -515,7 +519,7 @@ class Queue(object):
                         job.queue = sjob[3]
                     job.state = sjob[4].lower()
                     if not job.exitcode:
-                        job.exitcode = sjob[5].split(':')[-1]
+                        job.exitcode = int(sjob[5].split(':')[-1])
                     if not job.threads:
                         job.threads = int(sjob[6])
                     if not job.nodes:

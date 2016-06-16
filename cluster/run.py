@@ -7,7 +7,7 @@ File management and execution functions.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-02-11 16:03
- Last modified: 2016-06-15 12:26
+ Last modified: 2016-06-16 11:48
 
 ============================================================================
 """
@@ -94,6 +94,8 @@ fi
 
 FUNC_RUNNER = """\
 import sys
+import socket
+from subprocess import Popen, PIPE
 # Try to use dill, revert to pickle if not found
 try:
     import dill as pickle
@@ -107,11 +109,10 @@ except ImportError:
 sys.path.append('{path}')
 {modimpstr}
 
-
 def run_function(function_call, args=None):
     '''Run a function with args and return output.'''
     if not hasattr(function_call, '__call__'):
-        raise FunctionError('{{}} is not a callable function.'.format(
+        raise Exception('{{}} is not a callable function.'.format(
             function_call))
     if args:
         if isinstance(args, (tuple, list)):
@@ -124,8 +125,62 @@ def run_function(function_call, args=None):
         out = function_call()
     return out
 
+
+def cmd(command, args=None):
+    if isinstance(command, (list, tuple)):
+        if args:
+            raise Exception('Cannot submit list/tuple command as i' +
+                            'well as args argument')
+        command = ' '.join(command)
+    assert isinstance(command, str)
+    if args:
+        if isinstance(args, (list, tuple)):
+            args = ' '.join(args)
+        args = command + args
+    else:
+        args = command
+    pp = Popen(args, shell=True, universal_newlines=True,
+               stdout=PIPE, stderr=PIPE)
+    out, err = pp.communicate()
+    code = pp.returncode
+    return code, out.rstrip(), err.rstrip()
+
+
 with open('{pickle_file}', 'rb') as fin:
-    function_call, args = pickle.load(fin)
+    # Try to install packages first
+    try:
+        function_call, args = pickle.load(fin)
+    except ImportError as e:
+        ver = sys.version_info.major
+        sys.stderr.write('Failed to import function, attempting to install ' +
+                         'all required modules locally, this may take some '
+                         'time\\n')
+        try:
+            cmd("cat ~/.python_module_list.txt | xargs pip{{}} install --user"
+                .format(ver))
+        except:
+            pass
+        # If that doesn't work, fail with a useful error
+        fin.seek(0)
+        try:
+            function_call, args = pickle.load(fin)
+        except ImportError as e:
+            module = str(e).split(' ')[-1]
+            node   = socket.gethostname()
+            sys.stderr.write('Failed to import your function. This usually '
+                            'happens when you have a module installed locally '
+                            'that is not available on the compute nodes.\\n'
+                            'In this case the module is {{}}.\\n'.format(module) +
+                            'However, I can only catch the first uninstalled '
+                            'module. To make sure all of your modules are '
+                            'installed on the compute nodes, do this::\\n'
+                            "freeze --local | grep -v '^\-e' | cut -d = -f 1 "
+                            '> module_list.txt\\n'
+                            'Then, submit a job to the compute nodes with this '
+                            'command::\\n'
+                            'cat module_list.txt | xargs pip install --user\\n')
+            raise ImportError('Module {{}} is not installed on compute node {{}}'
+                            .format(module, node))
 
 try:
     out = run_function(function_call, args)

@@ -7,7 +7,7 @@ Manage job dependency tracking with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-56-14 14:04
- Last modified: 2016-06-15 13:37
+ Last modified: 2016-06-15 19:11
 
    DESCRIPTION: Runs jobs with a multiprocessing.Pool, but manages dependency
                 using an additional Process that loops through all submitted
@@ -18,7 +18,7 @@ Manage job dependency tracking with multiprocessing.
                 manages jobs by forking an instance of the job_runner
                 function and keeping it alive. The multiprocessing.Queue
                 class is then used to pass job information contained in the
-                JobQueue.Job class back and forth between the JobQueue class
+                Job class back and forth between the JobQueue class
                 running in the main process and the job_runner() fork running
                 as a separate thread.
 
@@ -30,6 +30,7 @@ Manage job dependency tracking with multiprocessing.
 ===============================================================================
 """
 import os
+import sys
 import atexit
 import multiprocessing as mp
 from subprocess import check_output, CalledProcessError
@@ -84,6 +85,7 @@ class JobQueue(object):
 
         def terminate():
             """Kill the queue runner."""
+            logme.log('Killing local queue and exiting', 'info')
             try:
                 self.update()
                 self.runner.terminate()
@@ -98,7 +100,10 @@ class JobQueue(object):
     def update(self):
         """Get fresh job info from the runner."""
         sleep(0.5)  # This allows the queue time to flush
-        assert self.runner.is_alive() is True
+        if self.runner.is_alive() is not True:
+            self.restart(True)
+        if self.runner.is_alive() is not True:
+            raise ClusterError('JobRunner has crashed')
         while not self._outputs.empty():
             # We loop through the whole queue stack, updating the dictionary
             # every time so that we get the latest info
@@ -124,15 +129,26 @@ class JobQueue(object):
         oldjob = self.jobno
         cores = int(cores)
         if cores > self.cores:
-            logme.log('Job core request exceeds resources, limiting to max',
-                      'warn')
+            logme.log('Job core request exceeds resources, limiting to max: ' +
+                      '{}'.format(self.cores), 'warn')
             cores = self.cores
-        self._jobqueue.put(self.Job(function, args, kwargs, dependencies,
-                                    cores))
+        self._jobqueue.put(Job(function, args, kwargs, dependencies,
+                               cores))
         sleep(0.5)
         self.update()
         newjob = self.jobno
-        assert newjob == oldjob + 1
+        # Sometimes the queue can freeze for reasons I don't understand, this
+        # is an attempted workaround.
+        if not newjob == oldjob + 1:
+            self.restart(True)
+            self._jobqueue.put(Job(function, args, kwargs, dependencies,
+                                   cores))
+            self.update()
+            newjob = self.jobno
+        if not newjob == oldjob + 1:
+            raise ClusterError('Job numbers are not updating correctly, the '
+                               'local queue has probably crashed. Please '
+                               'report this issue.')
         return self.jobno
 
     def wait(self, jobs=None):
@@ -213,52 +229,52 @@ class JobQueue(object):
         self.update()
         return str(self.jobs)
 
-    class Job(object):
+class Job(object):
 
-        """An object to pass arguments to the runner."""
+    """An object to pass arguments to the runner."""
 
-        def __init__(self, function, args=None, kwargs=None, depends=None,
-                     cores=1):
-            """Parse and save arguments."""
-            if args and not isinstance(args, tuple):
-                args = (args,)
-            if kwargs and not isinstance(kwargs, dict):
-                raise TypeError('kwargs must be a dict')
-            if depends:
-                if not isinstance(depends, (tuple, list)):
-                    depends = [depends]
-                try:
-                    depends = [int(i) for i in depends]
-                except ValueError:
-                    raise ValueError('dependencies must be integer job ids')
-            self.function = function
-            self.args     = args
-            self.kwargs   = kwargs
-            self.depends  = depends
-            self.cores    = int(cores)
+    def __init__(self, function, args=None, kwargs=None, depends=None,
+                    cores=1):
+        """Parse and save arguments."""
+        if args and not isinstance(args, tuple):
+            args = (args,)
+        if kwargs and not isinstance(kwargs, dict):
+            raise TypeError('kwargs must be a dict')
+        if depends:
+            if not isinstance(depends, (tuple, list)):
+                depends = [depends]
+            try:
+                depends = [int(i) for i in depends]
+            except ValueError:
+                raise ValueError('dependencies must be integer job ids')
+        self.function = function
+        self.args     = args
+        self.kwargs   = kwargs
+        self.depends  = depends
+        self.cores    = int(cores)
 
-            # Assigned later
-            self.id       = None
-            self.pid      = None
-            self.exitcode = None
-            self.out      = None
-            self.state    = 'Not Submitted'
+        # Assigned later
+        self.id       = None
+        self.pid      = None
+        self.exitcode = None
+        self.out      = None
+        self.state    = 'Not Submitted'
 
-        def __repr__(self):
-            """Job Info."""
-            return ("JobQueue.Job<{} (function:{},args:{}," +
-                    "kwargs:{};cores:{}) {}>").format(
-                        self.id, self.function.__name__, self.args,
-                        self.kwargs, self.cores, self.state)
+    def __repr__(self):
+        """Job Info."""
+        return ("Job<{} (function:{},args:{}," +
+                "kwargs:{};cores:{}) {}>").format(
+                    self.id, self.function.__name__, self.args,
+                    self.kwargs, self.cores, self.state)
 
-        def __str__(self):
-            """Print Info and Output."""
-            outstr  = "Job #{}; Cores: {}\n".format(
-                self.id if self.id else 'NA', self.cores)
-            outstr += "\tFunction: {}\n\targs: {}\n\tkwargs: {}\n\t".format(
-                self.function.__name__, self.args, self.kwargs)
-            outstr += "State: {}\n\tOutput: {}\n".format(self.state, self.out)
-            return outstr
+    def __str__(self):
+        """Print Info and Output."""
+        outstr  = "Job #{}; Cores: {}\n".format(
+            self.id if self.id else 'NA', self.cores)
+        outstr += "\tFunction: {}\n\targs: {}\n\tkwargs: {}\n\t".format(
+            self.function.__name__, self.args, self.kwargs)
+        outstr += "State: {}\n\tOutput: {}\n".format(self.state, self.out)
+        return outstr
 
 
 ###############################################################################
@@ -271,7 +287,7 @@ def job_runner(jobqueue, outputs, cores=None, jobno=None):
 
     Must be run as a separate multiprocessing.Process to function correctly.
 
-    :jobqueue: A multiprocessing.Queue object into which JobQueue.Job objects
+    :jobqueue: A multiprocessing.Queue object into which Job objects
                must be added. The function continually searches this Queue for
                new jobs. Note, function must be a function call, it cannot be
                anything else.
@@ -279,7 +295,7 @@ def job_runner(jobqueue, outputs, cores=None, jobno=None):
                tuples are required.
     :outputs:  A multiprocessing.Queue object that will take outputs. A
                dictionary of job objects will be output here with the format::
-                   {job_no => JobQueue.Job}
+                   {job_no => Job}
                **NOTE**: function return must be picklable otherwise this will
                          raise an exception when it is put into the Queue
                          object.
@@ -327,7 +343,7 @@ def job_runner(jobqueue, outputs, cores=None, jobno=None):
             # incremented, but this is a little redundant at this point.
             assert newjob == oldjob + 1
             job = jobqueue.get_nowait()
-            if not isinstance(job, JobQueue.Job):
+            if not isinstance(job, Job):
                 logme.log('job information must be a job object, was {}'.format(
                     type(job)), 'error')
                 continue
@@ -359,29 +375,30 @@ def job_runner(jobqueue, outputs, cores=None, jobno=None):
                 # Start jobs if dependencies are met and they aren't started.
                 # We use daemon mode so that child jobs are killed on exit.
                 if ready and not jobno in started:
+                    ver = sys.version_info.major
+                    # Python 2 doesn't support daemon, even though the docs
+                    # say that it does.
+                    gen_args = dict(name=str(jobno)) if ver == 2 \
+                        else dict(name=str(jobno), daemon=True)
                     if job_info.args and job_info.kwargs:
                         queue.append((mp.Process(target=job_info.function,
                                                  args=job_info.args,
                                                  kwargs=job_info.kwargs,
-                                                 name=str(jobno),
-                                                 daemon=True),
+                                                 **gen_args),
                                       job_info.cores))
                     elif job_info.args:
                         queue.append((mp.Process(target=job_info.function,
                                                  args=job_info.args,
-                                                 name=str(jobno),
-                                                 daemon=True),
+                                                 **gen_args),
                                       job_info.cores))
                     elif job_info.kwargs:
                         queue.append((mp.Process(target=job_info.function,
                                                  kwargs=job_info.kwargs,
-                                                 name=str(jobno),
-                                                 daemon=True),
+                                                 **gen_args),
                                       job_info.cores))
                     else:
                         queue.append((mp.Process(target=job_info.function,
-                                                 name=str(jobno),
-                                                 daemon=True),
+                                                 **gen_args),
                                       job_info.cores))
                     job_info.state = 'queued'
                     started.append(jobno)
