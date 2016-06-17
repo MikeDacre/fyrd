@@ -7,7 +7,9 @@ Python Cluster
 Submit jobs to slurm or torque, or with multiprocessing.
 
 Author:  Michael D Dacre <mike.dacre@gmail.com>
+
 License: MIT License, property of Stanford, use as you wish
+
 Version: 0.6.1
 
 Allows simple job submission with *dependency tracking and
@@ -23,7 +25,9 @@ Installation
 
 This module will work with Python 2.7+ on Linux systems.
 
-To install, use the standard python method::
+To install, use the standard python method:
+
+.. code:: shell
 
   git clone https://github.com/MikeDacre/python-cluster
   cd python-cluster
@@ -34,9 +38,11 @@ access, as most cluster environments share /home/<user> across
 the cluster, making this module available everywhere.
 
 *Note:* While the name is `python-cluster` you will import it
-just as `cluster`::
+just as `cluster`:
 
-    import cluster
+.. code:: python
+
+  import cluster
 
 Prerequisites
 -------------
@@ -53,13 +59,17 @@ Function Submission
 In order to submit functions to the cluster, this module must import
 them on the compute node. This means that all of your python modules
 must be available on every compute node. To avoid pain and debugging,
-you can do this manually by running this on your loggin node::
+you can do this manually by running this on your loggin node:
 
-    freeze --local | grep -v '^\-e' | cut -d = -f 1 > module_list.txt
+.. code:: shell
 
-And then on the compute nodes::
+  freeze --local | grep -v '^\-e' | cut -d = -f 1 > module_list.txt
 
-    cat module_list.txt | xargs pip install --user
+And then on the compute nodes:
+
+.. code:: shell
+
+  cat module_list.txt | xargs pip install --user
 
 This will ensure that all of your modules are installed globally.
 
@@ -86,12 +96,14 @@ generate an intuitive name, run the job, and write all outputs
 to files in the current directory. These can be cleaned with
 clean_dir().
 
-To run with dependency tracking, run::
+To run with dependency tracking, run:
 
-    import cluster
-    job  = cluster.submit(<command1>)
-    job2 = cluster.submit(<command2>, dependencies=job1)
-    exitcode, stdout, stderr = job2.get()  # Will block until job completes
+.. code:: python
+
+  import cluster
+  job  = cluster.submit(<command1>)
+  job2 = cluster.submit(<command2>, dependencies=job1)
+  exitcode, stdout, stderr = job2.get()  # Will block until job completes
 
 Functions
 ---------
@@ -102,9 +114,11 @@ shell scripts and shell commands.
 *However,* in order for this to work, `cluster` ends up importing your
 original script file on the nodes. This means that all code in your
 file will be executed, so anything that isn't a function or class must
-be protected with an::
+be protected with an:
 
-    if __name__ == '__main__':
+.. code:: python
+
+  if __name__ == '__main__':
 
 protecting statment.
 
@@ -115,10 +129,12 @@ way, it won't be good.
 File Submission
 ---------------
 
-If you want to just submit a file, that can be done like this::
+If you want to just submit a file, that can be done like this:
 
-    from cluster import submit_file
-    submit_file('/path/to/script', dependencies=007:009)
+.. code:: python
+
+  from cluster import submit_file
+  submit_file('/path/to/script', dependencies=[7, 9])
 
 This will return the job number and will enter the job into the queue as dependant on jobs 007 and 009. The dependencies can be omitted.
 
@@ -128,22 +144,26 @@ Queue Management
 
 This module provides simple queue management functions
 
-To generate a queue object, do the following::
+To generate a queue object, do the following:
 
-    import cluster
-    q = cluster.Queue(user='self')
+.. code:: python
+
+  import cluster
+  q = cluster.Queue(user='self')
 
 This will give you a simple queue object containg a list of jobs that belong to you.
 If you do not provide user, all jobs are included for all users. You can provide `qtype`
 to explicitly force the queue object to contain jobs from one queing system (e.g. local
 or torque).
 
-To get a dictionary of all jobs, running jobs, queued jobs, and complete jobs, use::
+To get a dictionary of all jobs, running jobs, queued jobs, and complete jobs, use:
 
-    q.jobs
-    q.running
-    q.complete
-    q.queued
+.. code:: python
+
+  q.jobs
+  q.running
+  q.complete
+  q.queued
 
 Every job has a number of attributes, including owner, nodes, cores, memory.
 
@@ -162,20 +182,32 @@ these every time, the module sets a config file at
 ~/.python-cluster that defines profiles. These can be edited
 directly in that file or through the config_file methods.
 
-For example::
-    config_file.set_profile('small', {'nodes': 1, 'cores': 1,
-                                      'mem': '2GB'})
+For example:
+
+.. code:: python
+
+  config_file.set_profile('small', {'nodes': 1, 'cores': 1,
+                                    'mem': '2GB'})
 
 To see all profiles run:
-    config_file.get_profile()
+
+.. code:: python
+
+  config_file.get_profile()
 
 Other options are defined in the config file, including the
 maximum number of jobs in the queue, the time to sleep between
-submissions, and other options. To see these run::
-    config_file.get()
+submissions, and other options. To see these run:
 
-You can set options with::
-    config_file.set()
+.. code:: python
+
+  config_file.get()
+
+You can set options with:
+
+.. code:: python
+
+  config_file.set()
 
 Feel free to alter the defaults in config_file.py and
 options.py, they are clearly documented.
@@ -185,14 +217,15 @@ Job Files
 
 All jobs write out a job file before submission, even though
 this is not necessary (or useful) with multiprocessing. In
-local mode, this is a .cluster file, in slurm is is a
-.cluster.sbatch and a .cluster.script file, in torque it is a
-.cluster.qsub file. 'cluster' is set by the suffix keyword,
+local mode, this is a `.cluster` file, in slurm is is a
+`.cluster.sbatch` and a `.cluster.script` file, in torque it is a
+`.cluster.qsub` file. 'cluster' is set by the suffix keyword,
 and can be overridden.
 
 To change the directory these files are written to, use the
 'filedir' keyword argument to Job or submit.
-*NOTE:* This *must* be accessible to the compute nodes!!!
+
+*NOTE:* This directory *must* be accessible to the compute nodes!!!
 
 All jobs are assigned a name that is used to generate the
 output files, including STDOUT and STDERR files. The default
@@ -225,16 +258,22 @@ Code Overview
 There are two important classes for interaction with the batch
 system: Job and Queue. The essential flow of a job submission
 is:
-    job = Job(command/function, arguments, name)
-    job.write()  # Writes the job submission files
-    job.submit() # Submits the job
-    job.wait()   # Waits for the job to complete
-    job.stdout   # Prints the output from the job
-    job.clean()  # Delete all of the files written
 
-You can also wait for many jobs with the Queue class::
-    q = Queue(user='self')
-    q.wait([job1, job2])
+.. code:: python
+
+  job = Job(command/function, arguments, name)
+  job.write()  # Writes the job submission files
+  job.submit() # Submits the job
+  job.wait()   # Waits for the job to complete
+  job.stdout   # Prints the output from the job
+  job.clean()  # Delete all of the files written
+
+You can also wait for many jobs with the Queue class:
+
+.. code:: python
+
+  q = Queue(user='self')
+  q.wait([job1, job2])
 
 The jobs in this case can be either a Job class or a job
 number.
