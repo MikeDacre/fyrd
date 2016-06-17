@@ -6,11 +6,13 @@ Python Cluster
 
 Submit jobs to slurm or torque, or with multiprocessing.
 
-Author:  Michael D Dacre <mike.dacre@gmail.com>
-
-License: MIT License, property of Stanford, use as you wish
-
-Version: 0.6.1
++---------+----------------------------------------------------+
+| Author  | Michael D Dacre <mike.dacre@gmail.com>             |
++---------+----------------------------------------------------+
+| License | MIT License, property of Stanford, use as you wish |
++---------+----------------------------------------------------+
+| Version | 0.6.1                                              |
++---------+----------------------------------------------------+
 
 Allows simple job submission with *dependency tracking and
 queue waiting* with either torque, slurm, or locally with the
@@ -171,23 +173,105 @@ Every job has a number of attributes, including owner, nodes, cores, memory.
 Advanced Usage
 **************
 
-Profiles, Keywords, and the Config File
----------------------------------------
+Keyword Arguments
+-----------------
 
-To make submission easier, this module defines a number of
-keyword arguments in the options.py file that can be used
-for all submission and Job() functions. These include things
-like 'cores' and 'nodes' and 'mem'. To avoid having to set
-these every time, the module sets a config file at
-~/.python-cluster that defines profiles. These can be edited
-directly in that file or through the config_file methods.
+To make submission easier, this module defines a number of keyword arguments in the options.py file that can be used for all submission and Job() functions. These include things like 'cores' and 'nodes' and 'mem'. 
 
-For example:
+The following is a complete list of arguments that can be used in this version::
+
+  Used in every mode::
+  cores:      Number of cores to use for the job
+              Type: int; Default: 1
+  modules:    Modules to load with the `module load` command
+              Type: list; Default: None
+  filedir:    Folder to write cluster files to, must be accessible to the compute
+              nodes.
+              Type: str; Default: .
+  dir:        The working directory for the job
+              Type: str; Default: path argument
+  suffix:     A suffix to append to job files (e.g. job.suffix.qsub)
+              Type: str; Default: cluster
+  outfile:    File to write STDOUT to
+              Type: str; Default: None
+  errfile:    File to write STDERR to
+              Type: str; Default: None
+
+  Used for function calls::
+  imports:    Imports to be used in function calls (e.g. sys, os) if not provided,
+              defaults to all current imports, which may not work if you use complex
+              imports. The list can include the import call, or just be a name, e.g.
+              ['from os import path', 'sys']
+              Type: list; Default: None
+
+  Used only in local mode::
+  threads:    Number of threads to use on the local machine
+              Type: int; Default: 8
+
+  Options that work in both slurm and torque::
+  nodes:      Number of nodes to request
+              Type: int; Default: 1
+  features:   A comma-separated list of node features to require
+              Type: list; Default: None
+  time:       Walltime in HH:MM:SS
+              Type: str; Default: 12:00:00
+  mem:        Memory to use in MB (e.g. 4000)
+              Type: ['int', 'str']; Default: 4000
+  partition:  The partition/queue to run in (e.g. local/batch)
+              Type: str; Default: None
+  account:    Account to be charged
+              Type: str; Default: None
+  export:     Comma separated list of environmental variables to export
+              Type: str; Default: None
+
+  Used for slurm only::
+  begin:      Start after this much time
+              Type: str; Default: None
+
+*Note:* Type is enforced, any provided argument must match that python type (automatic conversion is attempted), the default is just a recommendation and is not currently used. These arguments are passed like regular arguments to the submission and Job() functions, eg::
+
+  Job(nodes=1, cores=4, mem='20MB')
+
+This will be interpretted correctly on any system. If torque or slurm are not available, any cluster arguments will be ignored. The module will attempt to honor the cores request, but if it exceeds the maximum number of cores on the local machine, then the request will be trimmed accordingly (i.e. a 50 core request will become 8 cores on an 8 core machine).
+
+### Adding your own keywords
+
+There are many more options available for torque and slurm, to add your own, edit the options.py file, and look for CLUSTER_OPTS (or TORQUE/SLURM if your keyword option is only availble on one system). Add your option using the same format as is present in that file. The format is::
+
+  ('name', {'slurm': '--option-str={}', 'torque': '--torque-option={}', 'help': 'This is an option!', 'type': str, 'default': None})
+
+You can also add list options, but they must include 'sjoin' and 'tjoin' keys to define how to merge the list for slurm and torque, or you must write custom option handling code in ``cluster.options.options_to_string()``. For an excellent example of both approaches included in a single option, see the 'features' keyword above.
+
+I happily accept pull requests for new option additions (any any other improvements for that matter).
+
+Profiles and the Config File
+----------------------------
+
+To avoid having to enter all keyword arguments every time, profiles can be used. These profiles can store any of the above keywords and drastically simplify submission. For example::
+
+  job = submit(my_function, profile='large')
+  
+Instead of::
+
+  job = submit(my_funtion, nodes=2, cores=16, mem='64GB', partition='bigjobs', features=['highmem'], export='PYTHONPATH')
+
+These profiles are saved in a config file at ~/.python-cluster and can be editted in that file directly, or using the below functions. To edit them in the file directly, you must make sure that the section is labelled 'prof_<name>' where <name> is whatever you want it to be called. e.g.::
+
+  [prof_default]
+  nodes = 1
+  cores = 16
+  time = 24:00:00
+  mem = 32000
+
+*Note:* a default profile must always exist, it will be added back if it does not exist.
+
+Alternatively, the functions ``cluster.config_file.set_profile()`` and ``cluster.config_file.get_profile()`` can be used:
 
 .. code:: python
 
-  config_file.set_profile('small', {'nodes': 1, 'cores': 1,
-                                    'mem': '2GB'})
+  cluster.config_file.set_profile('small', {'nodes': 1, 'cores': 1,
+                                            'mem': '2GB'})
+  cluster.config_file.get_profile('small')
 
 To see all profiles run:
 
@@ -195,22 +279,19 @@ To see all profiles run:
 
   config_file.get_profile()
 
-Other options are defined in the config file, including the
-maximum number of jobs in the queue, the time to sleep between
-submissions, and other options. To see these run:
+Other options are defined in the config file, including the maximum number of jobs in the queue, the time to sleep between submissions, and other options. To see these run:
 
 .. code:: python
 
-  config_file.get()
+  cluster.config_file.get()
 
 You can set options with:
 
 .. code:: python
 
-  config_file.set()
+  cluster.config_file.set()
 
-Feel free to alter the defaults in config_file.py and
-options.py, they are clearly documented.
+The defaults can be directly edited in ``config_file.py``, they are clearly documented.
 
 Job Files
 ---------
@@ -232,6 +313,8 @@ output files, including STDOUT and STDERR files. The default
 name for the out files is STDOUT: name.cluster.out and
 STDERR: name.cluster.err. These can be overwridden with
 keyword arguments.
+
+All Job objects have a ``clean()`` method that will delete any left over files. In addition there is a clean_job_files script that will delete all files made by this package in any given directory. Be very careful with the script though, it can clobber a lot of work all at once if it is used wrong. 
 
 Dependecy Tracking
 ------------------
@@ -275,5 +358,12 @@ You can also wait for many jobs with the Queue class:
   q = Queue(user='self')
   q.wait([job1, job2])
 
-The jobs in this case can be either a Job class or a job
-number.
+The jobs in this case can be either a Job class or a job number.
+
+***********************
+Issues and Contributing
+***********************
+
+If you have any trouble with this software add an issue in https://github.com/MikeDacre/python-cluster/issues
+
+If you want to help improve it, please fork the repo and send me pull requests when you are done.
