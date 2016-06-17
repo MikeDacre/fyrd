@@ -7,7 +7,7 @@ Available options for job submission.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-31-17 08:04
- Last modified: 2016-06-15 14:32
+ Last modified: 2016-06-17 01:50
 
    DESCRIPTION: All keyword arguments that can be used with Job() objects are
                 defined in this file. These can be editted by the end user to
@@ -30,8 +30,9 @@ Available options for job submission.
 """
 import os
 import sys
+from textwrap import wrap, fill
 from itertools import groupby
-from textwrap import dedent
+from collections import OrderedDict
 
 from . import run
 from . import logme
@@ -51,66 +52,71 @@ __all__ = ['option_help']
 #      help: Info for the user on the option
 
 # Options available in all modes
-COMMON  = {'modules':
-           {'help': 'Modules to load with the `module load` command',
-            'default': None, 'type': list},
-           'imports':
-           {'help': 'Imports to be used in function calls (e.g. sys, os)',
-            'default': None, 'type': list},
-           'filedir':
-           {'help': 'Folder to write cluster files to, must be accessible ' +
-                    'to the compute nodes.',
-            'default': '.', 'type': str},
-           'dir':
-           {'help': 'The working directory for the job',
-            'default': 'path argument', 'type': str,
-            'slurm': '--workdir={}', 'torque': '-d {}'},
-           'suffix':
-           {'help': 'A suffix to append to job files (e.g. job.suffix.qsub)',
-            'default': 'cluster', 'type': str},
-           'outfile':
-           {'help': 'File to write STDOUT to',
-            'default': None, 'type': str,
-            'slurm': '-o {}', 'torque': '-o {}'},
-           'errfile':
-           {'help': 'File to write STDERR to',
-            'default': None, 'type': str,
-            'slurm': '-e {}', 'torque': '-e {}'},
-          }
+COMMON  = OrderedDict([
+    ('cores',
+     {'help': 'Number of cores to use for the job',
+      'default': 1, 'type': int}),
+    ('modules',
+     {'help': 'Modules to load with the `module load` command',
+      'default': None, 'type': list}),
+    ('imports',
+     {'help': 'Imports to be used in function calls (e.g. sys, os) '
+              'if not provided, defaults to all current imports, which '
+              'may not work if you use complex imports. The list can include '
+              'the import call, or just be a name, e.g. '
+              "['from os import path', 'sys']",
+      'default': None, 'type': list}),
+    ('filedir',
+     {'help': 'Folder to write cluster files to, must be accessible ' +
+              'to the compute nodes.',
+      'default': '.', 'type': str}),
+    ('dir',
+     {'help': 'The working directory for the job',
+      'default': 'path argument', 'type': str,
+      'slurm': '--workdir={}', 'torque': '-d {}'}),
+    ('suffix',
+     {'help': 'A suffix to append to job files (e.g. job.suffix.qsub)',
+      'default': 'cluster', 'type': str}),
+    ('outfile',
+     {'help': 'File to write STDOUT to',
+      'default': None, 'type': str,
+      'slurm': '-o {}', 'torque': '-o {}'}),
+    ('errfile',
+     {'help': 'File to write STDERR to',
+      'default': None, 'type': str,
+      'slurm': '-e {}', 'torque': '-e {}'}),
+])
 
 # Options used in only local runs
-NORMAL  = {'threads':
-           {'help': 'Number of threads to use on the local machine',
-            'default': THREADS, 'type': int}
-          }
+NORMAL  = OrderedDict([
+    ('threads',
+     {'help': 'Number of threads to use on the local machine',
+      'default': THREADS, 'type': int}),
+])
 
 # Options used in both torque and slurm
-CLUSTER_CORE = {'nodes':
-                {'help': 'Number of nodes to request',
-                 'default': 1, 'type': int},
-                'cores':
-                {'help': 'Number of cores to use for the job',
-                 'default': 1, 'type': int},
-                'features':
-                {'help': 'A comma-separated list of node features to require',
-                 'slurm': '--constraint={}', # Torque in options_to_string()
-                 'default': None, 'type': list, 'sjoin': '&'},
-                'time':
-                {'help': 'Walltime in HH:MM:SS',
-                 'default': '12:00:00', 'type': str,
-                 'slurm': '--time={}',
-                 'torque': 'walltime={}'},
-                'mem':
-                {'help': 'Memory to use in MB (e.g. 4000)',
-                 'default': 4000, 'type': (int, str),
-                 'slurm': '--mem={}',
-                 'torque': 'mem={}MB'},  # We explictly set MB in torque
-                'partition':
-                {'help': 'The partition/queue to run in (e.g. local/batch)',
-                 'default': None, 'type': str,
-                 'slurm': '-p {}',
-                 'torque': '-q {}'},
-               }
+CLUSTER_CORE = OrderedDict([
+    ('nodes',
+     {'help': 'Number of nodes to request',
+      'default': 1, 'type': int}),
+    ('features',
+     {'help': 'A comma-separated list of node features to require',
+      'slurm': '--constraint={}', # Torque in options_to_string()
+      'default': None, 'type': list, 'sjoin': '&'}),
+    ('time',
+     {'help': 'Walltime in HH:MM:SS',
+      'default': '12:00:00', 'type': str,
+      'slurm': '--time={}', 'torque': 'walltime={}'}),
+    # We explictly set MB in torque
+    ('mem',
+     {'help': 'Memory to use in MB (e.g. 4000)',
+      'default': 4000, 'type': (int, str),
+      'slurm': '--mem={}', 'torque': 'mem={}MB'}),
+    ('partition',
+     {'help': 'The partition/queue to run in (e.g. local/batch)',
+      'default': None, 'type': str,
+      'slurm': '-p {}', 'torque': '-q {}'}),
+])
 
 ### Note: There are many more options, as them as need to the following lists,
 ###       CLUSTER_OPTS should be used for options that work on both systems,
@@ -118,31 +124,34 @@ CLUSTER_CORE = {'nodes':
 ###       unique to one.
 
 # Additional options shared between systems
-CLUSTER_OPTS = {'account':
-                {'help': 'Account to be charged', 'default': None, 'type': str,
-                 'slurm': '--account={}', 'torque': '-A {}'},
-                'export':
-                {'help': 'Comma separated list of environmental variables to export',
-                 'default': None, 'type': str,
-                 'slurm': '--export={}', 'torque': '-v {}'}
-               }
+CLUSTER_OPTS = OrderedDict([
+    ('account',
+     {'help': 'Account to be charged', 'default': None, 'type': str,
+      'slurm': '--account={}', 'torque': '-A {}'}),
+    ('export',
+     {'help': 'Comma separated list of environmental variables to export',
+      'default': None, 'type': str,
+      'slurm': '--export={}', 'torque': '-v {}'}),
+])
 
 ###############################################################################
 #                                Torque Options                               #
 #  from: adaptivecomputing.com/torque/4-0-2/Content/topics/commands/qsub.htm  #
 ###############################################################################
 
-TORQUE =  {}
+TORQUE =  OrderedDict()
 
 #####################################################
 #                   SLURM Options                   #
 #  from: http://slurm.schedmd.com/pdfs/summary.pdf  #
 #####################################################
 
-SLURM  = {'begin':
-          {'help': 'Start after this much time',
-           'slurm': '--begin={}', 'type': str},
-         }
+SLURM  = OrderedDict([
+    ('begin',
+     {'help': 'Start after this much time',
+      'slurm': '--begin={}', 'type': str,
+      'default': None}),
+])
 
 
 ###############################################################################
@@ -384,87 +393,116 @@ def options_to_string(option_dict, qtype=None):
     return '\n'.join(outlist)
 
 
-def option_help(qtype=None, prnt=True):
+def option_help(qtype=None, mode='string'):
     """Print a sting to stdout displaying information on all options.
 
     :qtype: If provided only return info on that queue type.
-    :prnt:  If True, print to stdout, if False, return string.
+    :mode:  string: Return a formatted string
+            print:  Print the string to stdout
+            table:  Return a table of lists
     """
 
-    core_help = dedent("""\
-    Options available in all modes::
-    :cores:     How many cores to run on or threads to use.
-    :depends:   A list of dependencies for this job, must be either
-                Job objects (required for local mode) or job numbers.
-    :suffix:    The name to use in the output and error files
-    :dir:       The working directory to run in. Defaults to current.
-    """)
+    hlp = OrderedDict()
 
-    func_help = dedent("""\
-    Used for function calls::
-    :imports:   A list of imports, if not provided, defaults to all current
-                imports, which may not work if you use complex imports.
-                The list can include the import call, or just be a name, e.g
-                ['from os import path', 'sys']
-    """)
+    # Expicitly get the function call help out of core to treat separately
+    common = COMMON.copy()
+    impts  = common.pop('imports')
 
-    norm_help = dedent("""\
-    Used only in local mode::
-    :threads:   How many threads to use in the multiprocessing pool.
-                Defaults to all or cores if cores is provided.
-    """)
+    hlp['common'] = {
+        'summary': 'Used in every mode',
+        'help': common,
+    }
 
-    c_help = dedent("""\
-    Used for torque and slurm::
-    :nodes:     The number of nodes to request.
-                Type: int; Default: 1
-    :time:      The time to run for in HH:MM:SS.
-                Type: str; Default: 00:02:00
-    :mem:       Memory to use in MB.
-                Type: int; Default: 4000
-    :partition: Partition/queue to run on
-                Type: str; Default: 'local' in slurm, 'batch' in torque.
-    :modules:   Modules to load with the 'module load' command.
-                Type: list; Default: None.
-    """)
+    hlp['func'] = {
+        'summary': 'Used for function calls',
+        'help': OrderedDict([('imports', impts)]),
+    }
 
-    for option, inf in CLUSTER_OPTS.items():
-        c_help += (("{opt:<11} {help}\n{s:<12}Type: {type}; "
-                    'Default: {default}\n')
-                   .format(opt=':{}:'.format(option), help=inf['help'],
-                           type=inf['type'].__name__,
-                           default=inf['default'], s=' '))
+    hlp['local'] = {
+        'summary': 'Used only in local mode',
+        'help': NORMAL,
+    }
 
-    t_help = "Used for torque only::\n"
-    for option, inf in TORQUE.items():
-        t_help += (("{opt:<11} {help}\n{s:<12}Type: {type}; "
-                    "Default: {default}\n")
-                   .format(opt=':{}:'.format(option), help=inf['help'],
-                           type=inf['type'].__name__,
-                           default=inf['default'], s=' '))
+    # Include all cluster options in one
+    cluster = CLUSTER_CORE.copy()
+    cluster.update(CLUSTER_OPTS)
+    hlp['cluster'] = {
+        'summary': 'Options that work in both slurm and torque',
+        'help': cluster,
+    }
 
-    s_help = "Used for slurm only::\n"
-    for option, inf in SLURM.items():
-        s_help += ("{opt:<11} {help}\n{s:<12}Type: {typ}; Default: {default}\n"
-                   .format(opt=':{}:'.format(option), help=inf['help'],
-                           typ=inf['type'].__name__,
-                           default=inf['default'], s=' '))
+    if TORQUE:
+        hlp['torque'] = {
+            'summary': "Used for torque only",
+            'help': TORQUE,
+        }
 
-    outstr = core_help + '\n' + func_help
+    if SLURM:
+        hlp['slurm'] = {
+            'summary': "Used for slurm only",
+            'help': SLURM,
+        }
 
     if qtype:
         if qtype == 'local':
-            outstr += '\n' + norm_help
+            hlp.pop('cluster')
+            hlp.pop('torque')
+            hlp.pop('slurm')
         elif qtype == 'slurm':
-            outstr += '\n' + c_help + '\n' + s_help
+            hlp.pop('torque')
         elif qtype == 'torque':
-            outstr += '\n' + c_help + '\n' + t_help
+            hlp.pop('slurm')
         else:
             raise Exception('qtype must be "torque", "slurm", or "local"')
-    else:
-        outstr += '\n' + '\n'.join([norm_help, c_help, t_help, s_help])
 
-    if prnt:
-        sys.stdout.write(outstr)
+    if mode == 'print' or mode == 'string':
+        outstr = ''
+        for option_class, hlp_info in hlp.items():
+            tmpstr = ''
+            for option, inf in hlp_info['help'].items():
+                default = inf['default'] if 'default' in inf else None
+                type = inf['type']
+                helpitems = wrap(inf['help'])
+                helpstr   = helpitems[0]
+                if len(helpitems) > 1:
+                    helpstr  += '\n            '
+                    helpstr  += '\n            '.join(helpitems[1:])
+                if isinstance(type, (tuple, list, set)):
+                    type = [t.__name__ for t in type]
+                else:
+                    type = type.__name__
+                tmpstr += ('{o:<12}{h}\n{s:<12}Type: {t}; Default: {d}\n'
+                           .format(o=option + ':', h=helpstr, s=' ',
+                                   t=type, d=default))
+            outstr += '{}::\n{}\n'.format(hlp_info['summary'], tmpstr)
+        outstr = outstr.rstrip() + '\n'
+
+        if mode == 'print':
+            sys.stdout.write(outstr)
+        else:
+            return outstr
+    elif mode == 'table':
+        tables = OrderedDict()
+        for option_class, hlp_info in hlp.items():
+            tmptable = []
+            for option, inf in hlp_info['help'].items():
+                helpitems = wrap(inf['help'])
+                default = inf['default'] if 'default' in inf else None
+                type = inf['type']
+                if isinstance(type, (tuple, list, set)):
+                    type = [t.__name__ for t in type]
+                else:
+                    type = type.__name__
+                tmptable.append((option, '{:<70}'
+                                 .format(helpitems[0])))
+                if len(helpitems) > 1:
+                    for helpitem in helpitems[1:]:
+                        tmptable.append(('', '{}'
+                                         .format(helpitem)))
+                tmptable.append(('', 'Type: {}; Default: {}'
+                                 .format(type, default)))
+            tables[option_class] = {'summary': hlp_info['summary'],
+                            'table': tmptable}
+        return tables
     else:
-        return outstr
+        raise Exception('mode must be "print", "string", or "table"')
