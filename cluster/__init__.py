@@ -8,7 +8,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
        LICENSE: MIT License, property of Stanford, use as you wish
        VERSION: 0.6.1
        CREATED: 2015-12-11 22:19
- Last modified: 2016-06-15 19:50
+ Last modified: 2016-06-16 19:35
 
    DESCRIPTION: Allows simple job submission with *dependency tracking and
                 queue waiting* with either torque, slurm, or locally with the
@@ -141,6 +141,8 @@ Submit jobs to slurm or torque, or with multiprocessing.
 
 ============================================================================
 """
+import os as _os
+import signal as _signal
 import atexit as _atexit
 
 ################################
@@ -181,6 +183,7 @@ class ClusterError(Exception):
 from . import jobqueue
 from . import queue
 from . import job
+from .run import check_pid as _check_pid
 
 from .queue import Queue
 from .queue import wait
@@ -213,13 +216,9 @@ check_queue()
 ###############################
 #  Kill the JobQueue on exit  #
 ###############################
-def _kill_jobqueue():
-    try:
-        if jobqueue.JQUEUE:
-            if jobqueue.JQUEUE.runner.is_alive():
-                jobqueue.JQUEUE.runner.terminate()
-            del(jobqueue.JQUEUE)
-    except AssertionError:
-        pass
+#  def _kill_jobqueue():
+    #  if jobqueue.JQUEUE and _check_pid(jobqueue.JQUEUE.pid):
+        #  jobqueue.JQUEUE.terminate()
+    #  #  del(jobqueue.JQUEUE)
 
-_atexit.register(_kill_jobqueue)
+#  _atexit.register(_kill_jobqueue)

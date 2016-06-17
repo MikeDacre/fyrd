@@ -7,7 +7,7 @@ Manage job dependency tracking with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-56-14 14:04
- Last modified: 2016-06-15 19:11
+ Last modified: 2016-06-16 19:40
 
    DESCRIPTION: Runs jobs with a multiprocessing.Pool, but manages dependency
                 using an additional Process that loops through all submitted
@@ -32,10 +32,13 @@ Manage job dependency tracking with multiprocessing.
 import os
 import sys
 import atexit
+import signal
 import multiprocessing as mp
+from contextlib import contextmanager
 from subprocess import check_output, CalledProcessError
 from time import sleep
 
+from . import run
 # Get threads from root
 from . import THREADS
 
@@ -76,23 +79,26 @@ class JobQueue(object):
         self.jobno     = int(config_file.get('jobqueue', 'jobno', str(1)))
         self.cores     = int(cores) if cores else THREADS
         self.runner    = mp.Process(target=job_runner,
-                                    args=(self._jobqueue, self._outputs,
-                                          self.cores, self.jobnumber),
+                                    args=(self._jobqueue,
+                                          self._outputs,
+                                          self.cores,
+                                          self.jobnumber),
                                     name='Runner')
         self.runner.start()
+        self.pid = self.runner.pid
         assert self.runner.is_alive()
         self.jobs = {}
 
         def terminate():
             """Kill the queue runner."""
-            logme.log('Killing local queue and exiting', 'info')
             try:
-                self.update()
                 self.runner.terminate()
-            except AssertionError:
+                self._jobqueue.close()
+                self._outputs.close()
+            except AttributeError:
                 pass
-            self._jobqueue.close()
-            self._outputs.close()
+            if run.check_pid(self.runner.pid):
+                os.kill(self.runner.pid, signal.SIGKILL)
 
         # Call terminate when we exit
         atexit.register(terminate)
@@ -184,6 +190,7 @@ class JobQueue(object):
                                         self.cores, self.jobnumber),
                                   name='Runner')
         self.runner.start()
+        self.pid = self.runner.pid
         assert self.runner.is_alive()
 
     def __getattr__(self, attr):
@@ -435,3 +442,14 @@ def job_runner(jobqueue, outputs, cores=None, jobno=None):
 
         # Wait for half a second before looping again
         sleep(0.5)
+
+
+################################
+#  Function to help kill jobs  #
+################################
+@contextmanager
+def end_nicely(job_runner):
+    try:
+        yield job_runner
+    finally:
+        job_runner.terminate()

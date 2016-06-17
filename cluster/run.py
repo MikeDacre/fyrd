@@ -7,7 +7,7 @@ File management and execution functions.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-02-11 16:03
- Last modified: 2016-06-16 11:48
+ Last modified: 2016-06-16 19:15
 
 ============================================================================
 """
@@ -410,3 +410,13 @@ def split_file(infile, parts, outpath='', keep_header=True):
                 cnt = 0
         sfile.close()
     return tuple(outfiles)
+
+
+def check_pid(pid):
+    """Check For the existence of a unix pid."""
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    else:
+        return True
