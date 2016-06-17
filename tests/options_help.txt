@@ -1,0 +1,38 @@
+Options available in all modes::
+:cores:     How many cores to run on or threads to use.
+:depends:   A list of dependencies for this job, must be either
+            Job objects (required for local mode) or job numbers.
+:suffix:    The name to use in the output and error files
+:dir:       The working directory to run in. Defaults to current.
+
+Used for function calls::
+:imports:   A list of imports, if not provided, defaults to all current
+            imports, which may not work if you use complex imports.
+            The list can include the import call, or just be a name, e.g
+            ['from os import path', 'sys']
+
+Used only in local mode::
+:threads:   How many threads to use in the multiprocessing pool.
+            Defaults to all or cores if cores is provided.
+
+Used for torque and slurm::
+:nodes:     The number of nodes to request.
+            Type: int; Default: 1
+:time:      The time to run for in HH:MM:SS.
+            Type: str; Default: 00:02:00
+:mem:       Memory to use in MB.
+            Type: int; Default: 4000
+:partition: Partition/queue to run on
+            Type: str; Default: 'local' in slurm, 'batch' in torque.
+:modules:   Modules to load with the 'module load' command.
+            Type: list; Default: None.
+:export:    Comma separated list of environmental variables to export
+            Type: str; Default: None
+:account:   Account to be charged
+            Type: str; Default: None
+
+Used for torque only::
+
+Used for slurm only::
+:begin:     Start after this much time
+            Type: str; Default: None
