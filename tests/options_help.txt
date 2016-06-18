@@ -24,7 +24,7 @@ imports:    Imports to be used in function calls (e.g. sys, os) if not provided,
 
 Used only in local mode::
 threads:    Number of threads to use on the local machine
-            Type: int; Default: 24
+            Type: int; Default: 4
 
 Options that work in both slurm and torque::
 nodes:      Number of nodes to request

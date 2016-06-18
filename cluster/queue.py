@@ -7,7 +7,7 @@ Monitor the queue for torque or slurm.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-06-15 19:43
+ Last modified: 2016-06-17 17:39
 
    DESCRIPTION: Provides a class to monitor the torque, slurm, or local
                 jobqueue queues with identical syntax.
@@ -65,7 +65,6 @@ from . import ALLOWED_MODES
 #########################################################
 
 from . import jobqueue
-from . import THREADS
 from . import DEFAULTS
 
 # Reset broken multithreading
@@ -328,7 +327,7 @@ class Queue(object):
         # Mode specific initialization
         if self.qtype == 'local':
             if not jobqueue.JQUEUE or not jobqueue.JQUEUE.runner.is_alive():
-                jobqueue.JQUEUE = jobqueue.JobQueue(cores=THREADS)
+                jobqueue.JQUEUE = jobqueue.JobQueue(cores=jobqueue.THREADS)
             for job_id, job_info in jobqueue.JQUEUE:
                 if job_id in self.jobs:
                     job = self.jobs[job_id]

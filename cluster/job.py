@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-04-20 23:03
- Last modified: 2016-06-16 14:23
+ Last modified: 2016-06-17 17:39
 
 ===============================================================================
 """
@@ -43,7 +43,6 @@ from . import ClusterError
 ##########################################################
 
 from . import jobqueue
-from . import THREADS
 
 __all__ = ['Job', 'submit', 'make_job_file', 'clean', 'submit_file',
            'clean_dir']
@@ -318,7 +317,8 @@ class Job(object):
         elif self.qtype == 'local':
             # Create the pool
             if not jobqueue.JQUEUE or not jobqueue.JQUEUE.runner.is_alive():
-                threads = kwargs['threads'] if 'threads' in kwargs else THREADS
+                threads = kwargs['threads'] if 'threads' in kwargs \
+                        else jobqueue.THREADS
                 jobqueue.JQUEUE = jobqueue.JobQueue(cores=threads)
 
             scrpt = os.path.join(filedir, '{}.cluster'.format(name))
@@ -410,7 +410,7 @@ class Job(object):
 
             # Make sure the global job pool exists
             if not jobqueue.JQUEUE or not jobqueue.JQUEUE.runner.is_alive():
-                jobqueue.JQUEUE = jobqueue.JobQueue(cores=THREADS)
+                jobqueue.JQUEUE = jobqueue.JobQueue(cores=jobqueue.THREADS)
             self.id = jobqueue.JQUEUE.add(run.cmd, args=(command,),
                                           kwargs=fileargs,
                                           dependencies=dependencies,

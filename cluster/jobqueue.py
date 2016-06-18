@@ -7,7 +7,7 @@ Manage job dependency tracking with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-56-14 14:04
- Last modified: 2016-06-16 19:40
+ Last modified: 2016-06-17 17:38
 
    DESCRIPTION: Runs jobs with a multiprocessing.Pool, but manages dependency
                 using an additional Process that loops through all submitted
@@ -39,8 +39,6 @@ from subprocess import check_output, CalledProcessError
 from time import sleep
 
 from . import run
-# Get threads from root
-from . import THREADS
 
 # Get defaults
 from . import config_file
@@ -53,6 +51,13 @@ from . import logme
 
 # A global placeholder for a single JobQueue instance
 JQUEUE = None
+
+################################
+#  Normal Mode Multithreading  #
+################################
+
+from multiprocessing import cpu_count as _cnt
+THREADS  = _cnt()
 
 # Reset broken multithreading
 # Some of the numpy C libraries can break multithreading, this command

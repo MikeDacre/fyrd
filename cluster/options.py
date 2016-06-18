@@ -7,7 +7,7 @@ Available options for job submission.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-31-17 08:04
- Last modified: 2016-06-17 01:50
+ Last modified: 2016-06-17 17:45
 
    DESCRIPTION: All keyword arguments that can be used with Job() objects are
                 defined in this file. These can be editted by the end user to
@@ -36,7 +36,6 @@ from collections import OrderedDict
 
 from . import run
 from . import logme
-from . import THREADS
 
 __all__ = ['option_help']
 
@@ -91,7 +90,7 @@ COMMON  = OrderedDict([
 NORMAL  = OrderedDict([
     ('threads',
      {'help': 'Number of threads to use on the local machine',
-      'default': THREADS, 'type': int}),
+      'default': 4, 'type': int}),
 ])
 
 # Options used in both torque and slurm

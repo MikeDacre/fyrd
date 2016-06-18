@@ -8,7 +8,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
        LICENSE: MIT License, property of Stanford, use as you wish
        VERSION: 0.6.1
        CREATED: 2015-12-11 22:19
- Last modified: 2016-06-16 19:35
+ Last modified: 2016-06-17 17:37
 
    DESCRIPTION: Allows simple job submission with *dependency tracking and
                 queue waiting* with either torque, slurm, or locally with the
@@ -144,13 +144,6 @@ Submit jobs to slurm or torque, or with multiprocessing.
 import os as _os
 import signal as _signal
 import atexit as _atexit
-
-################################
-#  Normal Mode Multithreading  #
-################################
-
-from multiprocessing import cpu_count as _cnt
-THREADS  = _cnt()
 
 #################################################
 #  Currently configured job submission systems  #
