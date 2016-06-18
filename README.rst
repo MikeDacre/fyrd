@@ -14,10 +14,9 @@ Submit jobs to slurm or torque, or with multiprocessing.
 | Version | 0.6.1                                              |
 +---------+----------------------------------------------------+
 
-Allows simple job submission with *dependency tracking and
-queue waiting* with either torque, slurm, or locally with the
-multiprocessing module. It uses simple techiques to avoid
-overwhelming the queue and to catch bugs on the fly.
+Allows simple job submission with *dependency tracking and queue waiting* with
+either torque, slurm, or locally with the multiprocessing module. It uses simple
+techiques to avoid overwhelming the queue and to catch bugs on the fly.
 
 .. contents:: **Contents**
 
@@ -35,12 +34,11 @@ To install, use the standard python method:
   cd python-cluster
   python ./setup.py install --user
 
-In general you want user level install even if you have sudo
-access, as most cluster environments share /home/<user> across
-the cluster, making this module available everywhere.
+In general you want user level install even if you have sudo access, as most
+cluster environments share /home/<user> across the cluster, making this module
+available everywhere.
 
-*Note:* While the name is `python-cluster` you will import it
-just as `cluster`:
+*Note:* While the name is `python-cluster` you will import it just as `cluster`:
 
 .. code:: python
 
@@ -49,19 +47,19 @@ just as `cluster`:
 Prerequisites
 -------------
 
-The only external module that I use in this software is
-`dill <https://pypi.python.org/pypi/dill>`_. It isn't 100% required
-but it makes function submission much more stable.
+The only external module that I use in this software is `dill
+<https://pypi.python.org/pypi/dill>`_. It isn't 100% required but it makes
+function submission much more stable.
 
 If you choose to use dill, it must be installed cluster wide.
 
 Function Submission
 -------------------
 
-In order to submit functions to the cluster, this module must import
-them on the compute node. This means that all of your python modules
-must be available on every compute node. To avoid pain and debugging,
-you can do this manually by running this on your loggin node:
+In order to submit functions to the cluster, this module must import them on the
+compute node. This means that all of your python modules must be available on
+every compute node. To avoid pain and debugging, you can do this manually by
+running this on your loggin node:
 
 .. code:: shell
 
@@ -75,8 +73,8 @@ And then on the compute nodes:
 
 This will ensure that all of your modules are installed globally.
 
-In general it is a good idea to install modules as `--user` with pip
-to avoid this issue.
+In general it is a good idea to install modules as `--user` with pip to avoid
+this issue.
 
 ************
 Simple Usage
@@ -85,17 +83,16 @@ Simple Usage
 Setting Environment
 -------------------
 
-To set the environement, set queue.MODE to one of ['torque',
-'slurm', 'local'], or run get_cluster_environment().
+To set the environement, set queue.MODE to one of ['torque', 'slurm', 'local'],
+or run get_cluster_environment().
 
 Simple Job Submission
 ---------------------
 
-At its simplest, this module can be used by just executing
-submit(<command>), where command is a function or system
-command/shell script. The module will autodetect the cluster,
-generate an intuitive name, run the job, and write all outputs
-to files in the current directory. These can be cleaned with
+At its simplest, this module can be used by just executing submit(<command>),
+where command is a function or system command/shell script. The module will
+autodetect the cluster, generate an intuitive name, run the job, and write all
+outputs to files in the current directory. These can be cleaned with
 clean_dir().
 
 To run with dependency tracking, run:
@@ -110,13 +107,12 @@ To run with dependency tracking, run:
 Functions
 ---------
 
-The submit function works well with python functions as well as with
-shell scripts and shell commands.
+The submit function works well with python functions as well as with shell
+scripts and shell commands.
 
-*However,* in order for this to work, `cluster` ends up importing your
-original script file on the nodes. This means that all code in your
-file will be executed, so anything that isn't a function or class must
-be protected with an:
+*However,* in order for this to work, `cluster` ends up importing your original
+script file on the nodes. This means that all code in your file will be
+executed, so anything that isn't a function or class must be protected with an:
 
 .. code:: python
 
@@ -125,8 +121,8 @@ be protected with an:
 protecting statment.
 
 If you do not do this you can end up with multi-submission and infinate
-recursion, which could mess up your jobs or just crash the job, but either
-way, it won't be good.
+recursion, which could mess up your jobs or just crash the job, but either way,
+it won't be good.
 
 File Submission
 ---------------
@@ -138,7 +134,8 @@ If you want to just submit a file, that can be done like this:
   from cluster import submit_file
   submit_file('/path/to/script', dependencies=[7, 9])
 
-This will return the job number and will enter the job into the queue as dependant on jobs 007 and 009. The dependencies can be omitted.
+This will return the job number and will enter the job into the queue as
+dependant on jobs 007 and 009. The dependencies can be omitted.
 
 ****************
 Queue Management
@@ -153,12 +150,13 @@ To generate a queue object, do the following:
   import cluster
   q = cluster.Queue(user='self')
 
-This will give you a simple queue object containg a list of jobs that belong to you.
-If you do not provide user, all jobs are included for all users. You can provide `qtype`
-to explicitly force the queue object to contain jobs from one queing system (e.g. local
-or torque).
+This will give you a simple queue object containg a list of jobs that belong to
+you.  If you do not provide user, all jobs are included for all users. You can
+provide `qtype` to explicitly force the queue object to contain jobs from one
+queing system (e.g. local or torque).
 
-To get a dictionary of all jobs, running jobs, queued jobs, and complete jobs, use:
+To get a dictionary of all jobs, running jobs, queued jobs, and complete jobs,
+use:
 
 .. code:: python
 
@@ -176,7 +174,9 @@ Advanced Usage
 Keyword Arguments
 -----------------
 
-To make submission easier, this module defines a number of keyword arguments in the options.py file that can be used for all submission and Job() functions. These include things like 'cores' and 'nodes' and 'mem'. 
+To make submission easier, this module defines a number of keyword arguments in
+the options.py file that can be used for all submission and Job() functions.
+These include things like 'cores' and 'nodes' and 'mem'. 
 
 The following is a complete list of arguments that can be used in this version::
 
@@ -228,34 +228,56 @@ The following is a complete list of arguments that can be used in this version::
   begin:      Start after this much time
               Type: str; Default: None
 
-*Note:* Type is enforced, any provided argument must match that python type (automatic conversion is attempted), the default is just a recommendation and is not currently used. These arguments are passed like regular arguments to the submission and Job() functions, eg::
+*Note:* Type is enforced, any provided argument must match that python type
+(automatic conversion is attempted), the default is just a recommendation and is
+not currently used. These arguments are passed like regular arguments to the
+submission and Job() functions, eg::
 
   Job(nodes=1, cores=4, mem='20MB')
 
-This will be interpretted correctly on any system. If torque or slurm are not available, any cluster arguments will be ignored. The module will attempt to honor the cores request, but if it exceeds the maximum number of cores on the local machine, then the request will be trimmed accordingly (i.e. a 50 core request will become 8 cores on an 8 core machine).
+This will be interpretted correctly on any system. If torque or slurm are not
+available, any cluster arguments will be ignored. The module will attempt to
+honor the cores request, but if it exceeds the maximum number of cores on the
+local machine, then the request will be trimmed accordingly (i.e. a 50 core
+request will become 8 cores on an 8 core machine).
 
 ### Adding your own keywords
 
-There are many more options available for torque and slurm, to add your own, edit the options.py file, and look for CLUSTER_OPTS (or TORQUE/SLURM if your keyword option is only availble on one system). Add your option using the same format as is present in that file. The format is::
+There are many more options available for torque and slurm, to add your own,
+edit the options.py file, and look for CLUSTER_OPTS (or TORQUE/SLURM if your
+keyword option is only availble on one system). Add your option using the same
+format as is present in that file. The format is::
 
-  ('name', {'slurm': '--option-str={}', 'torque': '--torque-option={}', 'help': 'This is an option!', 'type': str, 'default': None})
+  ('name', {'slurm': '--option-str={}', 'torque': '--torque-option={}',
+            'help': 'This is an option!', 'type': str, 'default': None})
 
-You can also add list options, but they must include 'sjoin' and 'tjoin' keys to define how to merge the list for slurm and torque, or you must write custom option handling code in ``cluster.options.options_to_string()``. For an excellent example of both approaches included in a single option, see the 'features' keyword above.
+You can also add list options, but they must include 'sjoin' and 'tjoin' keys to
+define how to merge the list for slurm and torque, or you must write custom
+option handling code in ``cluster.options.options_to_string()``. For an
+excellent example of both approaches included in a single option, see the
+'features' keyword above.
 
-I happily accept pull requests for new option additions (any any other improvements for that matter).
+I happily accept pull requests for new option additions (any any other
+improvements for that matter).
 
 Profiles and the Config File
 ----------------------------
 
-To avoid having to enter all keyword arguments every time, profiles can be used. These profiles can store any of the above keywords and drastically simplify submission. For example::
+To avoid having to enter all keyword arguments every time, profiles can be used.
+These profiles can store any of the above keywords and drastically simplify
+submission. For example::
 
   job = submit(my_function, profile='large')
   
 Instead of::
 
-  job = submit(my_funtion, nodes=2, cores=16, mem='64GB', partition='bigjobs', features=['highmem'], export='PYTHONPATH')
+  job = submit(my_funtion, nodes=2, cores=16, mem='64GB', partition='bigjobs',
+               features=['highmem'], export='PYTHONPATH')
 
-These profiles are saved in a config file at ~/.python-cluster and can be editted in that file directly, or using the below functions. To edit them in the file directly, you must make sure that the section is labelled 'prof_<name>' where <name> is whatever you want it to be called. e.g.::
+These profiles are saved in a config file at ~/.python-cluster and can be
+editted in that file directly, or using the below functions. To edit them in the
+file directly, you must make sure that the section is labelled 'prof_<name>'
+where <name> is whatever you want it to be called. e.g.::
 
   [prof_default]
   nodes = 1
@@ -263,9 +285,11 @@ These profiles are saved in a config file at ~/.python-cluster and can be editte
   time = 24:00:00
   mem = 32000
 
-*Note:* a default profile must always exist, it will be added back if it does not exist.
+*Note:* a default profile must always exist, it will be added back if it does
+not exist.
 
-Alternatively, the functions ``cluster.config_file.set_profile()`` and ``cluster.config_file.get_profile()`` can be used:
+Alternatively, the functions ``cluster.config_file.set_profile()`` and
+``cluster.config_file.get_profile()`` can be used:
 
 .. code:: python
 
@@ -279,7 +303,9 @@ To see all profiles run:
 
   config_file.get_profile()
 
-Other options are defined in the config file, including the maximum number of jobs in the queue, the time to sleep between submissions, and other options. To see these run:
+Other options are defined in the config file, including the maximum number of
+jobs in the queue, the time to sleep between submissions, and other options. To
+see these run:
 
 .. code:: python
 
@@ -291,56 +317,56 @@ You can set options with:
 
   cluster.config_file.set()
 
-The defaults can be directly edited in ``config_file.py``, they are clearly documented.
+The defaults can be directly edited in ``config_file.py``, they are clearly
+documented.
 
 Job Files
 ---------
 
-All jobs write out a job file before submission, even though
-this is not necessary (or useful) with multiprocessing. In
-local mode, this is a `.cluster` file, in slurm is is a
-`.cluster.sbatch` and a `.cluster.script` file, in torque it is a
-`.cluster.qsub` file. 'cluster' is set by the suffix keyword,
-and can be overridden.
+All jobs write out a job file before submission, even though this is not
+necessary (or useful) with multiprocessing. In local mode, this is a `.cluster`
+file, in slurm is is a `.cluster.sbatch` and a `.cluster.script` file, in torque
+it is a `.cluster.qsub` file. 'cluster' is set by the suffix keyword, and can be
+overridden.
 
-To change the directory these files are written to, use the
-'filedir' keyword argument to Job or submit.
+To change the directory these files are written to, use the 'filedir' keyword
+argument to Job or submit.
 
 *NOTE:* This directory *must* be accessible to the compute nodes!!!
 
-All jobs are assigned a name that is used to generate the
-output files, including STDOUT and STDERR files. The default
-name for the out files is STDOUT: name.cluster.out and
-STDERR: name.cluster.err. These can be overwridden with
+All jobs are assigned a name that is used to generate the output files,
+including STDOUT and STDERR files. The default name for the out files is STDOUT:
+name.cluster.out and STDERR: name.cluster.err. These can be overwridden with
 keyword arguments.
 
-All Job objects have a ``clean()`` method that will delete any left over files. In addition there is a clean_job_files script that will delete all files made by this package in any given directory. Be very careful with the script though, it can clobber a lot of work all at once if it is used wrong. 
+All Job objects have a ``clean()`` method that will delete any left over files.
+In addition there is a clean_job_files script that will delete all files made by
+this package in any given directory. Be very careful with the script though, it
+can clobber a lot of work all at once if it is used wrong. 
 
 Dependecy Tracking
 ------------------
 
-Dependency tracking is supported in all modes. Local mode uses
-a unique queueing system that works similarly to torque and
-slurm and which is defined in jobqueue.py.
+Dependency tracking is supported in all modes. Local mode uses a unique queueing
+system that works similarly to torque and slurm and which is defined in
+jobqueue.py.
 
-To use dependency tracking in any mode pass a list of job ids
-to submit or submit_file with the `dependencies` keyword
-argument.
+To use dependency tracking in any mode pass a list of job ids to submit or
+submit_file with the `dependencies` keyword argument.
 
 Logging
 -------
 
-I use a custion logging script called logme to log errors. To
-get verbose output, set logme.MIN_LEVEL to 'debug'. To reduce
-output, set logme.MIN_LEVEL to 'warn'.
+I use a custion logging script called logme to log errors. To get verbose
+output, set logme.MIN_LEVEL to 'debug'. To reduce output, set logme.MIN_LEVEL to
+'warn'.
 
 *************
 Code Overview
 *************
 
-There are two important classes for interaction with the batch
-system: Job and Queue. The essential flow of a job submission
-is:
+There are two important classes for interaction with the batch system: Job and
+Queue. The essential flow of a job submission is:
 
 .. code:: python
 
@@ -364,6 +390,8 @@ The jobs in this case can be either a Job class or a job number.
 Issues and Contributing
 ***********************
 
-If you have any trouble with this software add an issue in https://github.com/MikeDacre/python-cluster/issues
+If you have any trouble with this software add an issue in
+https://github.com/MikeDacre/python-cluster/issues
 
-If you want to help improve it, please fork the repo and send me pull requests when you are done.
+If you want to help improve it, please fork the repo and send me pull requests
+when you are done.
