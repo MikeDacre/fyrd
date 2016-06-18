@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-04-20 23:03
- Last modified: 2016-06-17 17:39
+ Last modified: 2016-06-18 00:01
 
 ===============================================================================
 """
@@ -44,8 +44,8 @@ from . import ClusterError
 
 from . import jobqueue
 
-__all__ = ['Job', 'submit', 'make_job_file', 'clean', 'submit_file',
-           'clean_dir']
+__all__ = ['Job', 'submit', 'make_job', 'make_job_file', 'submit_file',
+           'clean', 'clean_dir']
 
 ###############################################################################
 #                                The Job Class                                #
@@ -120,10 +120,8 @@ class Job(object):
                   (not the queue number) will be added, ie. <name>.1
         :path:    Where to create the script, if None, current dir used.
         :qtype:   Override the default queue type
-        :profile: An optional profile to define options
-
-        Available Keyword Arguments
-        ---------------------------
+        :profile: The name of a profile saved in the config_file
+        :kwargs:  Keyword arguments to control job options
 
         There are many keyword arguments available for cluster job submission.
         These vary somewhat by queue type. For info run:
@@ -366,17 +364,15 @@ class Job(object):
     def submit(self, max_queue_len=None):
         """Submit this job.
 
-        If max_queue_len is specified (or in defaults), then this method will
-        block until the queue is open enough to allow submission.
+        :max_queue_len: if specified (or in defaults), then this method will
+                        block until the queue is open enough to allow
+                        submission.
 
         To disable max_queue_len, set it to 0. None will allow override by
         the default settings in the config file, and any positive integer will
         be interpretted to be the maximum queue length.
 
-        NOTE: In local mode, dependencies will result in this function blocking
-              until the dependencies are satisfied, not idea behavior.
-
-        Returns self.
+        :returns: self
         """
         if self.submitted:
             sys.stderr.write('Already submitted.')
@@ -817,22 +813,20 @@ def submit(command, args=None, name=None, path=None, qtype=None,
            profile=None, **kwargs):
     """Submit a script to the cluster.
 
-    Used in all modes::
     :command:   The command or function to execute.
     :args:      Optional arguments to add to command, particularly
                 useful for functions.
     :name:      The name of the job.
     :path:      Where to create the script, if None, current dir used.
-
-    Available Keyword Arguments
-    ---------------------------
+    :qtype:     'torque', 'slurm', or 'normal'
+    :profile:   The name of a profile saved in the config_file
+    :kwargs:    Keyword arguments to control job options
 
     There are many keyword arguments available for cluster job submission.
     These vary somewhat by queue type. For info run:
         cluster.options.option_help()
 
-    Returns:
-        Job object
+    :returns: Job object
     """
 
     queue.check_queue()  # Make sure the queue.MODE is usable
@@ -858,22 +852,19 @@ def make_job(command, args=None, name=None, path=None, qtype=None,
 
     If mode is local, this is just a simple shell script.
 
-     Used in all modes::
     :command:   The command or function to execute.
     :args:      Optional arguments to add to command, particularly
                 useful for functions.
     :name:      The name of the job.
     :path:      Where to create the script, if None, current dir used.
-
-    Available Keyword Arguments
-    ---------------------------
+    :qtype:     'torque', 'slurm', or 'normal'
+    :profile:   The name of a profile saved in the config_file
 
     There are many keyword arguments available for cluster job submission.
     These vary somewhat by queue type. For info run:
         cluster.options.option_help()
 
-    Returns:
-        A job object
+    :returns: A Job object
     """
 
     queue.check_queue()  # Make sure the queue.MODE is usable
@@ -891,22 +882,20 @@ def make_job_file(command, args=None, name=None, path=None, qtype=None,
 
     If mode is local, this is just a simple shell script.
 
-     Used in all modes::
     :command:   The command or function to execute.
     :args:      Optional arguments to add to command, particularly
                 useful for functions.
     :name:      The name of the job.
     :path:      Where to create the script, if None, current dir used.
-
-    Available Keyword Arguments
-    ---------------------------
+    :qtype:     'torque', 'slurm', or 'normal'
+    :profile:   The name of a profile saved in the config_file
+    :kwargs:    Keyword arguments to control job options
 
     There are many keyword arguments available for cluster job submission.
     These vary somewhat by queue type. For info run:
         cluster.options.option_help()
 
-    Returns:
-        Path to job script
+    :returns:   Path to job script
     """
 
     queue.check_queue()  # Make sure the queue.MODE is usable

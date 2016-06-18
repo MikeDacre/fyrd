@@ -7,7 +7,7 @@ Logging with timestamps and optional log files.
         AUTHOR: Michael D Dacre, mike.dacre@gmail.com
   ORGANIZATION: Stanford University
        CREATED: 2015-03-03 11:41
- Last modified: 2016-03-18 17:00
+ Last modified: 2016-06-18 00:11
 
    DESCRIPTION: Print a timestamped message to a logfile, STDERR, or STDOUT.
                 If STDERR or STDOUT are used, colored flags are added.
@@ -65,20 +65,27 @@ def log(message, level='info', logfile=None, also_write=None,
         min_level=None, kind=None):
     """Print a string to logfile.
 
-    :message: The message to print.
-    :logfile: Optional file to log to, defaults to STDERR. Can provide a
-              logging object
-    :level:    Prefix. Defaults to 'normal', options:
-        'debug':    '<timestamp> DEBUG --> '
-        'info':     '<timestamp> INFO --> '
-        'warn':     '<timestamp> WARNING --> '
-        'error':    '<timestamp> ERROR --> '
-        'critical': '<timestamp> CRITICAL --> '
-    :also_write: 'stdout': print to STDOUT also.
-    :also_write: 'stderr': print to STDERR also.
+    :message:     The message to print.
+    :logfile:     Optional file to log to, defaults to STDERR. Can provide a
+                  logging object
+    :level:       'debug'|'info'|'warn'|'error'|'normal'
+                  Will only print if level > MIN_LEVEL
 
-    :min_level: Retained for backwards compatibility, min_level should be set
-                using the logme.MIN_LEVEL constant.
+                  =========== ============================
+                  'debug':    '<timestamp> DEBUG --> '
+                  'info':     '<timestamp> INFO --> '
+                  'warn':     '<timestamp> WARNING --> '
+                  'error':    '<timestamp> ERROR --> '
+                  'critical': '<timestamp> CRITICAL --> '
+                  =========== ============================
+
+    :also_write:  'stdout': print to STDOUT also.
+                  'stderr': print to STDERR also.
+                  These only have an effect if the output is not already set
+                  to the same device.
+
+    :min_level:   Retained for backwards compatibility, min_level should be set
+                  using the logme.MIN_LEVEL constant.
 
     :kind: synonym for level, kept to retain backwards compatibility
     """

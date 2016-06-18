@@ -7,7 +7,7 @@ Monitor the queue for torque or slurm.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-06-17 17:39
+ Last modified: 2016-06-17 18:51
 
    DESCRIPTION: Provides a class to monitor the torque, slurm, or local
                 jobqueue queues with identical syntax.
@@ -67,6 +67,15 @@ from . import ALLOWED_MODES
 from . import jobqueue
 from . import DEFAULTS
 
+# Funtions to import if requested
+__all__ = ['Queue', 'wait', 'check_queue', 'get_cluster_environment']
+
+# We only need the queue defaults
+_defaults = DEFAULTS['queue']
+
+# This is set in the get_cluster_environment() function.
+MODE = ''
+
 # Reset broken multithreading
 # Some of the numpy C libraries can break multithreading, this command
 # fixes the issue.
@@ -74,61 +83,6 @@ try:
     check_output("taskset -p 0xff %d &>/dev/null" % os.getpid(), shell=True)
 except CalledProcessError:
     pass  # This doesn't work on Macs or Windows
-
-# We only need the queue defaults
-_defaults = DEFAULTS['queue']
-
-# Funtions to import if requested
-__all__ = ['Queue', 'check_queue', 'get_cluster_environment']
-
-# This is set in the get_cluster_environment() function.
-MODE = ''
-
-###########################################################
-#  Set the global cluster type: slurm, torque, or local  #
-###########################################################
-
-
-def get_cluster_environment():
-    """Detect the local cluster environment and set MODE globally.
-
-    Uses which to search for sbatch first, then qsub. If neither is found,
-    MODE is set to local.
-
-    :returns: MODE variable ('torque', 'slurm', or 'local')
-    """
-    global MODE
-    if run.which('sbatch'):
-        MODE = 'slurm'
-    elif run.which('qsub'):
-        MODE = 'torque'
-    else:
-        MODE = 'local'
-    if MODE == 'slurm' or MODE == 'torque':
-        logme.log('{} detected, using for cluster submissions'.format(MODE),
-                  'debug')
-    else:
-        logme.log('No cluster environment detected, using multiprocessing',
-                  'debug')
-    return MODE
-
-
-##############################
-#  Check if queue is usable  #
-##############################
-
-
-def check_queue(qtype=None):
-    """Raise exception if MODE is incorrect."""
-    if qtype and qtype not in ALLOWED_MODES:
-        raise ClusterError('qtype value {} is not recognized, '.format(qtype) +
-                           'should be: local, torque, or slurm')
-    if 'MODE' not in globals():
-        global MODE
-        MODE = get_cluster_environment()
-    if MODE not in ALLOWED_MODES:
-        raise ClusterError('MODE value {} is not recognized, '.format(MODE) +
-                           'should be: local, torque, or slurm')
 
 
 ###############################################################################
@@ -646,8 +600,60 @@ class Queue(object):
 
 
 ###############################################################################
-#                  Expose Queue Methods as Simple Functions                   #
+#                             Non-Class Functions                             #
 ###############################################################################
+
+
+###########################################################
+#  Set the global cluster type: slurm, torque, or local  #
+###########################################################
+
+
+def get_cluster_environment():
+    """Detect the local cluster environment and set MODE globally.
+
+    Uses which to search for sbatch first, then qsub. If neither is found,
+    MODE is set to local.
+
+    :returns: MODE variable ('torque', 'slurm', or 'local')
+    """
+    global MODE
+    if run.which('sbatch'):
+        MODE = 'slurm'
+    elif run.which('qsub'):
+        MODE = 'torque'
+    else:
+        MODE = 'local'
+    if MODE == 'slurm' or MODE == 'torque':
+        logme.log('{} detected, using for cluster submissions'.format(MODE),
+                  'debug')
+    else:
+        logme.log('No cluster environment detected, using multiprocessing',
+                  'debug')
+    return MODE
+
+
+##############################
+#  Check if queue is usable  #
+##############################
+
+
+def check_queue(qtype=None):
+    """Raise exception if MODE is incorrect."""
+    if qtype and qtype not in ALLOWED_MODES:
+        raise ClusterError('qtype value {} is not recognized, '.format(qtype) +
+                           'should be: local, torque, or slurm')
+    if 'MODE' not in globals():
+        global MODE
+        MODE = get_cluster_environment()
+    if MODE not in ALLOWED_MODES:
+        raise ClusterError('MODE value {} is not recognized, '.format(MODE) +
+                           'should be: local, torque, or slurm')
+
+
+######################################################################
+#  Expose the Queue waiting method without requiring a Queue object  #
+######################################################################
 
 
 def wait(jobs):

@@ -7,7 +7,7 @@ Get and set config file options.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-06-15 13:14
+ Last modified: 2016-06-18 00:03
 
    DESCRIPTION: The functions defined here provide an easy way to access the
                 config file defined by CONFIG_FILE (default ~/.python-cluster).
@@ -169,7 +169,7 @@ def get(section=None, key=None, default=None):
     :section: The config section to use (e.g. queue, prof)
     :key:     The config key to get (e.g. 'max_jobs')
     :default: If the key does not exist, create it with this default value.
-    Returns None if key does not exist.
+    :returns: None if key does not exist.
     """
     defaults = get_config()
     if not section:

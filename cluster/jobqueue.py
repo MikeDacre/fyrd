@@ -7,7 +7,7 @@ Manage job dependency tracking with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-56-14 14:04
- Last modified: 2016-06-17 17:38
+ Last modified: 2016-06-18 00:02
 
    DESCRIPTION: Runs jobs with a multiprocessing.Pool, but manages dependency
                 using an additional Process that loops through all submitted
@@ -34,7 +34,6 @@ import sys
 import atexit
 import signal
 import multiprocessing as mp
-from contextlib import contextmanager
 from subprocess import check_output, CalledProcessError
 from time import sleep
 
@@ -51,6 +50,8 @@ from . import logme
 
 # A global placeholder for a single JobQueue instance
 JQUEUE = None
+
+__all__ = ['JobQueue']
 
 ################################
 #  Normal Mode Multithreading  #
@@ -307,10 +308,9 @@ def job_runner(jobqueue, outputs, cores=None, jobno=None):
                tuples are required.
     :outputs:  A multiprocessing.Queue object that will take outputs. A
                dictionary of job objects will be output here with the format::
-                   {job_no => Job}
+               {job_no => Job}
                **NOTE**: function return must be picklable otherwise this will
-                         raise an exception when it is put into the Queue
-                         object.
+               raise an exception when it is put into the Queue object.
     :cores:    Number of cores to use in the multiprocessing pool. Defaults to
                all.
     :jobno:    What number to start counting jobs from, default 1.
@@ -447,14 +447,3 @@ def job_runner(jobqueue, outputs, cores=None, jobno=None):
 
         # Wait for half a second before looping again
         sleep(0.5)
-
-
-################################
-#  Function to help kill jobs  #
-################################
-@contextmanager
-def end_nicely(job_runner):
-    try:
-        yield job_runner
-    finally:
-        job_runner.terminate()
