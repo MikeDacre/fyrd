@@ -1,0 +1,1214 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>cluster.job &mdash; Python Cluster 0.6.1 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.6.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="Python Cluster 0.6.1 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body role="document">
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for cluster.job</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Submit jobs to slurm or torque, or with multiprocessing.</span>
+
+<span class="sd">===============================================================================</span>
+
+<span class="sd">        AUTHOR: Michael D Dacre, mike.dacre@gmail.com</span>
+<span class="sd">  ORGANIZATION: Stanford University</span>
+<span class="sd">       LICENSE: MIT License, property of Stanford, use as you wish</span>
+<span class="sd">       CREATED: 2016-04-20 23:03</span>
+<span class="sd"> Last modified: 2016-06-18 00:01</span>
+
+<span class="sd">===============================================================================</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">inspect</span>
+<span class="kn">from</span> <span class="nn">time</span> <span class="kn">import</span> <span class="n">sleep</span>
+<span class="kn">from</span> <span class="nn">types</span> <span class="kn">import</span> <span class="n">ModuleType</span>
+<span class="kn">from</span> <span class="nn">subprocess</span> <span class="kn">import</span> <span class="n">CalledProcessError</span>
+
+<span class="c1"># Try to use dill, revert to pickle if not found</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">dill</span> <span class="kn">as</span> <span class="nn">pickle</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">import</span> <span class="nn">cPickle</span> <span class="kn">as</span> <span class="nn">pickle</span> <span class="c1"># For python2</span>
+    <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+        <span class="kn">import</span> <span class="nn">pickle</span>
+
+<span class="c1">###############################################################################</span>
+<span class="c1">#                                Our functions                                #</span>
+<span class="c1">###############################################################################</span>
+
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">run</span>
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">logme</span>
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">queue</span>
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">options</span>
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">config_file</span>
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">ClusterError</span>
+
+<span class="c1">##########################################################</span>
+<span class="c1">#  The multiprocessing pool, only used in &#39;local&#39; mode  #</span>
+<span class="c1">##########################################################</span>
+
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">jobqueue</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Job&#39;</span><span class="p">,</span> <span class="s1">&#39;submit&#39;</span><span class="p">,</span> <span class="s1">&#39;make_job&#39;</span><span class="p">,</span> <span class="s1">&#39;make_job_file&#39;</span><span class="p">,</span> <span class="s1">&#39;submit_file&#39;</span><span class="p">,</span>
+           <span class="s1">&#39;clean&#39;</span><span class="p">,</span> <span class="s1">&#39;clean_dir&#39;</span><span class="p">]</span>
+
+<span class="c1">###############################################################################</span>
+<span class="c1">#                                The Job Class                                #</span>
+<span class="c1">###############################################################################</span>
+
+
+<div class="viewcode-block" id="Job"><a class="viewcode-back" href="../../api.html#cluster.Job">[docs]</a><span class="k">class</span> <span class="nc">Job</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="sd">&quot;&quot;&quot;Information about a single job on the cluster.</span>
+
+<span class="sd">    Holds information about submit time, number of cores, the job script,</span>
+<span class="sd">    and more.</span>
+
+<span class="sd">    submit() will submit the job if it is ready</span>
+<span class="sd">    wait()   will block until the job is done</span>
+<span class="sd">    get()    will block until the job is done and then unpickle a stored</span>
+<span class="sd">             output (if defined) and return the contents</span>
+<span class="sd">    clean()  will delete any files created by this object</span>
+
+<span class="sd">    Printing the class will display detailed job information.</span>
+
+<span class="sd">    Both wait() and get() will update the queue every two seconds and add</span>
+<span class="sd">    queue information to the job as they go.</span>
+
+<span class="sd">    If the job disappears from the queue with no information, it will be listed</span>
+<span class="sd">    as &#39;complete&#39;.</span>
+
+<span class="sd">    All jobs have a .submission attribute, which is a Script object containing</span>
+<span class="sd">    the submission script for the job and the file name, plus a &#39;written&#39; bool</span>
+<span class="sd">    that checks if the file exists.</span>
+
+<span class="sd">    In addition, SLURM jobs have a .exec_script attribute, which is a Script</span>
+<span class="sd">    object containing the shell command to run. This difference is due to the</span>
+<span class="sd">    fact that some SLURM systems execute multiple lines of the submission file</span>
+<span class="sd">    at the same time.</span>
+
+<span class="sd">    Finally, if the job command is a function, this object will also contain a</span>
+<span class="sd">    .function attribute, which contains the script to run the function.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">id</span>           <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">submitted</span>    <span class="o">=</span> <span class="bp">False</span>
+    <span class="n">written</span>      <span class="o">=</span> <span class="bp">False</span>
+    <span class="n">done</span>         <span class="o">=</span> <span class="bp">False</span>
+
+    <span class="c1"># Holds a pool object if we are in local mode</span>
+    <span class="n">pool_job</span>     <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="c1"># Scripts</span>
+    <span class="n">submission</span>   <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">exec_script</span>  <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">function</span>     <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="c1"># Dependencies</span>
+    <span class="n">dependencies</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="c1"># Holds queue information in torque and slurm</span>
+    <span class="n">queue_info</span>   <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="n">stdout</span> <span class="o">=</span> <span class="n">stderr</span> <span class="o">=</span> <span class="n">exitcode</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">qtype</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">profile</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwds</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Create a job object will submission information.</span>
+
+<span class="sd">        :command: The command or function to execute.</span>
+<span class="sd">        :args:    Optional arguments to add to command, particularly</span>
+<span class="sd">                  useful for functions.</span>
+<span class="sd">        :name:    Optional name of the job. If not defined, guessed. If a job</span>
+<span class="sd">                  of the same name is already queued, an integer job number</span>
+<span class="sd">                  (not the queue number) will be added, ie. &lt;name&gt;.1</span>
+<span class="sd">        :path:    Where to create the script, if None, current dir used.</span>
+<span class="sd">        :qtype:   Override the default queue type</span>
+<span class="sd">        :profile: The name of a profile saved in the config_file</span>
+<span class="sd">        :kwargs:  Keyword arguments to control job options</span>
+
+<span class="sd">        There are many keyword arguments available for cluster job submission.</span>
+<span class="sd">        These vary somewhat by queue type. For info run:</span>
+<span class="sd">            cluster.options.option_help()</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1">########################</span>
+        <span class="c1">#  Sanitize arguments  #</span>
+        <span class="c1">########################</span>
+
+        <span class="c1"># Make a copy of the keyword arguments, as we will delete arguments</span>
+        <span class="c1"># as we go</span>
+        <span class="n">kwargs</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">check_arguments</span><span class="p">(</span><span class="n">kwds</span><span class="o">.</span><span class="n">copy</span><span class="p">())</span>
+
+        <span class="c1"># Save command</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">command</span> <span class="o">=</span> <span class="n">command</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">args</span>    <span class="o">=</span> <span class="n">args</span>
+
+        <span class="c1"># Merge in profile</span>
+        <span class="k">if</span> <span class="n">profile</span><span class="p">:</span>
+            <span class="c1"># This is a Profile() object, the arguments are in the args dict</span>
+            <span class="n">prof</span> <span class="o">=</span> <span class="n">config_file</span><span class="o">.</span><span class="n">get_profile</span><span class="p">(</span><span class="n">profile</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">prof</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">k</span><span class="p">,</span><span class="n">v</span> <span class="ow">in</span> <span class="n">prof</span><span class="o">.</span><span class="n">args</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="k">if</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+                        <span class="n">kwargs</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">logme</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;No profile found for {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">profile</span><span class="p">),</span> <span class="s1">&#39;warn&#39;</span><span class="p">)</span>
+
+        <span class="c1"># If no profile or keywords, use default profile, args is a dict</span>
+        <span class="n">default_args</span> <span class="o">=</span> <span class="n">config_file</span><span class="o">.</span><span class="n">get_profile</span><span class="p">(</span><span class="s1">&#39;default&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">args</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">profile</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="n">kwargs</span> <span class="o">=</span> <span class="n">default_args</span>
+
+        <span class="c1"># Get required options</span>
+        <span class="n">req_options</span> <span class="o">=</span> <span class="n">config_file</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;opts&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">req_options</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span><span class="n">v</span> <span class="ow">in</span> <span class="n">req_options</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+                    <span class="n">kwargs</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+
+        <span class="c1"># Get environment</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">qtype</span> <span class="o">=</span> <span class="n">qtype</span> <span class="k">if</span> <span class="n">qtype</span> <span class="k">else</span> <span class="n">queue</span><span class="o">.</span><span class="n">MODE</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">queue</span> <span class="o">=</span> <span class="n">queue</span><span class="o">.</span><span class="n">Queue</span><span class="p">(</span><span class="n">user</span><span class="o">=</span><span class="s1">&#39;self&#39;</span><span class="p">,</span> <span class="n">qtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">qtype</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;Not Submitted&#39;</span>
+
+        <span class="c1"># Set name</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">name</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="s1">&#39;__call__&#39;</span><span class="p">):</span>
+                <span class="n">parts</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">command</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;&lt;&gt;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">)</span>
+                <span class="n">parts</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="s1">&#39;function&#39;</span><span class="p">)</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">parts</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="s1">&#39;built-in&#39;</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                    <span class="k">pass</span>
+                <span class="n">name</span> <span class="o">=</span> <span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">name</span> <span class="o">=</span> <span class="n">command</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+        <span class="c1"># Make sure name not in queue</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+        <span class="n">names</span>   <span class="o">=</span> <span class="p">[</span><span class="n">i</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="p">]</span>
+        <span class="n">namecnt</span> <span class="o">=</span> <span class="nb">len</span><span class="p">([</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">names</span> <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="n">name</span><span class="p">])</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;{}.{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">namecnt</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+        <span class="c1"># Set modules</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">modules</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;modules&#39;</span><span class="p">)</span> <span class="k">if</span> <span class="s1">&#39;modules&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="k">else</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">modules</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">modules</span> <span class="o">=</span> <span class="n">run</span><span class="o">.</span><span class="n">opt_split</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">modules</span><span class="p">,</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">,</span> <span class="s1">&#39;;&#39;</span><span class="p">))</span>
+
+        <span class="c1"># Path handling</span>
+        <span class="k">if</span> <span class="n">path</span><span class="p">:</span>
+            <span class="n">usedir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="s1">&#39;dir&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="n">usedir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;dir&#39;</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">usedir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Set runtime dir in arguments</span>
+        <span class="k">if</span> <span class="s1">&#39;dir&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;dir&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">usedir</span>
+
+        <span class="c1"># Set temp file path if different from runtime path</span>
+        <span class="n">filedir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;filedir&#39;</span><span class="p">])</span> \
+            <span class="k">if</span> <span class="s1">&#39;filedir&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="k">else</span> <span class="n">usedir</span>
+
+        <span class="c1"># Make sure args are a tuple or dictionary</span>
+        <span class="k">if</span> <span class="n">args</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)):</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">set</span><span class="p">)):</span>
+                    <span class="n">args</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">args</span> <span class="o">=</span> <span class="p">(</span><span class="n">args</span><span class="p">,)</span>
+
+        <span class="c1"># In case cores are passed as None</span>
+        <span class="k">if</span> <span class="s1">&#39;nodes&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;nodes&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">default_args</span><span class="p">[</span><span class="s1">&#39;nodes&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="s1">&#39;cores&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;cores&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">default_args</span><span class="p">[</span><span class="s1">&#39;cores&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;nodes&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cores</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;cores&#39;</span><span class="p">]</span>
+
+        <span class="c1"># Set output files</span>
+        <span class="n">suffix</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;suffix&#39;</span><span class="p">)</span> <span class="k">if</span> <span class="s1">&#39;suffix&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="k">else</span> <span class="s1">&#39;cluster&#39;</span>
+        <span class="k">if</span> <span class="s1">&#39;outfile&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;outfile&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">filedir</span><span class="p">,</span>
+                                             <span class="s1">&#39;.&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">name</span><span class="p">,</span> <span class="n">suffix</span><span class="p">,</span> <span class="s1">&#39;out&#39;</span><span class="p">]))</span>
+        <span class="k">if</span> <span class="s1">&#39;errfile&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;errfile&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">filedir</span><span class="p">,</span>
+                                             <span class="s1">&#39;.&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">name</span><span class="p">,</span> <span class="n">suffix</span><span class="p">,</span> <span class="s1">&#39;err&#39;</span><span class="p">]))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">outfile</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;outfile&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">errfile</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;errfile&#39;</span><span class="p">]</span>
+
+        <span class="c1"># Check and set dependencies</span>
+        <span class="k">if</span> <span class="s1">&#39;depends&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="n">dependencies</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;depends&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dependencies</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dependencies</span><span class="p">,</span> <span class="s1">&#39;str&#39;</span><span class="p">):</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">dependencies</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
+                    <span class="k">raise</span> <span class="n">ClusterError</span><span class="p">(</span><span class="s1">&#39;Dependencies must be number or list&#39;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">dependencies</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">dependencies</span><span class="p">)]</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dependencies</span><span class="p">,</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">Job</span><span class="p">)):</span>
+                <span class="n">dependencies</span> <span class="o">=</span> <span class="p">[</span><span class="n">dependencies</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dependencies</span><span class="p">,</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">list</span><span class="p">)):</span>
+                <span class="k">raise</span> <span class="n">ClusterError</span><span class="p">(</span><span class="s1">&#39;Dependencies must be number or list&#39;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">dependency</span> <span class="ow">in</span> <span class="n">dependencies</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dependency</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                    <span class="n">dependency</span>  <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">dependency</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dependency</span><span class="p">,</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">Job</span><span class="p">)):</span>
+                    <span class="k">raise</span> <span class="n">ClusterError</span><span class="p">(</span><span class="s1">&#39;Dependencies must be number or list&#39;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">dependencies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dependency</span><span class="p">)</span>
+
+        <span class="c1">######################################</span>
+        <span class="c1">#  Command and Function Preparation  #</span>
+        <span class="c1">######################################</span>
+
+        <span class="c1"># Make functions run remotely</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="s1">&#39;__call__&#39;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">function</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span>
+                <span class="n">file_name</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">filedir</span><span class="p">,</span> <span class="s1">&#39;{}_func.{}.py&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="n">name</span><span class="p">,</span> <span class="n">suffix</span><span class="p">)),</span>
+                <span class="n">function</span><span class="o">=</span><span class="n">command</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">args</span><span class="p">)</span>
+            <span class="c1"># Collapse the command into a python call to the function script</span>
+            <span class="n">command</span> <span class="o">=</span> <span class="s1">&#39;python{} {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">version</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                                           <span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="o">.</span><span class="n">file_name</span><span class="p">)</span>
+            <span class="n">args</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="c1"># Collapse args into command</span>
+        <span class="n">command</span> <span class="o">=</span> <span class="n">command</span> <span class="o">+</span> <span class="s1">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="k">if</span> <span class="n">args</span> <span class="k">else</span> <span class="n">command</span>
+
+        <span class="c1">#####################</span>
+        <span class="c1">#  Script Creation  #</span>
+        <span class="c1">#####################</span>
+
+        <span class="c1"># Build execution wrapper with modules</span>
+        <span class="n">precmd</span>  <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">modules</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">module</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">modules</span><span class="p">:</span>
+                <span class="n">precmd</span> <span class="o">+=</span> <span class="s1">&#39;module load {}</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">module</span><span class="p">)</span>
+
+        <span class="c1"># Create queue-dependent scripts</span>
+        <span class="n">sub_script</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">qtype</span> <span class="o">==</span> <span class="s1">&#39;slurm&#39;</span><span class="p">:</span>
+            <span class="n">scrpt</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">filedir</span><span class="p">,</span> <span class="s1">&#39;{}.cluster.sbatch&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
+
+            <span class="c1"># We use a separate script and a single srun command to avoid</span>
+            <span class="c1"># issues with multiple threads running at once</span>
+            <span class="n">exe_scrpt</span>  <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">filedir</span><span class="p">,</span> <span class="n">name</span> <span class="o">+</span> <span class="s1">&#39;.script&#39;</span><span class="p">)</span>
+            <span class="n">exe_script</span> <span class="o">=</span> <span class="n">run</span><span class="o">.</span><span class="n">CMND_RUNNER_TRACK</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="n">precmd</span><span class="o">=</span><span class="n">precmd</span><span class="p">,</span> <span class="n">usedir</span><span class="o">=</span><span class="n">usedir</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">command</span><span class="o">=</span><span class="n">command</span><span class="p">)</span>
+
+            <span class="c1"># Add all of the keyword arguments at once</span>
+            <span class="n">precmd</span> <span class="o">+=</span> <span class="n">options</span><span class="o">.</span><span class="n">options_to_string</span><span class="p">(</span><span class="n">kwargs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">qtype</span><span class="p">)</span>
+
+            <span class="n">ecmnd</span> <span class="o">=</span> <span class="s1">&#39;srun bash {}.script&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">exe_scrpt</span><span class="p">)</span>
+            <span class="n">sub_script</span> <span class="o">=</span> <span class="n">run</span><span class="o">.</span><span class="n">SCRP_RUNNER</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">precmd</span><span class="o">=</span><span class="n">precmd</span><span class="p">,</span>
+                                                <span class="n">script</span><span class="o">=</span><span class="n">exe_script</span><span class="p">,</span>
+                                                <span class="n">command</span><span class="o">=</span><span class="n">ecmnd</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">qtype</span> <span class="o">==</span> <span class="s1">&#39;torque&#39;</span><span class="p">:</span>
+            <span class="n">scrpt</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">filedir</span><span class="p">,</span> <span class="s1">&#39;{}.cluster.qsub&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
+
+            <span class="c1"># Add all of the keyword arguments at once</span>
+            <span class="n">precmd</span> <span class="o">+=</span> <span class="n">options</span><span class="o">.</span><span class="n">options_to_string</span><span class="p">(</span><span class="n">kwargs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">qtype</span><span class="p">)</span>
+
+            <span class="n">sub_script</span> <span class="o">=</span> <span class="n">run</span><span class="o">.</span><span class="n">CMND_RUNNER_TRACK</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="n">precmd</span><span class="o">=</span><span class="n">precmd</span><span class="p">,</span> <span class="n">usedir</span><span class="o">=</span><span class="n">usedir</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">command</span><span class="o">=</span><span class="n">command</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">qtype</span> <span class="o">==</span> <span class="s1">&#39;local&#39;</span><span class="p">:</span>
+            <span class="c1"># Create the pool</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">jobqueue</span><span class="o">.</span><span class="n">JQUEUE</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">jobqueue</span><span class="o">.</span><span class="n">JQUEUE</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">is_alive</span><span class="p">():</span>
+                <span class="n">threads</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;threads&#39;</span><span class="p">]</span> <span class="k">if</span> <span class="s1">&#39;threads&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span> \
+                        <span class="k">else</span> <span class="n">jobqueue</span><span class="o">.</span><span class="n">THREADS</span>
+                <span class="n">jobqueue</span><span class="o">.</span><span class="n">JQUEUE</span> <span class="o">=</span> <span class="n">jobqueue</span><span class="o">.</span><span class="n">JobQueue</span><span class="p">(</span><span class="n">cores</span><span class="o">=</span><span class="n">threads</span><span class="p">)</span>
+
+            <span class="n">scrpt</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">filedir</span><span class="p">,</span> <span class="s1">&#39;{}.cluster&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
+            <span class="n">sub_script</span> <span class="o">=</span> <span class="n">run</span><span class="o">.</span><span class="n">CMND_RUNNER_TRACK</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="n">precmd</span><span class="o">=</span><span class="n">precmd</span><span class="p">,</span> <span class="n">usedir</span><span class="o">=</span><span class="n">usedir</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">command</span><span class="o">=</span><span class="n">command</span><span class="p">)</span>
+
+        <span class="c1"># Create the Script objects</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">submission</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="n">script</span><span class="o">=</span><span class="n">sub_script</span><span class="p">,</span>
+                                 <span class="n">file_name</span><span class="o">=</span><span class="n">scrpt</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;exe_scrpt&#39;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">exec_script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="n">script</span><span class="o">=</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">exe_script</span><span class="p">),</span>
+                                      <span class="n">file_name</span><span class="o">=</span><span class="n">exe_scrpt</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span> <span class="o">=</span> <span class="n">kwargs</span>
+
+    <span class="c1">####################</span>
+    <span class="c1">#  Public Methods  #</span>
+    <span class="c1">####################</span>
+
+<div class="viewcode-block" id="Job.write"><a class="viewcode-back" href="../../api.html#cluster.Job.write">[docs]</a>    <span class="k">def</span> <span class="nf">write</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Write all scripts.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">submission</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">overwrite</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">exec_script</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">exec_script</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">overwrite</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">overwrite</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">written</span> <span class="o">=</span> <span class="bp">True</span></div>
+
+<div class="viewcode-block" id="Job.clean"><a class="viewcode-back" href="../../api.html#cluster.Job.clean">[docs]</a>    <span class="k">def</span> <span class="nf">clean</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">delete_outputs</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Delete all scripts created by this module, if they were written.</span>
+
+<span class="sd">        If delete_outputs is True, also delete the stdout and stderr files,</span>
+<span class="sd">        but get their contents first.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">jobfile</span> <span class="ow">in</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">submission</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">exec_script</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="n">jobfile</span><span class="p">:</span>
+                <span class="n">jobfile</span><span class="o">.</span><span class="n">clean</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">delete_outputs</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">get_stdout</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">get_stderr</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">outfile</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">errfile</span><span class="p">]:</span>
+                <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">f</span><span class="p">):</span>
+                    <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">f</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Job.submit"><a class="viewcode-back" href="../../api.html#cluster.Job.submit">[docs]</a>    <span class="k">def</span> <span class="nf">submit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">max_queue_len</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Submit this job.</span>
+
+<span class="sd">        :max_queue_len: if specified (or in defaults), then this method will</span>
+<span class="sd">                        block until the queue is open enough to allow</span>
+<span class="sd">                        submission.</span>
+
+<span class="sd">        To disable max_queue_len, set it to 0. None will allow override by</span>
+<span class="sd">        the default settings in the config file, and any positive integer will</span>
+<span class="sd">        be interpretted to be the maximum queue length.</span>
+
+<span class="sd">        :returns: self</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">submitted</span><span class="p">:</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;Already submitted.&#39;</span><span class="p">)</span>
+            <span class="k">return</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">max_queue_len</span><span class="p">,</span> <span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="bp">None</span><span class="p">),</span> <span class="nb">int</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s1">&#39;max_queue_len must be int or None, is {}&#39;</span>
+                            <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">max_queue_len</span><span class="p">)))</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">written</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">write</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">max_queue_len</span> <span class="ow">is</span> <span class="ow">not</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="o">.</span><span class="n">wait_to_submit</span><span class="p">(</span><span class="n">max_queue_len</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">qtype</span> <span class="o">==</span> <span class="s1">&#39;local&#39;</span><span class="p">:</span>
+            <span class="c1"># Normal mode dependency tracking uses only integer job numbers</span>
+            <span class="n">dependencies</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dependencies</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">depend</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">dependencies</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">depend</span><span class="p">,</span> <span class="n">Job</span><span class="p">):</span>
+                        <span class="n">dependencies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">depend</span><span class="o">.</span><span class="n">id</span><span class="p">))</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">dependencies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">depend</span><span class="p">))</span>
+
+            <span class="n">command</span> <span class="o">=</span> <span class="s1">&#39;bash {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">submission</span><span class="o">.</span><span class="n">file_name</span><span class="p">)</span>
+            <span class="n">fileargs</span>  <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">stdout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">outfile</span><span class="p">,</span>
+                             <span class="n">stderr</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">errfile</span><span class="p">)</span>
+
+            <span class="c1"># Make sure the global job pool exists</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">jobqueue</span><span class="o">.</span><span class="n">JQUEUE</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">jobqueue</span><span class="o">.</span><span class="n">JQUEUE</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">is_alive</span><span class="p">():</span>
+                <span class="n">jobqueue</span><span class="o">.</span><span class="n">JQUEUE</span> <span class="o">=</span> <span class="n">jobqueue</span><span class="o">.</span><span class="n">JobQueue</span><span class="p">(</span><span class="n">cores</span><span class="o">=</span><span class="n">jobqueue</span><span class="o">.</span><span class="n">THREADS</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">jobqueue</span><span class="o">.</span><span class="n">JQUEUE</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">run</span><span class="o">.</span><span class="n">cmd</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="n">command</span><span class="p">,),</span>
+                                          <span class="n">kwargs</span><span class="o">=</span><span class="n">fileargs</span><span class="p">,</span>
+                                          <span class="n">dependencies</span><span class="o">=</span><span class="n">dependencies</span><span class="p">,</span>
+                                          <span class="n">cores</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cores</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">submitted</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="k">return</span> <span class="bp">self</span>
+
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">qtype</span> <span class="o">==</span> <span class="s1">&#39;slurm&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dependencies</span><span class="p">:</span>
+                <span class="n">dependencies</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">depend</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">dependencies</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">depend</span><span class="p">,</span> <span class="n">Job</span><span class="p">):</span>
+                        <span class="n">dependencies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">depend</span><span class="o">.</span><span class="n">id</span><span class="p">))</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">dependencies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">depend</span><span class="p">))</span>
+                    <span class="n">depends</span> <span class="o">=</span> <span class="s1">&#39;--dependency=afterok:{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                        <span class="s1">&#39;:&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dependencies</span><span class="p">))</span>
+                    <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;sbatch&#39;</span><span class="p">,</span> <span class="n">depends</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">submission</span><span class="o">.</span><span class="n">file_name</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;sbatch&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">submission</span><span class="o">.</span><span class="n">file_name</span><span class="p">]</span>
+
+            <span class="c1"># Try to submit job 5 times</span>
+            <span class="n">code</span><span class="p">,</span> <span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span> <span class="o">=</span> <span class="n">run</span><span class="o">.</span><span class="n">cmd</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">tries</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">code</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">stdout</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">logme</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;sbatch failed with code {}</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">code</span><span class="p">),</span>
+                          <span class="s1">&#39;stdout: {}</span><span class="se">\n</span><span class="s1">stderr: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span><span class="p">),</span>
+                          <span class="s1">&#39;critical&#39;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">CalledProcessError</span><span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">submitted</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="k">return</span> <span class="bp">self</span>
+
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">qtype</span> <span class="o">==</span> <span class="s1">&#39;torque&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dependencies</span><span class="p">:</span>
+                <span class="n">dependencies</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">depend</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">dependencies</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">depend</span><span class="p">,</span> <span class="n">Job</span><span class="p">):</span>
+                        <span class="n">dependencies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">depend</span><span class="o">.</span><span class="n">id</span><span class="p">))</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">dependencies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">depend</span><span class="p">))</span>
+                <span class="n">depends</span> <span class="o">=</span> <span class="s1">&#39;-W depend={}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                    <span class="s1">&#39;,&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s1">&#39;afterok:&#39;</span> <span class="o">+</span> <span class="n">d</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">dependencies</span><span class="p">]))</span>
+                <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;qsub&#39;</span><span class="p">,</span> <span class="n">depends</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">submission</span><span class="o">.</span><span class="n">file_name</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;qsub&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">submission</span><span class="o">.</span><span class="n">file_name</span><span class="p">]</span>
+
+            <span class="c1"># Try to submit job 5 times</span>
+            <span class="n">code</span><span class="p">,</span> <span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span> <span class="o">=</span> <span class="n">run</span><span class="o">.</span><span class="n">cmd</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">tries</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">code</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">stdout</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">stderr</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;qsub: submit error (&#39;</span><span class="p">):</span>
+                    <span class="k">raise</span> <span class="n">ClusterError</span><span class="p">(</span><span class="s1">&#39;qsub submission failed with error: &#39;</span> <span class="o">+</span>
+                                       <span class="s1">&#39;{}, command: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="n">args</span><span class="p">))</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">logme</span><span class="o">.</span><span class="n">log</span><span class="p">((</span><span class="s1">&#39;qsub failed with code {}</span><span class="se">\n</span><span class="s1">&#39;</span>
+                               <span class="s1">&#39;stdout: {}</span><span class="se">\n</span><span class="s1">stderr: {}&#39;</span><span class="p">)</span>
+                              <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span><span class="p">),</span>
+                              <span class="s1">&#39;critical&#39;</span><span class="p">)</span>
+                    <span class="k">raise</span> <span class="n">CalledProcessError</span><span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span><span class="p">)</span>
+                    <span class="n">logme</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;qsub failed with err {}. Resubmitting.&#39;</span>
+                              <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">stderr</span><span class="p">),</span> <span class="s1">&#39;debug&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">submitted</span> <span class="o">=</span> <span class="bp">True</span>
+
+            <span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>  <span class="c1"># Give submission a chance</span>
+            <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="Job.update"><a class="viewcode-back" href="../../api.html#cluster.Job.update">[docs]</a>    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Update status from the queue.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">object</span><span class="o">.</span><span class="n">__getattribute__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;done&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">submitted</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">:</span>
+            <span class="n">queue_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">queue_info</span><span class="p">:</span>
+                <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">queue_info</span><span class="o">.</span><span class="n">id</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">queue_info</span> <span class="o">=</span> <span class="n">queue_info</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue_info</span><span class="o">.</span><span class="n">state</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;complete&#39;</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">done</span> <span class="o">=</span> <span class="bp">True</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">get_stdout</span><span class="p">(</span><span class="bp">False</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">get_stderr</span><span class="p">(</span><span class="bp">False</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">get_exitcode</span><span class="p">(</span><span class="bp">False</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="Job.wait"><a class="viewcode-back" href="../../api.html#cluster.Job.wait">[docs]</a>    <span class="k">def</span> <span class="nf">wait</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Block until job completes.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">done</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">done</span> <span class="o">=</span> <span class="bp">True</span></div>
+
+<div class="viewcode-block" id="Job.get"><a class="viewcode-back" href="../../api.html#cluster.Job.get">[docs]</a>    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Block until job completed and return exit_code, stdout, stderr.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">submitted</span><span class="p">:</span>
+            <span class="n">logme</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;Cannot wait for result as job has not been submitted&#39;</span><span class="p">,</span>
+                      <span class="s1">&#39;warn&#39;</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="n">sleep</span><span class="p">(</span><span class="mf">0.1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">exitcode</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">stdout</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">stderr</span></div>
+
+<div class="viewcode-block" id="Job.get_stdout"><a class="viewcode-back" href="../../api.html#cluster.Job.get_stdout">[docs]</a>    <span class="k">def</span> <span class="nf">get_stdout</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">update</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Read stdout file if exists and set self.stdout, return it.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">update</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">object</span><span class="o">.</span><span class="n">__getattribute__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;done&#39;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+        <span class="k">if</span> <span class="nb">object</span><span class="o">.</span><span class="n">__getattribute__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;done&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;_stdout&#39;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stdout</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;outfile&#39;</span><span class="p">]):</span>
+            <span class="n">stdout</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;outfile&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">stdout</span><span class="p">:</span>
+                <span class="n">stdout</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">stdout</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)[</span><span class="mi">2</span><span class="p">:</span><span class="o">-</span><span class="mi">3</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+            <span class="k">if</span> <span class="nb">object</span><span class="o">.</span><span class="n">__getattribute__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;done&#39;</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_stdout</span> <span class="o">=</span> <span class="n">stdout</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">stdout</span>  <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stdout</span>
+            <span class="k">return</span> <span class="n">stdout</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logme</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;No file at {}, cannot get stdout&#39;</span>
+                      <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;outfile&#39;</span><span class="p">]),</span> <span class="s1">&#39;debug&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Job.get_stderr"><a class="viewcode-back" href="../../api.html#cluster.Job.get_stderr">[docs]</a>    <span class="k">def</span> <span class="nf">get_stderr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">update</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Read stdout file if exists and set self.stdout, return it.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">update</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">object</span><span class="o">.</span><span class="n">__getattribute__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;done&#39;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+        <span class="k">if</span> <span class="nb">object</span><span class="o">.</span><span class="n">__getattribute__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;done&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;_stderr&#39;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stderr</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;errfile&#39;</span><span class="p">]):</span>
+            <span class="n">stderr</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;errfile&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+            <span class="k">if</span> <span class="nb">object</span><span class="o">.</span><span class="n">__getattribute__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;done&#39;</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_stderr</span> <span class="o">=</span> <span class="n">stderr</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">stderr</span>  <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stderr</span>
+            <span class="k">return</span> <span class="n">stderr</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logme</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;No file at {}, cannot get stderr&#39;</span>
+                      <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;errfile&#39;</span><span class="p">]),</span> <span class="s1">&#39;debug&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Job.get_exitcode"><a class="viewcode-back" href="../../api.html#cluster.Job.get_exitcode">[docs]</a>    <span class="k">def</span> <span class="nf">get_exitcode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">update</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Try to get the exitcode.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">update</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">object</span><span class="o">.</span><span class="n">__getattribute__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;done&#39;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">object</span><span class="o">.</span><span class="n">__getattribute__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;done&#39;</span><span class="p">):</span>
+            <span class="n">logme</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;Job is not complete, no exit code yet&#39;</span><span class="p">,</span> <span class="s1">&#39;info&#39;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">done</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;_exitcode&#39;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exitcode</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue_info</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">queue_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">queue_info</span><span class="p">,</span> <span class="s1">&#39;exitcode&#39;</span><span class="p">):</span>
+            <span class="n">code</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue_info</span><span class="o">.</span><span class="n">exitcode</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">code</span> <span class="o">=</span> <span class="bp">None</span>
+            <span class="n">logme</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;No exitcode even though the job is done, this &#39;</span> <span class="o">+</span>
+                      <span class="s2">&quot;shouldn&#39;t happen.&quot;</span><span class="p">,</span> <span class="s1">&#39;warn&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_exitcode</span> <span class="o">=</span> <span class="n">code</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">exitcode</span>  <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exitcode</span>
+        <span class="k">return</span> <span class="n">code</span></div>
+
+<div class="viewcode-block" id="Job.update_queue_info"><a class="viewcode-back" href="../../api.html#cluster.Job.update_queue_info">[docs]</a>    <span class="k">def</span> <span class="nf">update_queue_info</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Set queue_info from the queue even if done.&quot;&quot;&quot;</span>
+        <span class="n">queue_info1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+        <span class="n">queue_info2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">queue_info2</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">queue_info</span> <span class="o">=</span> <span class="n">queue_info2</span>
+        <span class="k">elif</span> <span class="n">queue_info1</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">queue_info</span> <span class="o">=</span> <span class="n">queue_info1</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue_info</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">submitted</span><span class="p">:</span>
+            <span class="n">logme</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;Cannot find self in the queue and queue_info is empty&#39;</span><span class="p">,</span>
+                      <span class="s1">&#39;warn&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue_info</span></div>
+
+    <span class="c1">###############</span>
+    <span class="c1">#  Internals  #</span>
+    <span class="c1">###############</span>
+
+    <span class="k">def</span> <span class="nf">__getattribute__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Make some attributes fully dynamic.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">key</span> <span class="o">==</span> <span class="s1">&#39;done&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">object</span><span class="o">.</span><span class="n">__getattribute__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;done&#39;</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="n">key</span> <span class="o">==</span> <span class="s1">&#39;files&#39;</span><span class="p">:</span>
+            <span class="n">files</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">submission</span><span class="p">]</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">exec_script</span><span class="p">:</span>
+                <span class="n">files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">exec_script</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="p">:</span>
+                <span class="n">files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">files</span>
+        <span class="k">elif</span> <span class="n">key</span> <span class="o">==</span> <span class="s1">&#39;stdout&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_stdout</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="n">key</span> <span class="o">==</span> <span class="s1">&#39;stderr&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_stderr</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="n">key</span> <span class="o">==</span> <span class="s1">&#39;exitcode&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_exitcode</span><span class="p">()</span>
+        <span class="k">return</span> <span class="nb">object</span><span class="o">.</span><span class="n">__getattribute__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return simple job information.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+        <span class="n">outstr</span> <span class="o">=</span> <span class="s2">&quot;Job:{name}&lt;{mode}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">qtype</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">submitted</span><span class="p">:</span>
+            <span class="n">outstr</span> <span class="o">+=</span> <span class="s1">&#39;:{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+        <span class="n">outstr</span> <span class="o">+=</span> <span class="s2">&quot;(command:{cmnd};args:{args})&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="n">cmnd</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">command</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">done</span><span class="p">:</span>
+            <span class="n">outstr</span> <span class="o">+=</span> <span class="s2">&quot;COMPLETED&quot;</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">written</span><span class="p">:</span>
+            <span class="n">outstr</span> <span class="o">+=</span> <span class="s2">&quot;WRITTEN&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">outstr</span> <span class="o">+=</span> <span class="s2">&quot;NOT_SUBMITTED&quot;</span>
+        <span class="n">outstr</span> <span class="o">+=</span> <span class="s2">&quot;&gt;&quot;</span>
+        <span class="k">return</span> <span class="n">outstr</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Print job name and ID + status.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">done</span><span class="p">:</span>
+            <span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;complete&#39;</span>
+            <span class="n">id1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">written</span><span class="p">:</span>
+            <span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;written&#39;</span>
+            <span class="n">id1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;not written&#39;</span>
+            <span class="n">id1</span> <span class="o">=</span> <span class="s1">&#39;NA&#39;</span>
+        <span class="k">return</span> <span class="s2">&quot;{name} ID: {id}, state: {state}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="nb">id</span><span class="o">=</span><span class="n">id1</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="n">state</span><span class="p">)</span></div>
+
+
+<span class="k">class</span> <span class="nc">Script</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="sd">&quot;&quot;&quot;A script string plus a file name.&quot;&quot;&quot;</span>
+
+    <span class="n">written</span> <span class="o">=</span> <span class="bp">False</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">file_name</span><span class="p">,</span> <span class="n">script</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initialize the script and file name.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">script</span>    <span class="o">=</span> <span class="n">script</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">file_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">file_name</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">write</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Write the script file.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">overwrite</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">file_name</span><span class="p">):</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">file_name</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fout</span><span class="p">:</span>
+                <span class="n">fout</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">script</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">written</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">file_name</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">clean</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Delete any files made by us.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">written</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">exists</span><span class="p">:</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">file_name</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Make sure boolean is up to date.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">attr</span> <span class="o">==</span> <span class="s1">&#39;exists&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">file_name</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Display simple info.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="s2">&quot;Script&lt;{}(exists: {}; written: {})&gt;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">file_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">exists</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">written</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Print the script.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;::</span><span class="se">\n\n</span><span class="s1">&#39;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">script</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+
+
+<span class="k">class</span> <span class="nc">Function</span><span class="p">(</span><span class="n">Script</span><span class="p">):</span>
+
+    <span class="sd">&quot;&quot;&quot;A special Script used to run a function.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">file_name</span><span class="p">,</span> <span class="n">function</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">imports</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">pickle_file</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">outfile</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Create a function wrapper.</span>
+
+<span class="sd">        NOTE: Function submission will fail if the parent file&#39;s code is not</span>
+<span class="sd">        wrapped in an if __main__ wrapper.</span>
+
+<span class="sd">        :function:    Function handle.</span>
+<span class="sd">        :args:        Arguments to the function as a tuple.</span>
+<span class="sd">        :imports:     A list of imports, if not provided, defaults to all current</span>
+<span class="sd">                      imports, which may not work if you use complex imports.</span>
+<span class="sd">                      The list can include the import call, or just be a name, e.g</span>
+<span class="sd">                      [&#39;from os import path&#39;, &#39;sys&#39;]</span>
+<span class="sd">        :pickle_file: The file to hold the function.</span>
+<span class="sd">        :outfile:     The file to hold the output.</span>
+<span class="sd">        :path:        The path to the calling script, used for importing self.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">function</span> <span class="o">=</span> <span class="n">function</span>
+        <span class="n">rootmod</span>       <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">getmodule</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parent</span>   <span class="o">=</span> <span class="n">rootmod</span><span class="o">.</span><span class="n">__name__</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">args</span>     <span class="o">=</span> <span class="n">args</span>
+
+        <span class="c1"># Get the module path</span>
+        <span class="n">rootname</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parent</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">rootmod</span><span class="p">,</span> <span class="s1">&#39;__file__&#39;</span><span class="p">):</span>
+            <span class="n">imppath</span><span class="p">,</span> <span class="n">impt</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">rootmod</span><span class="o">.</span><span class="n">__file__</span><span class="p">)</span>
+            <span class="n">impt</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">impt</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">imppath</span> <span class="o">=</span> <span class="s1">&#39;.&#39;</span>
+            <span class="n">impt</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="k">if</span> <span class="n">impt</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="o">.</span><span class="n">__module__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="o">.</span><span class="n">__module__</span> <span class="o">=</span> <span class="n">impt</span>
+
+        <span class="c1"># Try to set a sane import string to make the function work</span>
+        <span class="k">if</span> <span class="n">impt</span><span class="p">:</span>
+            <span class="c1">#  modstr  = &#39;try:\n    import {}\n&#39;.format(impt)</span>
+            <span class="c1">#  modstr += &#39;except ImportError:\n    pass\n&#39;</span>
+            <span class="n">modstr</span>  <span class="o">=</span> <span class="s1">&#39;try:</span><span class="se">\n</span><span class="s1">    from {} import {}</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="n">impt</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+            <span class="n">modstr</span> <span class="o">+=</span> <span class="s1">&#39;except ImportError:</span><span class="se">\n</span><span class="s1">    pass</span><span class="se">\n</span><span class="s1">&#39;</span>
+        <span class="k">elif</span> <span class="n">rootname</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="o">.</span><span class="n">__name__</span> <span class="ow">and</span> <span class="n">rootname</span> <span class="o">!=</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
+            <span class="n">modstr</span>  <span class="o">=</span> <span class="s1">&#39;try:</span><span class="se">\n</span><span class="s1">    from {} import {}</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="n">rootname</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+            <span class="n">modstr</span> <span class="o">+=</span> <span class="s1">&#39;except ImportError:</span><span class="se">\n</span><span class="s1">    pass</span><span class="se">\n</span><span class="s1">&#39;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">modstr</span>  <span class="o">=</span> <span class="s1">&#39;try:</span><span class="se">\n</span><span class="s1">    import {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+            <span class="n">modstr</span> <span class="o">+=</span> <span class="s1">&#39;except ImportError:</span><span class="se">\n</span><span class="s1">    pass</span><span class="se">\n</span><span class="s1">&#39;</span>
+
+        <span class="c1"># Take care of imports, either use manual or all current imports</span>
+        <span class="k">if</span> <span class="n">imports</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">imports</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
+                <span class="n">imports</span> <span class="o">=</span> <span class="p">[</span><span class="n">imports</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">imports</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">module</span> <span class="ow">in</span> <span class="nb">globals</span><span class="p">()</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">ModuleType</span><span class="p">):</span>
+                    <span class="n">imports</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+            <span class="n">imports</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">imports</span><span class="p">))</span>
+
+        <span class="c1"># Write a list of modules to ~/.python_module_list.txt</span>
+        <span class="c1"># This will work on standard linux systems only, and will silently fail</span>
+        <span class="c1"># on other systems.</span>
+        <span class="n">ver</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="o">.</span><span class="n">major</span>
+        <span class="n">modules</span> <span class="o">=</span> <span class="n">run</span><span class="o">.</span><span class="n">cmd</span><span class="p">(</span><span class="s2">&quot;pip{} freeze --local | &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ver</span><span class="p">)</span> <span class="o">+</span>
+                          <span class="s2">&quot;grep -v &#39;^\-e&#39; | cut -d = -f 1 &gt; &quot;</span> <span class="o">+</span>
+                          <span class="s2">&quot;~/python_module_list&quot;</span><span class="p">)</span>
+        <span class="c1"># Create a sane set of imports</span>
+        <span class="n">filtered_imports</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">imp</span> <span class="ow">in</span> <span class="n">imports</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">imp</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;import&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">imp</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;from&#39;</span><span class="p">):</span>
+                <span class="n">filtered_imports</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;try:</span><span class="se">\n</span><span class="s1">    &#39;</span> <span class="o">+</span> <span class="n">imp</span><span class="o">.</span><span class="n">rstrip</span><span class="p">()</span> <span class="o">+</span>
+                                        <span class="s1">&#39;except ImportError:</span><span class="se">\n</span><span class="s1">    pass&#39;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="s1">&#39;.&#39;</span> <span class="ow">in</span> <span class="n">imp</span><span class="p">:</span>
+                    <span class="n">rootimp</span> <span class="o">=</span> <span class="n">imp</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">rootimp</span> <span class="o">==</span> <span class="s1">&#39;pickle&#39;</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">rootimp</span> <span class="o">==</span> <span class="s1">&#39;sys&#39;</span> \
+                            <span class="ow">and</span> <span class="ow">not</span> <span class="n">rootimp</span> <span class="o">==</span> <span class="s1">&#39;dill&#39;</span><span class="p">:</span>
+                        <span class="n">filtered_imports</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;try:</span><span class="se">\n</span><span class="s1">    import {}</span><span class="se">\n</span><span class="s1">&#39;</span>
+                                                <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">rootimp</span><span class="p">)</span> <span class="o">+</span>
+                                                <span class="s1">&#39;except ImportError:</span><span class="se">\n</span><span class="s1">    &#39;</span> <span class="o">+</span>
+                                                <span class="s1">&#39;pass</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="n">imp</span> <span class="o">==</span> <span class="s1">&#39;pickle&#39;</span> <span class="ow">or</span> <span class="n">imp</span> <span class="o">==</span> <span class="s1">&#39;sys&#39;</span> <span class="ow">or</span> <span class="n">imp</span> <span class="o">==</span> <span class="s1">&#39;dill&#39;</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">filtered_imports</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39;try:</span><span class="se">\n</span><span class="s1">    import {}</span><span class="se">\n</span><span class="s1">&#39;</span>
+                                         <span class="s1">&#39;except ImportError:</span><span class="se">\n</span><span class="s1">    pass</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+                                        <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">imp</span><span class="p">))</span>
+        <span class="c1"># Get rid of duplicates and sort imports</span>
+        <span class="n">impts</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">filtered_imports</span><span class="p">)))</span>
+
+        <span class="c1"># Set file names</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pickle_file</span> <span class="o">=</span> <span class="n">pickle_file</span> <span class="k">if</span> <span class="n">pickle_file</span> <span class="k">else</span> <span class="n">file_name</span> <span class="o">+</span> <span class="s1">&#39;.pickle.in&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">outfile</span>     <span class="o">=</span> <span class="n">outfile</span> <span class="k">if</span> <span class="n">outfile</span> <span class="k">else</span> <span class="n">file_name</span> <span class="o">+</span> <span class="s1">&#39;.pickle.out&#39;</span>
+
+        <span class="c1"># Create script text</span>
+        <span class="n">script</span> <span class="o">=</span> <span class="s1">&#39;#!/usr/bin/env python{}</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ver</span><span class="p">)</span>
+        <span class="n">script</span> <span class="o">+=</span> <span class="n">run</span><span class="o">.</span><span class="n">FUNC_RUNNER</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="n">imppath</span><span class="p">,</span>
+                                         <span class="n">modimpstr</span><span class="o">=</span><span class="n">modstr</span><span class="p">,</span>
+                                         <span class="n">imports</span><span class="o">=</span><span class="n">impts</span><span class="p">,</span>
+                                         <span class="n">pickle_file</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pickle_file</span><span class="p">,</span>
+                                         <span class="n">out_file</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">outfile</span><span class="p">)</span>
+
+        <span class="nb">super</span><span class="p">(</span><span class="n">Function</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">file_name</span><span class="p">,</span> <span class="n">script</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">write</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Write the pickle file and call the parent Script write function.&quot;&quot;&quot;</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pickle_file</span><span class="p">,</span> <span class="s1">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fout</span><span class="p">:</span>
+            <span class="n">pickle</span><span class="o">.</span><span class="n">dump</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">),</span> <span class="n">fout</span><span class="p">)</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Function</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">overwrite</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">clean</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Delete any files made by us.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">written</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pickle_file</span><span class="p">):</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pickle_file</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">outfile</span><span class="p">):</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">outfile</span><span class="p">)</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Function</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">clean</span><span class="p">()</span>
+
+
+<span class="c1">###############################################################################</span>
+<span class="c1">#                            Submission Functions                             #</span>
+<span class="c1">###############################################################################</span>
+
+
+<div class="viewcode-block" id="submit"><a class="viewcode-back" href="../../api.html#cluster.submit">[docs]</a><span class="k">def</span> <span class="nf">submit</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">qtype</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+           <span class="n">profile</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Submit a script to the cluster.</span>
+
+<span class="sd">    :command:   The command or function to execute.</span>
+<span class="sd">    :args:      Optional arguments to add to command, particularly</span>
+<span class="sd">                useful for functions.</span>
+<span class="sd">    :name:      The name of the job.</span>
+<span class="sd">    :path:      Where to create the script, if None, current dir used.</span>
+<span class="sd">    :qtype:     &#39;torque&#39;, &#39;slurm&#39;, or &#39;normal&#39;</span>
+<span class="sd">    :profile:   The name of a profile saved in the config_file</span>
+<span class="sd">    :kwargs:    Keyword arguments to control job options</span>
+
+<span class="sd">    There are many keyword arguments available for cluster job submission.</span>
+<span class="sd">    These vary somewhat by queue type. For info run:</span>
+<span class="sd">        cluster.options.option_help()</span>
+
+<span class="sd">    :returns: Job object</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">queue</span><span class="o">.</span><span class="n">check_queue</span><span class="p">()</span>  <span class="c1"># Make sure the queue.MODE is usable</span>
+
+    <span class="n">job</span> <span class="o">=</span> <span class="n">Job</span><span class="p">(</span><span class="n">command</span><span class="o">=</span><span class="n">command</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">args</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">,</span> <span class="n">qtype</span><span class="o">=</span><span class="n">qtype</span><span class="p">,</span>
+              <span class="n">profile</span><span class="o">=</span><span class="n">profile</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="n">job</span><span class="o">.</span><span class="n">write</span><span class="p">()</span>
+    <span class="n">job</span><span class="o">.</span><span class="n">submit</span><span class="p">()</span>
+    <span class="n">job</span><span class="o">.</span><span class="n">_update</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="n">job</span></div>
+
+
+<span class="c1">#########################</span>
+<span class="c1">#  Job file generation  #</span>
+<span class="c1">#########################</span>
+
+
+<div class="viewcode-block" id="make_job"><a class="viewcode-back" href="../../api.html#cluster.make_job">[docs]</a><span class="k">def</span> <span class="nf">make_job</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">qtype</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+             <span class="n">profile</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Make a job file compatible with the chosen cluster.</span>
+
+<span class="sd">    If mode is local, this is just a simple shell script.</span>
+
+<span class="sd">    :command:   The command or function to execute.</span>
+<span class="sd">    :args:      Optional arguments to add to command, particularly</span>
+<span class="sd">                useful for functions.</span>
+<span class="sd">    :name:      The name of the job.</span>
+<span class="sd">    :path:      Where to create the script, if None, current dir used.</span>
+<span class="sd">    :qtype:     &#39;torque&#39;, &#39;slurm&#39;, or &#39;normal&#39;</span>
+<span class="sd">    :profile:   The name of a profile saved in the config_file</span>
+
+<span class="sd">    There are many keyword arguments available for cluster job submission.</span>
+<span class="sd">    These vary somewhat by queue type. For info run:</span>
+<span class="sd">        cluster.options.option_help()</span>
+
+<span class="sd">    :returns: A Job object</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">queue</span><span class="o">.</span><span class="n">check_queue</span><span class="p">()</span>  <span class="c1"># Make sure the queue.MODE is usable</span>
+
+    <span class="n">job</span> <span class="o">=</span> <span class="n">Job</span><span class="p">(</span><span class="n">command</span><span class="o">=</span><span class="n">command</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">args</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">,</span> <span class="n">qtype</span><span class="o">=</span><span class="n">qtype</span><span class="p">,</span>
+              <span class="n">profile</span><span class="o">=</span><span class="n">profile</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="c1"># Return the path to the script</span>
+    <span class="k">return</span> <span class="n">job</span></div>
+
+
+<div class="viewcode-block" id="make_job_file"><a class="viewcode-back" href="../../api.html#cluster.make_job_file">[docs]</a><span class="k">def</span> <span class="nf">make_job_file</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">qtype</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                  <span class="n">profile</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Make a job file compatible with the chosen cluster.</span>
+
+<span class="sd">    If mode is local, this is just a simple shell script.</span>
+
+<span class="sd">    :command:   The command or function to execute.</span>
+<span class="sd">    :args:      Optional arguments to add to command, particularly</span>
+<span class="sd">                useful for functions.</span>
+<span class="sd">    :name:      The name of the job.</span>
+<span class="sd">    :path:      Where to create the script, if None, current dir used.</span>
+<span class="sd">    :qtype:     &#39;torque&#39;, &#39;slurm&#39;, or &#39;normal&#39;</span>
+<span class="sd">    :profile:   The name of a profile saved in the config_file</span>
+<span class="sd">    :kwargs:    Keyword arguments to control job options</span>
+
+<span class="sd">    There are many keyword arguments available for cluster job submission.</span>
+<span class="sd">    These vary somewhat by queue type. For info run:</span>
+<span class="sd">        cluster.options.option_help()</span>
+
+<span class="sd">    :returns:   Path to job script</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">queue</span><span class="o">.</span><span class="n">check_queue</span><span class="p">()</span>  <span class="c1"># Make sure the queue.MODE is usable</span>
+
+    <span class="n">job</span> <span class="o">=</span> <span class="n">Job</span><span class="p">(</span><span class="n">command</span><span class="o">=</span><span class="n">command</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">args</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">,</span> <span class="n">qtype</span><span class="o">=</span><span class="n">qtype</span><span class="p">,</span>
+              <span class="n">profile</span><span class="o">=</span><span class="n">profile</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="n">job</span> <span class="o">=</span> <span class="n">job</span><span class="o">.</span><span class="n">write</span><span class="p">()</span>
+
+    <span class="c1"># Return the path to the script</span>
+    <span class="k">return</span> <span class="n">job</span><span class="o">.</span><span class="n">submission</span></div>
+
+
+<span class="c1">##############</span>
+<span class="c1">#  Cleaning  #</span>
+<span class="c1">##############</span>
+
+
+<div class="viewcode-block" id="clean"><a class="viewcode-back" href="../../api.html#cluster.clean">[docs]</a><span class="k">def</span> <span class="nf">clean</span><span class="p">(</span><span class="n">jobs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Delete all files in jobs list or single Job object.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">jobs</span><span class="p">,</span> <span class="n">Job</span><span class="p">):</span>
+        <span class="n">jobs</span> <span class="o">=</span> <span class="p">[</span><span class="n">jobs</span><span class="p">]</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">jobs</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
+        <span class="k">raise</span> <span class="n">ClusterError</span><span class="p">(</span><span class="s1">&#39;Job list must be a Job, list, or tuple&#39;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">job</span> <span class="ow">in</span> <span class="n">jobs</span><span class="p">:</span>
+        <span class="n">job</span><span class="o">.</span><span class="n">clean</span><span class="p">()</span></div>
+
+
+<span class="c1">###############################################################################</span>
+<span class="c1">#                      Job Object Independent Functions                       #</span>
+<span class="c1">###############################################################################</span>
+
+
+<div class="viewcode-block" id="submit_file"><a class="viewcode-back" href="../../api.html#cluster.submit_file">[docs]</a><span class="k">def</span> <span class="nf">submit_file</span><span class="p">(</span><span class="n">script_file</span><span class="p">,</span> <span class="n">dependencies</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">threads</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">qtype</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Submit a job file to the cluster.</span>
+
+<span class="sd">    If qtype or queue.MODE is torque, qsub is used; if it is slurm, sbatch</span>
+<span class="sd">    is used; if it is local, the file is executed with subprocess.</span>
+
+<span class="sd">    This function is independent of the Job object and just submits a file.</span>
+
+<span class="sd">    :dependencies: A job number or list of job numbers.</span>
+<span class="sd">                   In slurm: `--dependency=afterok:` is used</span>
+<span class="sd">                   For torque: `-W depend=afterok:` is used</span>
+
+<span class="sd">    :threads:      Total number of threads to use at a time, defaults to all.</span>
+<span class="sd">                   ONLY USED IN LOCAL MODE</span>
+
+<span class="sd">    :returns:      job number for torque or slurm</span>
+<span class="sd">                   multiprocessing job object for local mode</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">queue</span><span class="o">.</span><span class="n">check_queue</span><span class="p">()</span>  <span class="c1"># Make sure the queue.MODE is usable</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">qtype</span><span class="p">:</span>
+        <span class="n">qtype</span> <span class="o">=</span> <span class="n">queue</span><span class="o">.</span><span class="n">get_cluster_environment</span><span class="p">()</span>
+
+    <span class="c1"># Check dependencies</span>
+    <span class="k">if</span> <span class="n">dependencies</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dependencies</span><span class="p">,</span> <span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">)):</span>
+            <span class="n">dependencies</span> <span class="o">=</span> <span class="p">[</span><span class="n">dependencies</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dependencies</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s1">&#39;dependencies must be a list, int, or string.&#39;</span><span class="p">)</span>
+        <span class="n">dependencies</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">dependencies</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">qtype</span> <span class="o">==</span> <span class="s1">&#39;slurm&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">dependencies</span><span class="p">:</span>
+            <span class="n">dependencies</span> <span class="o">=</span> <span class="s1">&#39;--dependency=afterok:{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="s1">&#39;:&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">dependencies</span><span class="p">]))</span>
+            <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;sbatch&#39;</span><span class="p">,</span> <span class="n">dependencies</span><span class="p">,</span> <span class="n">script_file</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;sbatch&#39;</span><span class="p">,</span> <span class="n">script_file</span><span class="p">]</span>
+        <span class="c1"># Try to submit job 5 times</span>
+        <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+            <span class="n">code</span><span class="p">,</span> <span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span> <span class="o">=</span> <span class="n">run</span><span class="o">.</span><span class="n">cmd</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">code</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">job</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">stdout</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+                <span class="k">break</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">count</span> <span class="o">==</span> <span class="mi">5</span><span class="p">:</span>
+                    <span class="n">logme</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;sbatch failed with code {}</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">code</span><span class="p">),</span>
+                              <span class="s1">&#39;stdout: {}</span><span class="se">\n</span><span class="s1">stderr: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span><span class="p">),</span>
+                              <span class="s1">&#39;critical&#39;</span><span class="p">)</span>
+                    <span class="k">raise</span> <span class="n">CalledProcessError</span><span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span><span class="p">)</span>
+                <span class="n">logme</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;sbatch failed with err {}. Resubmitting.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                    <span class="n">stderr</span><span class="p">),</span> <span class="s1">&#39;debug&#39;</span><span class="p">)</span>
+                <span class="n">count</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="k">break</span>
+        <span class="k">return</span> <span class="n">job</span>
+
+    <span class="k">elif</span> <span class="n">qtype</span> <span class="o">==</span> <span class="s1">&#39;torque&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">dependencies</span><span class="p">:</span>
+            <span class="n">dependencies</span> <span class="o">=</span> <span class="s1">&#39;-W depend={}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="s1">&#39;,&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s1">&#39;afterok:&#39;</span> <span class="o">+</span> <span class="n">d</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">dependencies</span><span class="p">]))</span>
+            <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;qsub&#39;</span><span class="p">,</span> <span class="n">dependencies</span><span class="p">,</span> <span class="n">script_file</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;qsub&#39;</span><span class="p">,</span> <span class="n">script_file</span><span class="p">]</span>
+        <span class="c1"># Try to submit job 5 times</span>
+        <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+            <span class="n">code</span><span class="p">,</span> <span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span> <span class="o">=</span> <span class="n">run</span><span class="o">.</span><span class="n">cmd</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">code</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">job</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">stdout</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+                <span class="k">break</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">count</span> <span class="o">==</span> <span class="mi">5</span><span class="p">:</span>
+                    <span class="n">logme</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;qsub failed with code {}</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">code</span><span class="p">),</span>
+                              <span class="s1">&#39;stdout: {}</span><span class="se">\n</span><span class="s1">stderr: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span><span class="p">),</span>
+                              <span class="s1">&#39;critical&#39;</span><span class="p">)</span>
+                    <span class="k">raise</span> <span class="n">CalledProcessError</span><span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span><span class="p">)</span>
+                <span class="n">logme</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;qsub failed with err {}. Resubmitting.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                    <span class="n">stderr</span><span class="p">),</span> <span class="s1">&#39;debug&#39;</span><span class="p">)</span>
+                <span class="n">count</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="k">break</span>
+        <span class="k">return</span> <span class="n">job</span>
+
+    <span class="k">elif</span> <span class="n">qtype</span> <span class="o">==</span> <span class="s1">&#39;local&#39;</span><span class="p">:</span>
+        <span class="c1"># Normal mode dependency tracking uses only integer job numbers</span>
+        <span class="n">depends</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">dependencies</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">depend</span> <span class="ow">in</span> <span class="n">dependencies</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">depend</span><span class="p">,</span> <span class="n">Job</span><span class="p">):</span>
+                    <span class="n">depends</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">depend</span><span class="o">.</span><span class="n">id</span><span class="p">))</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">depends</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">depend</span><span class="p">))</span>
+        <span class="n">command</span> <span class="o">=</span> <span class="s1">&#39;bash {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">script_file</span><span class="p">)</span>
+        <span class="c1"># Make sure the global job pool exists</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">jobqueue</span><span class="o">.</span><span class="n">JQUEUE</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">jobqueue</span><span class="o">.</span><span class="n">JQUEUE</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">is_alive</span><span class="p">():</span>
+            <span class="n">jobqueue</span><span class="o">.</span><span class="n">JQUEUE</span> <span class="o">=</span> <span class="n">jobqueue</span><span class="o">.</span><span class="n">JobQueue</span><span class="p">(</span><span class="n">cores</span><span class="o">=</span><span class="n">threads</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">jobqueue</span><span class="o">.</span><span class="n">JQUEUE</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">run</span><span class="o">.</span><span class="n">cmd</span><span class="p">,</span> <span class="p">(</span><span class="n">command</span><span class="p">,),</span> <span class="n">dependencies</span><span class="o">=</span><span class="n">depends</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="clean_dir"><a class="viewcode-back" href="../../api.html#cluster.clean_dir">[docs]</a><span class="k">def</span> <span class="nf">clean_dir</span><span class="p">(</span><span class="n">directory</span><span class="o">=</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s1">&#39;cluster&#39;</span><span class="p">,</span> <span class="n">qtype</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">confirm</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Delete all files made by this module in directory.</span>
+
+<span class="sd">    CAUTION: The clean() function will delete **EVERY** file with</span>
+<span class="sd">             extensions matching those these::</span>
+<span class="sd">                 .&lt;suffix&gt;.err</span>
+<span class="sd">                 .&lt;suffix&gt;.out</span>
+<span class="sd">                 .&lt;suffix&gt;.sbatch &amp; .cluster.script for slurm mode</span>
+<span class="sd">                 .&lt;suffix&gt;.qsub for torque mode</span>
+<span class="sd">                 .&lt;suffix&gt; for local mode</span>
+<span class="sd">                 _func.&lt;suffix&gt;.py</span>
+<span class="sd">                 _func.&lt;suffix&gt;.py.pickle.in</span>
+<span class="sd">                 _func.&lt;suffix&gt;.py.pickle.out</span>
+
+<span class="sd">    :directory: The directory to run in, defaults to the current directory.</span>
+<span class="sd">    :qtype:     Only run on files of this qtype</span>
+<span class="sd">    :confirm:   Ask the user before deleting the files</span>
+<span class="sd">    :returns:   A set of deleted files</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">queue</span><span class="o">.</span><span class="n">check_queue</span><span class="p">(</span><span class="n">qtype</span><span class="p">)</span>  <span class="c1"># Make sure the queue.MODE is usable</span>
+
+    <span class="c1"># Sanitize arguments</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">directory</span><span class="p">:</span>
+        <span class="n">directory</span> <span class="o">=</span> <span class="s1">&#39;.&#39;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">suffix</span><span class="p">:</span>
+        <span class="n">suffix</span> <span class="o">=</span> <span class="s1">&#39;cluster&#39;</span>
+
+    <span class="c1"># Extension patterns to delete</span>
+    <span class="n">extensions</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;.&#39;</span> <span class="o">+</span> <span class="n">suffix</span> <span class="o">+</span> <span class="s1">&#39;.err&#39;</span><span class="p">,</span> <span class="s1">&#39;.&#39;</span> <span class="o">+</span> <span class="n">suffix</span> <span class="o">+</span> <span class="s1">&#39;.out&#39;</span><span class="p">,</span>
+                  <span class="s1">&#39;_func.&#39;</span> <span class="o">+</span> <span class="n">suffix</span> <span class="o">+</span> <span class="s1">&#39;.py&#39;</span><span class="p">,</span>
+                  <span class="s1">&#39;_func.&#39;</span> <span class="o">+</span> <span class="n">suffix</span> <span class="o">+</span> <span class="s1">&#39;.py.pickle.in&#39;</span><span class="p">,</span>
+                  <span class="s1">&#39;_func.&#39;</span> <span class="o">+</span> <span class="n">suffix</span> <span class="o">+</span> <span class="s1">&#39;.py.pickle.out&#39;</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">qtype</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">qtype</span> <span class="o">==</span> <span class="s1">&#39;local&#39;</span><span class="p">:</span>
+            <span class="n">extensions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;.&#39;</span> <span class="o">+</span> <span class="n">suffix</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">qtype</span> <span class="o">==</span> <span class="s1">&#39;slurm&#39;</span><span class="p">:</span>
+            <span class="n">extensions</span> <span class="o">+=</span> <span class="p">[</span><span class="s1">&#39;.&#39;</span> <span class="o">+</span> <span class="n">suffix</span> <span class="o">+</span> <span class="s1">&#39;.sbatch&#39;</span><span class="p">,</span> <span class="s1">&#39;.&#39;</span> <span class="o">+</span> <span class="n">suffix</span> <span class="o">+</span> <span class="s1">&#39;.script&#39;</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="n">qtype</span><span class="o">==</span> <span class="s1">&#39;torque&#39;</span><span class="p">:</span>
+            <span class="n">extensions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;.&#39;</span> <span class="o">+</span> <span class="n">suffix</span> <span class="o">+</span> <span class="s1">&#39;.qsub&#39;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">extensions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;.&#39;</span> <span class="o">+</span> <span class="n">suffix</span><span class="p">)</span>
+        <span class="n">extensions</span> <span class="o">+=</span> <span class="p">[</span><span class="s1">&#39;.&#39;</span> <span class="o">+</span> <span class="n">suffix</span> <span class="o">+</span> <span class="s1">&#39;.sbatch&#39;</span><span class="p">,</span> <span class="s1">&#39;.&#39;</span> <span class="o">+</span> <span class="n">suffix</span> <span class="o">+</span> <span class="s1">&#39;.script&#39;</span><span class="p">]</span>
+        <span class="n">extensions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;.&#39;</span> <span class="o">+</span> <span class="n">suffix</span> <span class="o">+</span> <span class="s1">&#39;.qsub&#39;</span><span class="p">)</span>
+
+    <span class="n">files</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">directory</span><span class="p">))</span>
+             <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">i</span><span class="p">)]</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">files</span><span class="p">:</span>
+        <span class="n">logme</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;No files found.&#39;</span><span class="p">,</span> <span class="s1">&#39;debug&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[]</span>
+
+    <span class="n">deleted</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">extension</span> <span class="ow">in</span> <span class="n">extensions</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="n">extension</span><span class="p">):</span>
+                <span class="n">deleted</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+
+    <span class="n">deleted</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">deleted</span><span class="p">)</span>
+    <span class="n">delete</span>  <span class="o">=</span> <span class="bp">False</span>
+
+    <span class="k">if</span> <span class="n">confirm</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">deleted</span><span class="p">:</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;Files to delete::</span><span class="se">\n\t</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n\t</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">deleted</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="s2">&quot;Do you want to delete these files? (y/n) &quot;</span>
+            <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="o">.</span><span class="n">major</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                    <span class="n">answer</span> <span class="o">=</span> <span class="nb">raw_input</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">answer</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">answer</span> <span class="o">==</span> <span class="s1">&#39;y&#39;</span> <span class="ow">or</span> <span class="n">answer</span> <span class="o">==</span> <span class="s1">&#39;n&#39;</span><span class="p">:</span>
+                    <span class="k">break</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;Invalid response {}, please try again</span><span class="se">\n</span><span class="s1">&#39;</span>
+                                    <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">answer</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">answer</span> <span class="o">==</span> <span class="s1">&#39;y&#39;</span><span class="p">:</span>
+                <span class="n">delete</span>  <span class="o">=</span> <span class="bp">True</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;Deleting...</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;Aborting</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+                <span class="n">delete</span>  <span class="o">=</span> <span class="bp">False</span>
+                <span class="n">deleted</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;No files to delete.</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">delete</span> <span class="o">=</span> <span class="bp">True</span>
+
+    <span class="k">if</span> <span class="n">delete</span> <span class="ow">and</span> <span class="n">deleted</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">deleted</span><span class="p">:</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">confirm</span><span class="p">:</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;Done</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">deleted</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2016, Michael Dacre <mike.dacre@gmail.com>.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.4.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.8</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>
