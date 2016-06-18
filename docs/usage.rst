@@ -62,11 +62,13 @@ this issue.
 Simple Usage
 ============
 
-Setting Environment
--------------------
+Setting up the Environment
+--------------------------
 
-To set the environement, set queue.MODE to one of ['torque', 'slurm', 'local'],
-or run get_cluster_environment().
+No environment setup is required, the package will auto-detect the environment
+at runtime. However, if you wish to manually override the queue system, set
+queue.MODE to one of ['torque', 'slurm', 'local'], or run
+get_cluster_environment().
 
 Simple Job Submission
 ---------------------
@@ -86,8 +88,8 @@ To run with dependency tracking, run:
   job2 = cluster.submit(<command2>, dependencies=job1)
   exitcode, stdout, stderr = job2.get()  # Will block until job completes
 
-Functions
----------
+Submitting Functions
+--------------------
 
 The submit function works well with python functions as well as with shell
 scripts and shell commands.

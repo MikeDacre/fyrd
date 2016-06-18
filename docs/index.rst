@@ -11,9 +11,10 @@ Submit jobs to slurm or torque, or with multiprocessing.
 | Version | 0.6.1                                              |
 +---------+----------------------------------------------------+
 
-Allows simple job submission with *dependency tracking and queue waiting* with
+Allows easy job submission with *dependency tracking and queue waiting* with
 either torque, slurm, or locally with the multiprocessing module. It uses simple
-techiques to avoid overwhelming the queue and to catch bugs on the fly.
+techiques to avoid overwhelming the queue and to catch bugs (e.g. queue stalling)
+on the fly.
 
 Contents:
 
