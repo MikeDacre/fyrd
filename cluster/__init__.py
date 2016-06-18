@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
         LICENSE: MIT License, property of Stanford, use as you wish
         VERSION: 0.6.1
         CREATED: 2015-12-11 22:19
-  Last modified: 2016-06-17 18:29
+  Last modified: 2016-06-18 15:15
  =============== ===================================================
 
 Allows simple job submission with *dependency tracking and queue waiting* with
@@ -149,22 +149,23 @@ import atexit as _atexit
 ALLOWED_MODES = ['local', 'torque', 'slurm']
 # Current mode held in queue.MODE
 
-##########################
-#  Config File Defaults  #
-##########################
-
-from .config_file import get_config
-DEFAULTS = get_config()
-
 ###################
 #  House Keeping  #
 ###################
+
 
 class ClusterError(Exception):
 
     """A custom exception for cluster errors."""
 
     pass
+
+##########################
+#  Config File Defaults  #
+##########################
+
+from .config_file import get_config
+DEFAULTS = get_config()
 
 #########################################
 #  Make our functions easily available  #
@@ -202,6 +203,7 @@ __all__ = ['Job', 'Queue', 'wait', 'submit', 'submit_file', 'make_job_file',
 
 queue.MODE = get_cluster_environment()
 check_queue()
+
 
 ###############################
 #  Kill the JobQueue on exit  #

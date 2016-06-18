@@ -7,7 +7,7 @@ Monitor the queue for torque or slurm.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-06-17 18:51
+ Last modified: 2016-06-18 15:02
 
    DESCRIPTION: Provides a class to monitor the torque, slurm, or local
                 jobqueue queues with identical syntax.
@@ -640,13 +640,18 @@ def get_cluster_environment():
 
 def check_queue(qtype=None):
     """Raise exception if MODE is incorrect."""
-    if qtype and qtype not in ALLOWED_MODES:
-        raise ClusterError('qtype value {} is not recognized, '.format(qtype) +
-                           'should be: local, torque, or slurm')
     if 'MODE' not in globals():
         global MODE
         MODE = get_cluster_environment()
-    if MODE not in ALLOWED_MODES:
+    if qtype:
+        if qtype not in ALLOWED_MODES:
+            raise ClusterError('qtype value {} is not recognized, '.format(qtype) +
+                               'should be: local, torque, or slurm')
+        else:
+            if MODE not in ALLOWED_MODES:
+                MODE = qtype
+            return True
+    elif MODE not in ALLOWED_MODES:
         raise ClusterError('MODE value {} is not recognized, '.format(MODE) +
                            'should be: local, torque, or slurm')
 

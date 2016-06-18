@@ -7,7 +7,7 @@ Available options for job submission.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-31-17 08:04
- Last modified: 2016-06-17 17:45
+ Last modified: 2016-06-18 15:19
 
    DESCRIPTION: All keyword arguments that can be used with Job() objects are
                 defined in this file. These can be editted by the end user to
@@ -36,6 +36,7 @@ from collections import OrderedDict
 
 from . import run
 from . import logme
+from . import ClusterError
 
 __all__ = ['option_help']
 
@@ -152,6 +153,10 @@ SLURM  = OrderedDict([
       'default': None}),
 ])
 
+###############################################################################
+#                       DO NOT EDIT BELOW THIS LINE!!!                        #
+###############################################################################
+
 
 ###############################################################################
 #                     Composites for Checking and Lookup                      #
@@ -177,9 +182,21 @@ ALL_KWDS = CLUSTER_KWDS.copy()
 ALL_KWDS.update(NORMAL_KWDS)
 
 # Will be 'name' -> type
-ALLOWED_KWDS = {}
+ALLOWED_KWDS = OrderedDict()
 for name, info in ALL_KWDS.items():
     ALLOWED_KWDS[name] = info['type'] if 'type' in info else None
+
+
+###############################################################################
+#                      Option Handling Custom Exception                       #
+###############################################################################
+
+class OptionsError(ClusterError):
+
+    """A custom Exception for failures in option parsing."""
+
+    pass
+
 
 ###############################################################################
 #                          Option Handling Functions                          #
@@ -195,7 +212,7 @@ def check_arguments(kwargs):
     # Make sure types are correct
     for arg, opt in kwargs.items():
         if arg not in ALLOWED_KWDS:
-            raise Exception('Unrecognized argument {}'.format(arg))
+            raise OptionsError('Unrecognized argument {}'.format(arg))
         if opt is not None and not isinstance(opt, ALLOWED_KWDS[arg]):
             try:
                 newtype = ALLOWED_KWDS[arg]
@@ -240,9 +257,9 @@ def check_arguments(kwargs):
                                         str(secs).rjust(2, '0'))
                 new_kwds[arg] = opt
             except:
-                raise Exception('time must be formatted as D-HH:MM:SS ' +
-                                'or a fragment of that (e.g. MM:SS) ' +
-                                'it is formatted as {}'.format(opt))
+                raise OptionsError('time must be formatted as D-HH:MM:SS ' +
+                                   'or a fragment of that (e.g. MM:SS) ' +
+                                   'it is formatted as {}'.format(opt))
 
         # Force memory into an integer of megabytes
         elif arg == 'mem' and isinstance(opt, str):
@@ -270,7 +287,7 @@ def check_arguments(kwargs):
                     # Crazy people
                     opt = sval*1024*1024
                 else:
-                    raise Exception('Unknown memory unit opt {}'.format(sunit))
+                    raise ValueError('Unknown memory unit opt {}'.format(sunit))
                 # Don't allow 0, minimum memory req is 5MB
                 if opt < 5:
                     opt = 5
@@ -290,10 +307,14 @@ def option_to_string(option, value=None, qtype=None):
     qtype = qtype if qtype else queue.MODE
     queue.check_queue(qtype)
 
-    option = option.rstrip()
+    if isinstance(option, dict):
+        raise ValueError('Arguments to option_to_string cannot be '
+                         'dictionaries, you probably want options_to_string')
+
+    option = str(option).rstrip()
 
     if option == 'cores' or option == 'nodes':
-        raise Exception('Cannot handle cores or nodes here, use ' +
+        raise OptionsError('Cannot handle cores or nodes here, use ' +
                         'options_to_string')
 
     if qtype == 'slurm':
@@ -304,7 +325,7 @@ def option_to_string(option, value=None, qtype=None):
         return ''  # There is no need of this in local mode
     else:
         # This should never happen
-        raise Exception('Invalid qtype {}'.format(qtype))
+        raise ClusterError('Invalid qtype {}'.format(qtype))
 
     # Make sure argument allowed
     option, value = list(check_arguments({option: value}).items())[0]
@@ -323,13 +344,13 @@ def option_to_string(option, value=None, qtype=None):
                 logme.log('Using default value {} for {}'
                           .format(value, option), 'debug')
             else:
-                raise Exception('{} requires a value'.format(option))
+                raise OptionsError('{} requires a value'.format(option))
 
     # Return formatted string
     prefix = '#SBATCH' if qtype == 'slurm' else '#PBS'
     if '{}' in kwds[option][qtype]:
         if value is None:
-            raise Exception('Cannot use None as an argument for option {}'
+            raise OptionsError('Cannot use None as an argument for option {}'
                             .format(option))
         return '{prefix} {optarg}'.format(
             prefix=prefix, optarg=kwds[option][qtype].format(value))
@@ -443,6 +464,7 @@ def option_help(qtype=None, mode='string'):
         }
 
     if qtype:
+        cluster.queue.check_queue(qtype)
         if qtype == 'local':
             hlp.pop('cluster')
             hlp.pop('torque')
@@ -452,7 +474,7 @@ def option_help(qtype=None, mode='string'):
         elif qtype == 'torque':
             hlp.pop('slurm')
         else:
-            raise Exception('qtype must be "torque", "slurm", or "local"')
+            raise ClusterError('qtype must be "torque", "slurm", or "local"')
 
     if mode == 'print' or mode == 'string':
         outstr = ''
@@ -504,4 +526,4 @@ def option_help(qtype=None, mode='string'):
                             'table': tmptable}
         return tables
     else:
-        raise Exception('mode must be "print", "string", or "table"')
+        raise ClusterError('mode must be "print", "string", or "table"')
