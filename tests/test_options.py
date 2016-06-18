@@ -85,3 +85,6 @@ def test_string_formatting():
     with pytest.raises(cluster.options.OptionsError):
         cluster.options.option_to_string('nodes', 2)
 
+def test_back_to_normal():
+    """Return the queue to the normal setting."""
+    cluster.queue.get_cluster_environment()
