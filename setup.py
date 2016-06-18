@@ -1,29 +1,62 @@
 """
 Setup Script for Slurmy
 """
-from setuptools import setup, find_packages
-from Cython.Build import cythonize
+import os
+import sys
 from codecs import open
-from os import path
-from os import listdir
 
-here = path.abspath(path.dirname(__file__))
+# Make setuptools work everywhere
+import ez_setup
+ez_setup.use_setuptools()
+
+import setuptools
+from setuptools import setup
+from setuptools.command.install import install
+log = setuptools.distutils.log
+
+here = os.path.abspath(os.path.dirname(__file__))
 
 # Get the long description from the README file
-with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
+with open(os.path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 # Generate a list of python scripts
 scpts = []
-for i in listdir(here + '/bin'):
-    scpts.append('bin/' + i)
+scpt_dir = os.listdir(os.path.join(here, 'bin'))
+for scpt in scpt_dir:
+    scpts.append(os.path.join('bin', scpt))
+
+class ScriptInstaller(install):
+
+    """Make scripts copy directly instead of being wrapped.
+
+    This also changes the way the module is installed, see::
+        http://stackoverflow.com/questions/37874445
+    """
+
+    def run(self):
+        """Wrapper for parent run, display message first."""
+
+        sys.stderr.write('\nWelcome to Python Cluster!\n')
+        sys.stderr.write('Make sure you install this program to a place \n'
+                         'that is accessible cluster wide if you want\n'
+                         'cluster jobs to be able to submit child jobs.\n')
+        sys.stderr.write('\nSome helper scripts not required by the library \n'
+                         'will also be installed to the default PATH chosen \n'
+                         'by the python install software, this is usually \n'
+                         '~/.local/bin or /usr/local/bin, you need to make \n'
+                         'sure this location is in your PATH\n\n')
+
+        # Call the main installer
+        install.run(self)
 
 setup(
     name='python-cluster',
     version='0.6.1',
-    description='Submit and monitor slurm, torque, and threaded jobs',
+    description='Submit functions and shell scripts to torque, slurm, ' +
+                'or local machines',
     long_description=long_description,
-    url='https://github.com/MikeDacre/python_slurm',
+    url='https://github.com/MikeDacre/python-cluster',
     author='Michael Dacre',
     author_email='mike.dacre@gmail.com',
     license='MIT',
@@ -52,5 +85,6 @@ setup(
 
     requires=['dill'],
     packages=['cluster'],
+    cmdclass={'install': ScriptInstaller},
     scripts=scpts,
 )
