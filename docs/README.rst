@@ -1,6 +1,7 @@
 This folder contains sphinx documentation sources to build documentation for the
 whole project.  The documentation already exists at
-`<https://mikedacre.github.io/python-cluster>`_ and in PythonCluster.pdf document in the
+`<https://mikedacre.github.io/python-cluster>`_ and in the
+`PythonCluster.pdf <../PythonCluster.pdf>`_ document in the
 root of this repository.
 
 To build it again, just run `make html latexpdf` in this directory, note that
