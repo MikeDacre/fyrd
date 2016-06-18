@@ -1,0 +1,974 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>API Documentation &mdash; Python Cluster 0.6.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.6.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Python Cluster 0.6.1 documentation" href="index.html" />
+    <link rel="prev" title="Scripts" href="scripts.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body role="document">
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="api-documentation">
+<h1>API Documentation<a class="headerlink" href="#api-documentation" title="Permalink to this headline">¶</a></h1>
+<p>The following documentation is primarily built from the docstrings of the actual
+source code and can be considered an API reference.</p>
+<div class="section" id="queueing">
+<h2>Queueing<a class="headerlink" href="#queueing" title="Permalink to this headline">¶</a></h2>
+<p>The most import thing is the <cite>Queue()</cite> class which does most of the queue
+mangement. In addition, <cite>get_cluster_environment()</cite> attempts to autodetect the
+cluster type (torque, slurm, normal) and sets the global cluster type for the
+whole file. Finally, the <cite>wait()</cite> function accepts a list of jobs and will block
+until those jobs are complete.</p>
+<dl class="class">
+<dt id="cluster.Queue">
+<em class="property">class </em><code class="descclassname">cluster.</code><code class="descname">Queue</code><span class="sig-paren">(</span><em>user=None</em>, <em>qtype=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/queue.html#Queue"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.Queue" title="Permalink to this definition">¶</a></dt>
+<dd><p>Handle torque, slurm, or multiprocessing objects.</p>
+<p>All methods are transparent and work the same regardless of queue type.</p>
+<p>Queue.queue is a list of jobs in the queue. For torque and slurm, this is
+all jobs in the queue for the specified user. In local mode, it is all jobs
+added to the pool, Queue must be notified of these by adding the job object
+to the queue directly with add().</p>
+<dl class="exception">
+<dt id="cluster.Queue.QueueError">
+<em class="property">exception </em><code class="descname">QueueError</code><a class="reference internal" href="_modules/cluster/queue.html#Queue.QueueError"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.Queue.QueueError" title="Permalink to this definition">¶</a></dt>
+<dd><p>Simple Exception wrapper.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="cluster.Queue.QueueJob">
+<em class="property">class </em><code class="descclassname">Queue.</code><code class="descname">QueueJob</code><a class="reference internal" href="_modules/cluster/queue.html#Queue.QueueJob"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.Queue.QueueJob" title="Permalink to this definition">¶</a></dt>
+<dd><p>Only used for torque/slurm jobs in the queue.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster.Queue.can_submit">
+<code class="descclassname">Queue.</code><code class="descname">can_submit</code><span class="sig-paren">(</span><em>max_queue_len=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/queue.html#Queue.can_submit"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.Queue.can_submit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return True if R/Q jobs are less than max_queue_len.</p>
+<p>If max_queue_len is None, default from config is used.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster.Queue.update">
+<code class="descclassname">Queue.</code><code class="descname">update</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/queue.html#Queue.update"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.Queue.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>Refresh the list of jobs from the server, limit queries.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster.Queue.wait">
+<code class="descclassname">Queue.</code><code class="descname">wait</code><span class="sig-paren">(</span><em>jobs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/queue.html#Queue.wait"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.Queue.wait" title="Permalink to this definition">¶</a></dt>
+<dd><p>Block until all jobs in jobs are complete.</p>
+<dl class="docutils">
+<dt>Note: update time is dependant upon the queue_update parameter in</dt>
+<dd><p class="first">your ~/.cluster file.</p>
+<p class="last">In addition, wait() will not return until between 1 and 3
+seconds after a job has completed, irrespective of queue_update
+time. This allows time for any copy operations to complete after
+the job exits.</p>
+</dd>
+</dl>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Jobs:</th><td class="field-body">A job or list of jobs to check. Can be one of:
+Job or multiprocessing.pool.ApplyResult objects, job ID
+(int/str), or a object or a list/tuple of multiple Jobs or
+job IDs.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">True on success False or nothing on failure.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster.Queue.wait_to_submit">
+<code class="descclassname">Queue.</code><code class="descname">wait_to_submit</code><span class="sig-paren">(</span><em>max_queue_len=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/queue.html#Queue.wait_to_submit"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.Queue.wait_to_submit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Wait until R/Q jobs are less than max_queue_len.</p>
+<p>If max_queue_len is None, default from config is used.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.queue.get_cluster_environment">
+<code class="descclassname">cluster.queue.</code><code class="descname">get_cluster_environment</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/queue.html#get_cluster_environment"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.queue.get_cluster_environment" title="Permalink to this definition">¶</a></dt>
+<dd><p>Detect the local cluster environment and set MODE globally.</p>
+<p>Uses which to search for sbatch first, then qsub. If neither is found,
+MODE is set to local.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">MODE variable (&#8216;torque&#8217;, &#8216;slurm&#8217;, or &#8216;local&#8217;)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.queue.wait">
+<code class="descclassname">cluster.queue.</code><code class="descname">wait</code><span class="sig-paren">(</span><em>jobs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/queue.html#wait"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.queue.wait" title="Permalink to this definition">¶</a></dt>
+<dd><p>Wait for jobs to finish.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Jobs:</th><td class="field-body">A single job or list of jobs to wait for. With torque or slurm,
+these should be job IDs, with local mode, these are
+multiprocessing job objects (returned by submit())</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.queue.check_queue">
+<code class="descclassname">cluster.queue.</code><code class="descname">check_queue</code><span class="sig-paren">(</span><em>qtype=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/queue.html#check_queue"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.queue.check_queue" title="Permalink to this definition">¶</a></dt>
+<dd><p>Raise exception if MODE is incorrect.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="job-management">
+<h2>Job Management<a class="headerlink" href="#job-management" title="Permalink to this headline">¶</a></h2>
+<p>Job management is handeled by the <cite>Job()</cite> class, full instructions on using this
+class are above, in particular review the &#8216;Keyword Arguments&#8217; section above.</p>
+<p>The methods of this class are exposed by a few functions that aim to make job
+submission easier. The foremost of these is <cite>submit()</cite> which can take as little
+as a single command and execute it. <cite>make_job()</cite> and <cite>make_job_file()</cite> work
+similarly but just return a Job object, or write the file and then return the
+Job object respectively. <cite>clean()</cite> takes a list of Job objects and runs their
+internal <cite>clean()</cite> methods, deleting all written files.</p>
+<p>There are two additional functions that are completely independent of the Job
+object: <cite>submit_file()</cite> and <cite>clean_dir()</cite>. <cite>submit_file()</cite> uses similar methods
+to the Job class to submit a job to the cluster, but it does not involve the job
+class at all, instead just submitting an already created job file. It can do
+dependency tracking in the same way as a job file, but that is all.
+<cite>clean_dir()</cite> uses the file naming convention established in the Job class (and
+defined separately here) to delete all files in a directory that look like they
+could be made by this module. It has an autoconfirm feature that can be
+activated to avoid accidental clobbering.</p>
+<dl class="class">
+<dt id="cluster.Job">
+<em class="property">class </em><code class="descclassname">cluster.</code><code class="descname">Job</code><span class="sig-paren">(</span><em>command</em>, <em>args=None</em>, <em>name=None</em>, <em>path=None</em>, <em>qtype=None</em>, <em>profile=None</em>, <em>**kwds</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/job.html#Job"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.Job" title="Permalink to this definition">¶</a></dt>
+<dd><p>Information about a single job on the cluster.</p>
+<p>Holds information about submit time, number of cores, the job script,
+and more.</p>
+<p>submit() will submit the job if it is ready
+wait()   will block until the job is done
+get()    will block until the job is done and then unpickle a stored</p>
+<blockquote>
+<div>output (if defined) and return the contents</div></blockquote>
+<p>clean()  will delete any files created by this object</p>
+<p>Printing the class will display detailed job information.</p>
+<p>Both wait() and get() will update the queue every two seconds and add
+queue information to the job as they go.</p>
+<p>If the job disappears from the queue with no information, it will be listed
+as &#8216;complete&#8217;.</p>
+<p>All jobs have a .submission attribute, which is a Script object containing
+the submission script for the job and the file name, plus a &#8216;written&#8217; bool
+that checks if the file exists.</p>
+<p>In addition, SLURM jobs have a .exec_script attribute, which is a Script
+object containing the shell command to run. This difference is due to the
+fact that some SLURM systems execute multiple lines of the submission file
+at the same time.</p>
+<p>Finally, if the job command is a function, this object will also contain a
+.function attribute, which contains the script to run the function.</p>
+<dl class="method">
+<dt id="cluster.Job.clean">
+<code class="descname">clean</code><span class="sig-paren">(</span><em>delete_outputs=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/job.html#Job.clean"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.Job.clean" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete all scripts created by this module, if they were written.</p>
+<p>If delete_outputs is True, also delete the stdout and stderr files,
+but get their contents first.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster.Job.get">
+<code class="descname">get</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/job.html#Job.get"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.Job.get" title="Permalink to this definition">¶</a></dt>
+<dd><p>Block until job completed and return exit_code, stdout, stderr.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster.Job.get_exitcode">
+<code class="descname">get_exitcode</code><span class="sig-paren">(</span><em>update=True</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/job.html#Job.get_exitcode"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.Job.get_exitcode" title="Permalink to this definition">¶</a></dt>
+<dd><p>Try to get the exitcode.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster.Job.get_stderr">
+<code class="descname">get_stderr</code><span class="sig-paren">(</span><em>update=True</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/job.html#Job.get_stderr"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.Job.get_stderr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read stdout file if exists and set self.stdout, return it.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster.Job.get_stdout">
+<code class="descname">get_stdout</code><span class="sig-paren">(</span><em>update=True</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/job.html#Job.get_stdout"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.Job.get_stdout" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read stdout file if exists and set self.stdout, return it.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster.Job.submit">
+<code class="descname">submit</code><span class="sig-paren">(</span><em>max_queue_len=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/job.html#Job.submit"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.Job.submit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Submit this job.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Max_queue_len:</th><td class="field-body">if specified (or in defaults), then this method will
+block until the queue is open enough to allow
+submission.</td>
+</tr>
+</tbody>
+</table>
+<p>To disable max_queue_len, set it to 0. None will allow override by
+the default settings in the config file, and any positive integer will
+be interpretted to be the maximum queue length.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">self</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster.Job.update">
+<code class="descname">update</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/job.html#Job.update"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.Job.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update status from the queue.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster.Job.update_queue_info">
+<code class="descname">update_queue_info</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/job.html#Job.update_queue_info"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.Job.update_queue_info" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set queue_info from the queue even if done.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster.Job.wait">
+<code class="descname">wait</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/job.html#Job.wait"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.Job.wait" title="Permalink to this definition">¶</a></dt>
+<dd><p>Block until job completes.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster.Job.write">
+<code class="descname">write</code><span class="sig-paren">(</span><em>overwrite=True</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/job.html#Job.write"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.Job.write" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write all scripts.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.submit">
+<code class="descclassname">cluster.</code><code class="descname">submit</code><span class="sig-paren">(</span><em>command</em>, <em>args=None</em>, <em>name=None</em>, <em>path=None</em>, <em>qtype=None</em>, <em>profile=None</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/job.html#submit"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.submit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Submit a script to the cluster.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Command:</th><td class="field-body">The command or function to execute.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Args:</th><td class="field-body">Optional arguments to add to command, particularly
+useful for functions.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Name:</th><td class="field-body">The name of the job.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Path:</th><td class="field-body">Where to create the script, if None, current dir used.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Qtype:</th><td class="field-body">&#8216;torque&#8217;, &#8216;slurm&#8217;, or &#8216;normal&#8217;</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Profile:</th><td class="field-body">The name of a profile saved in the config_file</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Kwargs:</th><td class="field-body">Keyword arguments to control job options</td>
+</tr>
+</tbody>
+</table>
+<p>There are many keyword arguments available for cluster job submission.
+These vary somewhat by queue type. For info run:</p>
+<blockquote>
+<div>cluster.options.option_help()</div></blockquote>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">Job object</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.job.submit_file">
+<code class="descclassname">cluster.job.</code><code class="descname">submit_file</code><span class="sig-paren">(</span><em>script_file</em>, <em>dependencies=None</em>, <em>threads=None</em>, <em>qtype=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/job.html#submit_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.job.submit_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Submit a job file to the cluster.</p>
+<p>If qtype or queue.MODE is torque, qsub is used; if it is slurm, sbatch
+is used; if it is local, the file is executed with subprocess.</p>
+<p>This function is independent of the Job object and just submits a file.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Dependencies:</th><td class="field-body">A job number or list of job numbers.
+In slurm: <cite>&#8211;dependency=afterok:</cite> is used
+For torque: <cite>-W depend=afterok:</cite> is used</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Threads:</th><td class="field-body">Total number of threads to use at a time, defaults to all.
+ONLY USED IN LOCAL MODE</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">job number for torque or slurm
+multiprocessing job object for local mode</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.job.make_job">
+<code class="descclassname">cluster.job.</code><code class="descname">make_job</code><span class="sig-paren">(</span><em>command</em>, <em>args=None</em>, <em>name=None</em>, <em>path=None</em>, <em>qtype=None</em>, <em>profile=None</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/job.html#make_job"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.job.make_job" title="Permalink to this definition">¶</a></dt>
+<dd><p>Make a job file compatible with the chosen cluster.</p>
+<p>If mode is local, this is just a simple shell script.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Command:</th><td class="field-body">The command or function to execute.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Args:</th><td class="field-body">Optional arguments to add to command, particularly
+useful for functions.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Name:</th><td class="field-body">The name of the job.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Path:</th><td class="field-body">Where to create the script, if None, current dir used.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Qtype:</th><td class="field-body">&#8216;torque&#8217;, &#8216;slurm&#8217;, or &#8216;normal&#8217;</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Profile:</th><td class="field-body">The name of a profile saved in the config_file</td>
+</tr>
+</tbody>
+</table>
+<p>There are many keyword arguments available for cluster job submission.
+These vary somewhat by queue type. For info run:</p>
+<blockquote>
+<div>cluster.options.option_help()</div></blockquote>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A Job object</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.job.make_job_file">
+<code class="descclassname">cluster.job.</code><code class="descname">make_job_file</code><span class="sig-paren">(</span><em>command</em>, <em>args=None</em>, <em>name=None</em>, <em>path=None</em>, <em>qtype=None</em>, <em>profile=None</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/job.html#make_job_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.job.make_job_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Make a job file compatible with the chosen cluster.</p>
+<p>If mode is local, this is just a simple shell script.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Command:</th><td class="field-body">The command or function to execute.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Args:</th><td class="field-body">Optional arguments to add to command, particularly
+useful for functions.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Name:</th><td class="field-body">The name of the job.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Path:</th><td class="field-body">Where to create the script, if None, current dir used.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Qtype:</th><td class="field-body">&#8216;torque&#8217;, &#8216;slurm&#8217;, or &#8216;normal&#8217;</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Profile:</th><td class="field-body">The name of a profile saved in the config_file</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Kwargs:</th><td class="field-body">Keyword arguments to control job options</td>
+</tr>
+</tbody>
+</table>
+<p>There are many keyword arguments available for cluster job submission.
+These vary somewhat by queue type. For info run:</p>
+<blockquote>
+<div>cluster.options.option_help()</div></blockquote>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">Path to job script</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.job.clean">
+<code class="descclassname">cluster.job.</code><code class="descname">clean</code><span class="sig-paren">(</span><em>jobs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/job.html#clean"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.job.clean" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete all files in jobs list or single Job object.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.job.clean_dir">
+<code class="descclassname">cluster.job.</code><code class="descname">clean_dir</code><span class="sig-paren">(</span><em>directory='.'</em>, <em>suffix='cluster'</em>, <em>qtype=None</em>, <em>confirm=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/job.html#clean_dir"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.job.clean_dir" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete all files made by this module in directory.</p>
+<dl class="docutils">
+<dt>CAUTION: The clean() function will delete <strong>EVERY</strong> file with</dt>
+<dd><dl class="first last docutils">
+<dt>extensions matching those these::</dt>
+<dd>.&lt;suffix&gt;.err
+.&lt;suffix&gt;.out
+.&lt;suffix&gt;.sbatch &amp; .cluster.script for slurm mode
+.&lt;suffix&gt;.qsub for torque mode
+.&lt;suffix&gt; for local mode
+_func.&lt;suffix&gt;.py
+_func.&lt;suffix&gt;.py.pickle.in
+_func.&lt;suffix&gt;.py.pickle.out</dd>
+</dl>
+</dd>
+</dl>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Directory:</th><td class="field-body">The directory to run in, defaults to the current directory.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Qtype:</th><td class="field-body">Only run on files of this qtype</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Confirm:</th><td class="field-body">Ask the user before deleting the files</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">A set of deleted files</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</div>
+<div class="section" id="options">
+<h2>Options<a class="headerlink" href="#options" title="Permalink to this headline">¶</a></h2>
+<p>All keyword arguments are defined in dictionaries in the <cite>options.py</cite> file,
+alongside function to manage those dictionaries. Of particular importance is
+<cite>option_help()</cite>, which can display all of the keyword arguments as a string or a
+table. <cite>check_arguments()</cite> checks a dictionary to make sure that the arguments
+are allowed (i.e. definied), it is called on all keyword arguments in the
+package.</p>
+<p>The way that option handling works in general, is that all hardcoded keyword
+arguments must contain a dictionary entry for &#8216;torque&#8217; and &#8216;slurm&#8217;, as well as a
+type declaration. If the type is NoneType, then the option is assumed to be a
+boolean option. If it has a type though, <cite>check_argument()</cite> attmepts to cast the
+type and specific idiosyncracies are handled in this step, e.g. memory is converted
+into an integer of MB. Once the arguments are sanitized <cite>format()</cite> is called on
+the string held in either the &#8216;torque&#8217; or the &#8216;slurm&#8217; values, and the formatted
+string is then used as an option. If the type is a list/tuple, the &#8216;sjoin&#8217; and
+&#8216;tjoin&#8217; dictionary keys must exist, and are used to handle joining.</p>
+<p>The following two functions are used to manage this formatting step.</p>
+<p><cite>option_to_string()</cite> will take an option/value pair and return an appropriate
+string that can be used in the current queue mode. If the option is not
+implemented in the current mode, a debug message is printed to the console and
+an empty string is returned.</p>
+<p><cite>options_to_string()</cite> is a wrapper around <cite>option_to_string()</cite> and can handle a
+whole dictionary of arguments, it explicitly handle arguments that cannot be
+managed using a simple string format.</p>
+<dl class="function">
+<dt id="cluster.options.option_help">
+<code class="descclassname">cluster.options.</code><code class="descname">option_help</code><span class="sig-paren">(</span><em>qtype=None</em>, <em>mode='string'</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/options.html#option_help"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.options.option_help" title="Permalink to this definition">¶</a></dt>
+<dd><p>Print a sting to stdout displaying information on all options.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Qtype:</th><td class="field-body">If provided only return info on that queue type.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Mode:</th><td class="field-body">string: Return a formatted string
+print:  Print the string to stdout
+table:  Return a table of lists</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.options.check_arguments">
+<code class="descclassname">cluster.options.</code><code class="descname">check_arguments</code><span class="sig-paren">(</span><em>kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/options.html#check_arguments"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.options.check_arguments" title="Permalink to this definition">¶</a></dt>
+<dd><p>Make sure all keywords are allowed.</p>
+<p>Raises Exception on error, returns sanitized dictionary on success.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.options.options_to_string">
+<code class="descclassname">cluster.options.</code><code class="descname">options_to_string</code><span class="sig-paren">(</span><em>option_dict</em>, <em>qtype=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/options.html#options_to_string"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.options.options_to_string" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a multi-line string for slurm or torque job submission.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Option_dict:</th><td class="field-body">Dict in format {option: value} where value can be None.
+If value is None, default used.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Qtype:</th><td class="field-body">&#8216;torque&#8217;, &#8216;slurm&#8217;, or &#8216;local&#8217;: override queue.MODE</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.options.option_to_string">
+<code class="descclassname">cluster.options.</code><code class="descname">option_to_string</code><span class="sig-paren">(</span><em>option</em>, <em>value=None</em>, <em>qtype=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/options.html#option_to_string"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.options.option_to_string" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a string with an appropriate flag for slurm or torque.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Option:</th><td class="field-body">An allowed option definied in options.all_options</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Value:</th><td class="field-body">A value for that option if required (if None, default used)</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Qtype:</th><td class="field-body">&#8216;torque&#8217;, &#8216;slurm&#8217;, or &#8216;local&#8217;: override queue.MODE</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</div>
+<div class="section" id="config-file">
+<h2>Config File<a class="headerlink" href="#config-file" title="Permalink to this headline">¶</a></h2>
+<p>Profiles are combinations of keyword arguments that can be called in any of the
+submission functions. They are handled in the <cite>config_file.py</cite> file which just
+adds an abstraction layer on top of the builtin python ConfigParser script.</p>
+<p>The config file also contains other options that can be managed with the <cite>get()</cite>
+and <cite>set()</cite> functions. Profiles are wrapped in a <cite>Profile()</cite> class to make
+attribute access easy, but they are fundamentally just dictionaries of keyword
+arguments. They can be created with <cite>cluster.config_file.Profile({kewywds})</cite> and
+then written to a file with that class&#8217; <cite>write()</cite> method. The easiest way to
+interact with profiles is with the <cite>get_profile()</cite> and <cite>set_profile()</cite>
+functions. These make it very easy to go from a dictionary of keywords to a
+profile.</p>
+<p>Profiles can then be called with the <cite>profile=</cite> keyword in any submission
+function or Job class.</p>
+<dl class="class">
+<dt id="cluster.config_file.Profile">
+<em class="property">class </em><code class="descclassname">cluster.config_file.</code><code class="descname">Profile</code><span class="sig-paren">(</span><em>name</em>, <em>kwds</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/config_file.html#Profile"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.config_file.Profile" title="Permalink to this definition">¶</a></dt>
+<dd><p>A job submission profile. Just a thin wrapper around a dict.</p>
+<dl class="method">
+<dt id="cluster.config_file.Profile.write">
+<code class="descname">write</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/config_file.html#Profile.write"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.config_file.Profile.write" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write self to config file.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.config_file.get">
+<code class="descclassname">cluster.config_file.</code><code class="descname">get</code><span class="sig-paren">(</span><em>section=None</em>, <em>key=None</em>, <em>default=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/config_file.html#get"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.config_file.get" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get a single key or section.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Section:</th><td class="field-body">The config section to use (e.g. queue, prof)</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Key:</th><td class="field-body">The config key to get (e.g. &#8216;max_jobs&#8217;)</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Default:</th><td class="field-body">If the key does not exist, create it with this default value.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">None if key does not exist.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.config_file.set">
+<code class="descclassname">cluster.config_file.</code><code class="descname">set</code><span class="sig-paren">(</span><em>section</em>, <em>key</em>, <em>value</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/config_file.html#set"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.config_file.set" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write a config key to the config file.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.config_file.set_profile">
+<code class="descclassname">cluster.config_file.</code><code class="descname">set_profile</code><span class="sig-paren">(</span><em>name</em>, <em>args</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/config_file.html#set_profile"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.config_file.set_profile" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write profile to config file.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.config_file.get_profile">
+<code class="descclassname">cluster.config_file.</code><code class="descname">get_profile</code><span class="sig-paren">(</span><em>profile=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/config_file.html#get_profile"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.config_file.get_profile" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a profile if it exists, if None, return all profiles.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.config_file.delete">
+<code class="descclassname">cluster.config_file.</code><code class="descname">delete</code><span class="sig-paren">(</span><em>section</em>, <em>key=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/config_file.html#delete"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.config_file.delete" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete a config item.</p>
+<p>If key is not provided deletes whole section.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.config_file.get_config">
+<code class="descclassname">cluster.config_file.</code><code class="descname">get_config</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/config_file.html#get_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.config_file.get_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load defaults from file.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="local-queue-implementation">
+<h2>Local Queue Implementation<a class="headerlink" href="#local-queue-implementation" title="Permalink to this headline">¶</a></h2>
+<p>The local queue implementation is based on the multiprocessing library and is
+not intended to be used directly, it should always be used via the Job class
+because it is somewhat tempramental. The essential idea behind it is that we can
+have one JobQueue class that is bound to the parent process, it exclusively
+manages a single child thread that runs the <cite>job_runner()</cite> function. The two
+process communicate using a <cite>multiprocessing.Queue</cite> object, and pass
+<cite>cluster.jobqueue.Job</cite> objects back and forth between them.</p>
+<p>The Job objects (different from the Job objects in <cite>job.py</cite>) contain information
+about the task to run, including the number of cores required. The job runner
+manages a pool of <cite>multiprocessing.Pool</cite> tasks directly, and keeps the total
+running cores below the total allowed (default is the system max, can be set
+with the threads keyword). It backfills smaller jobs and holds on to larger jobs
+until there is enough space free.</p>
+<p>This is close to what torque and slurm do, but vastly more crude. It serves as a
+stopgap to allow parallel software written for compute clusters to run on a
+single machine in a similar fashion, without the need for a pipeline alteration.
+The reason I have reimplemented a process pool is that I need dependency
+tracking and I need to allow some processes to run on multiple cores (e.g. 6 of
+the available 24 on the machine).</p>
+<p>The <cite>job_runner()</cite> and <cite>Job</cite> objects should never be accessed except by the
+JobQueue. Only one JobQueue should run at a time (not enforced), and by default
+it is bound to <cite>cluster.jobqueue.JQUEUE</cite>. That is the interface used by all
+other parts of this package.</p>
+<dl class="class">
+<dt id="cluster.jobqueue.JobQueue">
+<em class="property">class </em><code class="descclassname">cluster.jobqueue.</code><code class="descname">JobQueue</code><span class="sig-paren">(</span><em>cores=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/jobqueue.html#JobQueue"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.jobqueue.JobQueue" title="Permalink to this definition">¶</a></dt>
+<dd><p>Monitor and submit multiprocessing.Pool jobs with dependencies.</p>
+<dl class="method">
+<dt id="cluster.jobqueue.JobQueue.add">
+<code class="descname">add</code><span class="sig-paren">(</span><em>function</em>, <em>args=None</em>, <em>kwargs=None</em>, <em>dependencies=None</em>, <em>cores=1</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/jobqueue.html#JobQueue.add"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.jobqueue.JobQueue.add" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add function to local job queue.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Function:</th><td class="field-body">A function object. To run a command, use the run.cmd
+function here.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Args:</th><td class="field-body">A tuple of args to submit to the function.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Kwargs:</th><td class="field-body">A dict of keyword arguments to submit to the function.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Dependencies:</th><td class="field-body">A list of job IDs that this job will depend on.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Cores:</th><td class="field-body">The number of threads required by this job.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">A job ID</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster.jobqueue.JobQueue.get">
+<code class="descname">get</code><span class="sig-paren">(</span><em>job</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/jobqueue.html#JobQueue.get"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.jobqueue.JobQueue.get" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the output of a single job</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster.jobqueue.JobQueue.restart">
+<code class="descname">restart</code><span class="sig-paren">(</span><em>force=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/jobqueue.html#JobQueue.restart"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.jobqueue.JobQueue.restart" title="Permalink to this definition">¶</a></dt>
+<dd><p>Kill the job queue and restart it.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster.jobqueue.JobQueue.update">
+<code class="descname">update</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/jobqueue.html#JobQueue.update"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.jobqueue.JobQueue.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get fresh job info from the runner.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster.jobqueue.JobQueue.wait">
+<code class="descname">wait</code><span class="sig-paren">(</span><em>jobs=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/jobqueue.html#JobQueue.wait"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.jobqueue.JobQueue.wait" title="Permalink to this definition">¶</a></dt>
+<dd><p>Wait for a list of jobs, all jobs are the default.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="cluster.jobqueue.Job">
+<em class="property">class </em><code class="descclassname">cluster.jobqueue.</code><code class="descname">Job</code><span class="sig-paren">(</span><em>function</em>, <em>args=None</em>, <em>kwargs=None</em>, <em>depends=None</em>, <em>cores=1</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/jobqueue.html#Job"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.jobqueue.Job" title="Permalink to this definition">¶</a></dt>
+<dd><p>An object to pass arguments to the runner.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.jobqueue.job_runner">
+<code class="descclassname">cluster.jobqueue.</code><code class="descname">job_runner</code><span class="sig-paren">(</span><em>jobqueue</em>, <em>outputs</em>, <em>cores=None</em>, <em>jobno=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/jobqueue.html#job_runner"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.jobqueue.job_runner" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run jobs with dependency tracking.</p>
+<p>Must be run as a separate multiprocessing.Process to function correctly.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Jobqueue:</th><td class="field-body">A multiprocessing.Queue object into which Job objects
+must be added. The function continually searches this Queue for
+new jobs. Note, function must be a function call, it cannot be
+anything else.
+function is the only required argument, the rest are optional.
+tuples are required.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Outputs:</th><td class="field-body">A multiprocessing.Queue object that will take outputs. A
+dictionary of job objects will be output here with the format::
+{job_no =&gt; Job}
+<strong>NOTE</strong>: function return must be picklable otherwise this will
+raise an exception when it is put into the Queue object.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Cores:</th><td class="field-body">Number of cores to use in the multiprocessing pool. Defaults to
+all.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Jobno:</th><td class="field-body">What number to start counting jobs from, default 1.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</div>
+<div class="section" id="logme">
+<h2>Logme<a class="headerlink" href="#logme" title="Permalink to this headline">¶</a></h2>
+<p>This is a package I wrote myself and keep using because I like it. It provides
+syslog style leveled logging (e.g. &#8216;debug&#8217;-&gt;&#8217;info&#8217;-&gt;&#8217;warn&#8217;-&gt;&#8217;error&#8217;-&gt;&#8217;critical&#8217;)
+and it implements colors and timestamped messages.</p>
+<p>The minimum print level can be set module wide at runtime by changing
+<cite>cluster.logme.MIN_LEVEL</cite>.</p>
+<dl class="function">
+<dt id="cluster.logme.log">
+<code class="descclassname">cluster.logme.</code><code class="descname">log</code><span class="sig-paren">(</span><em>message</em>, <em>level='info'</em>, <em>logfile=None</em>, <em>also_write=None</em>, <em>min_level=None</em>, <em>kind=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/logme.html#log"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.logme.log" title="Permalink to this definition">¶</a></dt>
+<dd><p>Print a string to logfile.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Message:</th><td class="field-body"><p class="first">The message to print.</p>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Logfile:</th><td class="field-body"><p class="first">Optional file to log to, defaults to STDERR. Can provide a
+logging object</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Level:</th><td class="field-body"><p class="first">&#8216;debug&#8217;|&#8217;info&#8217;|&#8217;warn&#8217;|&#8217;error&#8217;|&#8217;normal&#8217;
+Will only print if level &gt; MIN_LEVEL</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="28%" />
+<col width="72%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>&#8216;debug&#8217;:</td>
+<td>&#8216;&lt;timestamp&gt; DEBUG &#8211;&gt; &#8216;</td>
+</tr>
+<tr class="row-even"><td>&#8216;info&#8217;:</td>
+<td>&#8216;&lt;timestamp&gt; INFO &#8211;&gt; &#8216;</td>
+</tr>
+<tr class="row-odd"><td>&#8216;warn&#8217;:</td>
+<td>&#8216;&lt;timestamp&gt; WARNING &#8211;&gt; &#8216;</td>
+</tr>
+<tr class="row-even"><td>&#8216;error&#8217;:</td>
+<td>&#8216;&lt;timestamp&gt; ERROR &#8211;&gt; &#8216;</td>
+</tr>
+<tr class="row-odd"><td>&#8216;critical&#8217;:</td>
+<td>&#8216;&lt;timestamp&gt; CRITICAL &#8211;&gt; &#8216;</td>
+</tr>
+</tbody>
+</table>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Also_write:</th><td class="field-body"><p class="first">&#8216;stdout&#8217;: print to STDOUT also.
+&#8216;stderr&#8217;: print to STDERR also.
+These only have an effect if the output is not already set
+to the same device.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Min_level:</th><td class="field-body"><p class="first">Retained for backwards compatibility, min_level should be set
+using the logme.MIN_LEVEL constant.</p>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Kind:</th><td class="field-body"><p class="first last">synonym for level, kept to retain backwards compatibility</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</div>
+<div class="section" id="other-functions">
+<h2>Other Functions<a class="headerlink" href="#other-functions" title="Permalink to this headline">¶</a></h2>
+<p>Some other wrapper functions are defined in <cite>run.py</cite>, these are just little
+useful knick-knacks that make function submission and queue management possible.</p>
+<dl class="function">
+<dt id="cluster.run.cmd">
+<code class="descclassname">cluster.run.</code><code class="descname">cmd</code><span class="sig-paren">(</span><em>command</em>, <em>args=None</em>, <em>stdout=None</em>, <em>stderr=None</em>, <em>tries=1</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/run.html#cmd"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.run.cmd" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run command and return status, output, stderr.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Command:</th><td class="field-body">Path to executable.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Args:</th><td class="field-body">Tuple of arguments.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Stdout:</th><td class="field-body">File or open file like object to write STDOUT to.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Stderr:</th><td class="field-body">File or open file like object to write STDERR to.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Tries:</th><td class="field-body">Int: Number of times to try to execute 1+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.run.which">
+<code class="descclassname">cluster.run.</code><code class="descname">which</code><span class="sig-paren">(</span><em>program</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/run.html#which"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.run.which" title="Permalink to this definition">¶</a></dt>
+<dd><p>Replicate the UNIX which command.</p>
+<dl class="docutils">
+<dt>Taken verbatim from:</dt>
+<dd>stackoverflow.com/questions/377017/test-if-executable-exists-in-python</dd>
+</dl>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Program:</th><td class="field-body">Name of executable to test.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">Path to the program or None on failure.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.run.open_zipped">
+<code class="descclassname">cluster.run.</code><code class="descname">open_zipped</code><span class="sig-paren">(</span><em>infile</em>, <em>mode='r'</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/run.html#open_zipped"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.run.open_zipped" title="Permalink to this definition">¶</a></dt>
+<dd><p>Open a regular, gzipped, or bz2 file.</p>
+<p>Returns text mode file handle.</p>
+<p>If infile is a file handle or text device, it is returned without
+changes.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster.run.split_file">
+<code class="descclassname">cluster.run.</code><code class="descname">split_file</code><span class="sig-paren">(</span><em>infile</em>, <em>parts</em>, <em>outpath=''</em>, <em>keep_header=True</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/cluster/run.html#split_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#cluster.run.split_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Split a file in parts parts and return a list of paths.</p>
+<p>NOTE: Linux specific (uses wc).</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Outpath:</th><td class="field-body">The directory to save the split files.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Keep_header:</th><td class="field-body">Add the header line to the top of every file.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</div>
+<div class="section" id="indices-and-tables">
+<h2>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></li>
+<li><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">API Documentation</a><ul>
+<li><a class="reference internal" href="#queueing">Queueing</a></li>
+<li><a class="reference internal" href="#job-management">Job Management</a></li>
+<li><a class="reference internal" href="#options">Options</a></li>
+<li><a class="reference internal" href="#config-file">Config File</a></li>
+<li><a class="reference internal" href="#local-queue-implementation">Local Queue Implementation</a></li>
+<li><a class="reference internal" href="#logme">Logme</a></li>
+<li><a class="reference internal" href="#other-functions">Other Functions</a></li>
+<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+</ul>
+</li>
+</ul>
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="scripts.html" title="previous chapter">Scripts</a></li>
+  </ul></li>
+</ul>
+</div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/api.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2016, Michael Dacre <mike.dacre@gmail.com>.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.4.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.8</a>
+      
+      |
+      <a href="_sources/api.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

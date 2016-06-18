@@ -1,0 +1,534 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>cluster.jobqueue &mdash; Python Cluster 0.6.1 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.6.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="Python Cluster 0.6.1 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body role="document">
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for cluster.jobqueue</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Manage job dependency tracking with multiprocessing.</span>
+
+<span class="sd">===============================================================================</span>
+
+<span class="sd">        AUTHOR: Michael D Dacre, mike.dacre@gmail.com</span>
+<span class="sd">  ORGANIZATION: Stanford University</span>
+<span class="sd">       LICENSE: MIT License, property of Stanford, use as you wish</span>
+<span class="sd">       CREATED: 2016-56-14 14:04</span>
+<span class="sd"> Last modified: 2016-06-18 00:02</span>
+
+<span class="sd">   DESCRIPTION: Runs jobs with a multiprocessing.Pool, but manages dependency</span>
+<span class="sd">                using an additional Process that loops through all submitted</span>
+<span class="sd">                jobs and checks dependencies before running.</span>
+
+<span class="sd">                The JobQueue class works as the queue and functions in a</span>
+<span class="sd">                similar, but much more basic, way as torque or slurm. It</span>
+<span class="sd">                manages jobs by forking an instance of the job_runner</span>
+<span class="sd">                function and keeping it alive. The multiprocessing.Queue</span>
+<span class="sd">                class is then used to pass job information contained in the</span>
+<span class="sd">                Job class back and forth between the JobQueue class</span>
+<span class="sd">                running in the main process and the job_runner() fork running</span>
+<span class="sd">                as a separate thread.</span>
+
+<span class="sd">                The actual job management is done by job_runner() and uses</span>
+<span class="sd">                multiprocessing.Process objects and not the Pool object.</span>
+<span class="sd">                This allows for more careful management and it also allows</span>
+<span class="sd">                exit codes to be captured.</span>
+
+<span class="sd">===============================================================================</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">atexit</span>
+<span class="kn">import</span> <span class="nn">signal</span>
+<span class="kn">import</span> <span class="nn">multiprocessing</span> <span class="kn">as</span> <span class="nn">mp</span>
+<span class="kn">from</span> <span class="nn">subprocess</span> <span class="kn">import</span> <span class="n">check_output</span><span class="p">,</span> <span class="n">CalledProcessError</span>
+<span class="kn">from</span> <span class="nn">time</span> <span class="kn">import</span> <span class="n">sleep</span>
+
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">run</span>
+
+<span class="c1"># Get defaults</span>
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">config_file</span>
+
+<span class="c1"># Get an Exception object to use</span>
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">ClusterError</span>
+
+<span class="c1"># Get logging function</span>
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">logme</span>
+
+<span class="c1"># A global placeholder for a single JobQueue instance</span>
+<span class="n">JQUEUE</span> <span class="o">=</span> <span class="bp">None</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;JobQueue&#39;</span><span class="p">]</span>
+
+<span class="c1">################################</span>
+<span class="c1">#  Normal Mode Multithreading  #</span>
+<span class="c1">################################</span>
+
+<span class="kn">from</span> <span class="nn">multiprocessing</span> <span class="kn">import</span> <span class="n">cpu_count</span> <span class="k">as</span> <span class="n">_cnt</span>
+<span class="n">THREADS</span>  <span class="o">=</span> <span class="n">_cnt</span><span class="p">()</span>
+
+<span class="c1"># Reset broken multithreading</span>
+<span class="c1"># Some of the numpy C libraries can break multithreading, this command</span>
+<span class="c1"># fixes the issue.</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">check_output</span><span class="p">(</span><span class="s2">&quot;taskset -p 0xff </span><span class="si">%d</span><span class="s2"> &amp;&gt;/dev/null&quot;</span> <span class="o">%</span> <span class="n">os</span><span class="o">.</span><span class="n">getpid</span><span class="p">(),</span> <span class="n">shell</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">CalledProcessError</span><span class="p">:</span>
+    <span class="k">pass</span>  <span class="c1"># This doesn&#39;t work on Macs or Windows</span>
+
+
+<span class="c1">###############################################################################</span>
+<span class="c1">#                      The JobQueue Class to Manage Jobs                      #</span>
+<span class="c1">###############################################################################</span>
+
+
+<div class="viewcode-block" id="JobQueue"><a class="viewcode-back" href="../../api.html#cluster.jobqueue.JobQueue">[docs]</a><span class="k">class</span> <span class="nc">JobQueue</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="sd">&quot;&quot;&quot;Monitor and submit multiprocessing.Pool jobs with dependencies.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cores</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Spawn a job_runner process to interact with.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_jobqueue</span> <span class="o">=</span> <span class="n">mp</span><span class="o">.</span><span class="n">Queue</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_outputs</span>  <span class="o">=</span> <span class="n">mp</span><span class="o">.</span><span class="n">Queue</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">jobno</span>     <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">config_file</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;jobqueue&#39;</span><span class="p">,</span> <span class="s1">&#39;jobno&#39;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="mi">1</span><span class="p">)))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cores</span>     <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">cores</span><span class="p">)</span> <span class="k">if</span> <span class="n">cores</span> <span class="k">else</span> <span class="n">THREADS</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">runner</span>    <span class="o">=</span> <span class="n">mp</span><span class="o">.</span><span class="n">Process</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">job_runner</span><span class="p">,</span>
+                                    <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_jobqueue</span><span class="p">,</span>
+                                          <span class="bp">self</span><span class="o">.</span><span class="n">_outputs</span><span class="p">,</span>
+                                          <span class="bp">self</span><span class="o">.</span><span class="n">cores</span><span class="p">,</span>
+                                          <span class="bp">self</span><span class="o">.</span><span class="n">jobnumber</span><span class="p">),</span>
+                                    <span class="n">name</span><span class="o">=</span><span class="s1">&#39;Runner&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">pid</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">is_alive</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">def</span> <span class="nf">terminate</span><span class="p">():</span>
+            <span class="sd">&quot;&quot;&quot;Kill the queue runner.&quot;&quot;&quot;</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">terminate</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_jobqueue</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_outputs</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+                <span class="k">pass</span>
+            <span class="k">if</span> <span class="n">run</span><span class="o">.</span><span class="n">check_pid</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">pid</span><span class="p">):</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">kill</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">pid</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">SIGKILL</span><span class="p">)</span>
+
+        <span class="c1"># Call terminate when we exit</span>
+        <span class="n">atexit</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">terminate</span><span class="p">)</span>
+
+<div class="viewcode-block" id="JobQueue.update"><a class="viewcode-back" href="../../api.html#cluster.jobqueue.JobQueue.update">[docs]</a>    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Get fresh job info from the runner.&quot;&quot;&quot;</span>
+        <span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>  <span class="c1"># This allows the queue time to flush</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">is_alive</span><span class="p">()</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">True</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">restart</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">is_alive</span><span class="p">()</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">True</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ClusterError</span><span class="p">(</span><span class="s1">&#39;JobRunner has crashed&#39;</span><span class="p">)</span>
+        <span class="k">while</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_outputs</span><span class="o">.</span><span class="n">empty</span><span class="p">():</span>
+            <span class="c1"># We loop through the whole queue stack, updating the dictionary</span>
+            <span class="c1"># every time so that we get the latest info</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_outputs</span><span class="o">.</span><span class="n">get_nowait</span><span class="p">())</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">jobno</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+            <span class="n">config_file</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s1">&#39;jobqueue&#39;</span><span class="p">,</span> <span class="s1">&#39;jobno&#39;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">jobno</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="JobQueue.add"><a class="viewcode-back" href="../../api.html#cluster.jobqueue.JobQueue.add">[docs]</a>    <span class="k">def</span> <span class="nf">add</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">function</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">dependencies</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+            <span class="n">cores</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Add function to local job queue.</span>
+
+<span class="sd">        :function:     A function object. To run a command, use the run.cmd</span>
+<span class="sd">                       function here.</span>
+<span class="sd">        :args:         A tuple of args to submit to the function.</span>
+<span class="sd">        :kwargs:       A dict of keyword arguments to submit to the function.</span>
+<span class="sd">        :dependencies: A list of job IDs that this job will depend on.</span>
+<span class="sd">        :cores:        The number of threads required by this job.</span>
+<span class="sd">        :returns:      A job ID</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">is_alive</span><span class="p">()</span>
+        <span class="n">oldjob</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobno</span>
+        <span class="n">cores</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">cores</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cores</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">cores</span><span class="p">:</span>
+            <span class="n">logme</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;Job core request exceeds resources, limiting to max: &#39;</span> <span class="o">+</span>
+                      <span class="s1">&#39;{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cores</span><span class="p">),</span> <span class="s1">&#39;warn&#39;</span><span class="p">)</span>
+            <span class="n">cores</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cores</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_jobqueue</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">Job</span><span class="p">(</span><span class="n">function</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">,</span> <span class="n">dependencies</span><span class="p">,</span>
+                               <span class="n">cores</span><span class="p">))</span>
+        <span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+        <span class="n">newjob</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobno</span>
+        <span class="c1"># Sometimes the queue can freeze for reasons I don&#39;t understand, this</span>
+        <span class="c1"># is an attempted workaround.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">newjob</span> <span class="o">==</span> <span class="n">oldjob</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">restart</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_jobqueue</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">Job</span><span class="p">(</span><span class="n">function</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">,</span> <span class="n">dependencies</span><span class="p">,</span>
+                                   <span class="n">cores</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+            <span class="n">newjob</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobno</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">newjob</span> <span class="o">==</span> <span class="n">oldjob</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ClusterError</span><span class="p">(</span><span class="s1">&#39;Job numbers are not updating correctly, the &#39;</span>
+                               <span class="s1">&#39;local queue has probably crashed. Please &#39;</span>
+                               <span class="s1">&#39;report this issue.&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobno</span></div>
+
+<div class="viewcode-block" id="JobQueue.wait"><a class="viewcode-back" href="../../api.html#cluster.jobqueue.JobQueue.wait">[docs]</a>    <span class="k">def</span> <span class="nf">wait</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">jobs</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Wait for a list of jobs, all jobs are the default.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">jobs</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
+            <span class="n">jobs</span> <span class="o">=</span> <span class="p">[</span><span class="n">jobs</span><span class="p">]</span>
+        <span class="k">while</span> <span class="n">jobs</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">job</span> <span class="ow">in</span> <span class="n">jobs</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">job</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">ClusterError</span><span class="p">(</span><span class="s1">&#39;Job {} has not been submitted.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">job</span><span class="p">))</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="p">[</span><span class="n">job</span><span class="p">]</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;done&#39;</span><span class="p">:</span>
+                    <span class="n">jobs</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">job</span><span class="p">)</span>
+                <span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="JobQueue.get"><a class="viewcode-back" href="../../api.html#cluster.jobqueue.JobQueue.get">[docs]</a>    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return the output of a single job&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">job</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ClusterError</span><span class="p">(</span><span class="s1">&#39;Job {} has not been submitted.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">job</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">job</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="p">[</span><span class="n">job</span><span class="p">]</span><span class="o">.</span><span class="n">out</span></div>
+
+<div class="viewcode-block" id="JobQueue.restart"><a class="viewcode-back" href="../../api.html#cluster.jobqueue.JobQueue.restart">[docs]</a>    <span class="k">def</span> <span class="nf">restart</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Kill the job queue and restart it.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">force</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">done</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="p">):</span>
+                <span class="n">logme</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;Cannot restart, incomplete jobs&#39;</span><span class="p">,</span> <span class="s1">&#39;error&#39;</span><span class="p">)</span>
+                <span class="k">return</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">terminate</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">runner</span>  <span class="o">=</span> <span class="n">mp</span><span class="o">.</span><span class="n">Process</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">job_runner</span><span class="p">,</span>
+                                  <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_jobqueue</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_outputs</span><span class="p">,</span>
+                                        <span class="bp">self</span><span class="o">.</span><span class="n">cores</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobnumber</span><span class="p">),</span>
+                                  <span class="n">name</span><span class="o">=</span><span class="s1">&#39;Runner&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">pid</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">is_alive</span><span class="p">()</span></div>
+
+    <span class="k">def</span> <span class="nf">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Dynamic dictionary filtering.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">attr</span> <span class="o">==</span> <span class="s1">&#39;done&#39;</span> <span class="ow">or</span> <span class="n">attr</span> <span class="o">==</span> <span class="s1">&#39;queued&#39;</span> <span class="ow">or</span> <span class="n">attr</span> <span class="o">==</span> <span class="s1">&#39;waiting&#39;</span> \
+                <span class="ow">or</span> <span class="n">attr</span> <span class="o">==</span> <span class="s1">&#39;running&#39;</span><span class="p">:</span>
+            <span class="n">newdict</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">jobid</span><span class="p">,</span> <span class="n">job_info</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">job_info</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">attr</span><span class="p">:</span>
+                    <span class="n">newdict</span><span class="p">[</span><span class="n">jobid</span><span class="p">]</span> <span class="o">=</span> <span class="n">job_info</span>
+            <span class="k">return</span> <span class="n">newdict</span>
+
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Allow direct accessing of jobs by job id.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Allow us to be iterable&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">jobno</span><span class="p">,</span> <span class="n">job</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">yield</span> <span class="n">jobno</span><span class="p">,</span> <span class="n">job</span>
+
+    <span class="k">def</span> <span class="nf">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Length is the total job count.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Class information.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+        <span class="k">return</span> <span class="p">(</span><span class="s2">&quot;JobQueue&lt;({})jobs:{};completed:{};running:{};queued:{}&gt;&quot;</span>
+                <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cores</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">done</span><span class="p">),</span>
+                        <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">running</span><span class="p">),</span>
+                        <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">waiting</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">queued</span><span class="p">)))</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Print jobs.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Job"><a class="viewcode-back" href="../../api.html#cluster.jobqueue.Job">[docs]</a><span class="k">class</span> <span class="nc">Job</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="sd">&quot;&quot;&quot;An object to pass arguments to the runner.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">function</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">depends</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                    <span class="n">cores</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Parse and save arguments.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">args</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+            <span class="n">args</span> <span class="o">=</span> <span class="p">(</span><span class="n">args</span><span class="p">,)</span>
+        <span class="k">if</span> <span class="n">kwargs</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">kwargs</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;kwargs must be a dict&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">depends</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">depends</span><span class="p">,</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">list</span><span class="p">)):</span>
+                <span class="n">depends</span> <span class="o">=</span> <span class="p">[</span><span class="n">depends</span><span class="p">]</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">depends</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">depends</span><span class="p">]</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;dependencies must be integer job ids&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">function</span> <span class="o">=</span> <span class="n">function</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">args</span>     <span class="o">=</span> <span class="n">args</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span>   <span class="o">=</span> <span class="n">kwargs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">depends</span>  <span class="o">=</span> <span class="n">depends</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cores</span>    <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">cores</span><span class="p">)</span>
+
+        <span class="c1"># Assigned later</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">id</span>       <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pid</span>      <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">exitcode</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">out</span>      <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">state</span>    <span class="o">=</span> <span class="s1">&#39;Not Submitted&#39;</span>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Job Info.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">(</span><span class="s2">&quot;Job&lt;{} (function:{},args:{},&quot;</span> <span class="o">+</span>
+                <span class="s2">&quot;kwargs:{};cores:{}) {}&gt;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cores</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Print Info and Output.&quot;&quot;&quot;</span>
+        <span class="n">outstr</span>  <span class="o">=</span> <span class="s2">&quot;Job #{}; Cores: {}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="k">else</span> <span class="s1">&#39;NA&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cores</span><span class="p">)</span>
+        <span class="n">outstr</span> <span class="o">+=</span> <span class="s2">&quot;</span><span class="se">\t</span><span class="s2">Function: {}</span><span class="se">\n\t</span><span class="s2">args: {}</span><span class="se">\n\t</span><span class="s2">kwargs: {}</span><span class="se">\n\t</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">outstr</span> <span class="o">+=</span> <span class="s2">&quot;State: {}</span><span class="se">\n\t</span><span class="s2">Output: {}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">out</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">outstr</span></div>
+
+
+<span class="c1">###############################################################################</span>
+<span class="c1">#               The Job Runner that will fork and run all jobs                #</span>
+<span class="c1">###############################################################################</span>
+
+
+<div class="viewcode-block" id="job_runner"><a class="viewcode-back" href="../../api.html#cluster.jobqueue.job_runner">[docs]</a><span class="k">def</span> <span class="nf">job_runner</span><span class="p">(</span><span class="n">jobqueue</span><span class="p">,</span> <span class="n">outputs</span><span class="p">,</span> <span class="n">cores</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">jobno</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Run jobs with dependency tracking.</span>
+
+<span class="sd">    Must be run as a separate multiprocessing.Process to function correctly.</span>
+
+<span class="sd">    :jobqueue: A multiprocessing.Queue object into which Job objects</span>
+<span class="sd">               must be added. The function continually searches this Queue for</span>
+<span class="sd">               new jobs. Note, function must be a function call, it cannot be</span>
+<span class="sd">               anything else.</span>
+<span class="sd">               function is the only required argument, the rest are optional.</span>
+<span class="sd">               tuples are required.</span>
+<span class="sd">    :outputs:  A multiprocessing.Queue object that will take outputs. A</span>
+<span class="sd">               dictionary of job objects will be output here with the format::</span>
+<span class="sd">               {job_no =&gt; Job}</span>
+<span class="sd">               **NOTE**: function return must be picklable otherwise this will</span>
+<span class="sd">               raise an exception when it is put into the Queue object.</span>
+<span class="sd">    :cores:    Number of cores to use in the multiprocessing pool. Defaults to</span>
+<span class="sd">               all.</span>
+<span class="sd">    :jobno:    What number to start counting jobs from, default 1.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">output</span><span class="p">(</span><span class="n">out</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Explicitly clear the dictionary before sending the output.&quot;&quot;&quot;</span>
+        <span class="c1"># Don&#39;t send output if it is the same as last time.</span>
+        <span class="n">lastout</span> <span class="o">=</span> <span class="n">outputs</span><span class="o">.</span><span class="n">get</span><span class="p">()</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">outputs</span><span class="o">.</span><span class="n">empty</span><span class="p">()</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">out</span> <span class="o">==</span> <span class="n">lastout</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="k">while</span> <span class="ow">not</span> <span class="n">outputs</span><span class="o">.</span><span class="n">empty</span><span class="p">():</span>
+            <span class="c1"># Clear the output object</span>
+            <span class="n">outputs</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+        <span class="n">outputs</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+
+    <span class="c1"># Make sure we have Queue objects</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">jobqueue</span><span class="p">,</span> <span class="n">mp</span><span class="o">.</span><span class="n">queues</span><span class="o">.</span><span class="n">Queue</span><span class="p">)</span> \
+            <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">outputs</span><span class="p">,</span> <span class="n">mp</span><span class="o">.</span><span class="n">queues</span><span class="o">.</span><span class="n">Queue</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">ClusterError</span><span class="p">(</span><span class="s1">&#39;jobqueue and outputs must be multiprocessing &#39;</span> <span class="o">+</span>
+                           <span class="s1">&#39;Queue objects&#39;</span><span class="p">)</span>
+
+    <span class="c1"># Initialize job objects</span>
+    <span class="n">jobno</span>   <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">jobno</span><span class="p">)</span> <span class="k">if</span> <span class="n">jobno</span> \
+              <span class="k">else</span> <span class="nb">int</span><span class="p">(</span><span class="n">config_file</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;jobqueue&#39;</span><span class="p">,</span> <span class="s1">&#39;jobno&#39;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="mi">1</span><span class="p">)))</span>
+    <span class="n">jobs</span>    <span class="o">=</span> <span class="p">{}</span> <span class="c1"># This will hold job numbers</span>
+    <span class="n">started</span> <span class="o">=</span> <span class="p">[]</span> <span class="c1"># A list of started jobs to check against</span>
+    <span class="n">cores</span>   <span class="o">=</span> <span class="n">cores</span> <span class="k">if</span> <span class="n">cores</span> <span class="k">else</span> <span class="n">THREADS</span>
+    <span class="n">queue</span>   <span class="o">=</span> <span class="p">[]</span> <span class="c1"># This will hold Processes that haven&#39;t started yet</span>
+    <span class="n">running</span> <span class="o">=</span> <span class="p">[]</span> <span class="c1"># This will hold actively running jobs to manage core count</span>
+    <span class="n">done</span>    <span class="o">=</span> <span class="p">[]</span> <span class="c1"># A list of completed jobs to check against</span>
+
+    <span class="c1"># Actually loop through the jobs</span>
+    <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">jobqueue</span><span class="o">.</span><span class="n">empty</span><span class="p">():</span>
+            <span class="n">oldjob</span> <span class="o">=</span> <span class="n">jobno</span>
+            <span class="n">jobno</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">newjob</span> <span class="o">=</span> <span class="n">jobno</span>
+            <span class="c1"># Sometimes the thread stalls if it has been left a while and</span>
+            <span class="c1"># ends up reusing the same job number. I don&#39;t know why this</span>
+            <span class="c1"># happens, however explicitly getting the jobno seems to fix the</span>
+            <span class="c1"># issue. Just to be sure I also want to test that the job number is</span>
+            <span class="c1"># incremented, but this is a little redundant at this point.</span>
+            <span class="k">assert</span> <span class="n">newjob</span> <span class="o">==</span> <span class="n">oldjob</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="n">job</span> <span class="o">=</span> <span class="n">jobqueue</span><span class="o">.</span><span class="n">get_nowait</span><span class="p">()</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">job</span><span class="p">,</span> <span class="n">Job</span><span class="p">):</span>
+                <span class="n">logme</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;job information must be a job object, was {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                    <span class="nb">type</span><span class="p">(</span><span class="n">job</span><span class="p">)),</span> <span class="s1">&#39;error&#39;</span><span class="p">)</span>
+                <span class="k">continue</span>
+
+            <span class="c1"># The arguments look good, so lets add this to the stack.</span>
+            <span class="n">job</span><span class="o">.</span><span class="n">state</span>   <span class="o">=</span> <span class="s1">&#39;submitted&#39;</span>
+            <span class="n">job</span><span class="o">.</span><span class="n">id</span>      <span class="o">=</span> <span class="n">jobno</span>
+            <span class="n">jobs</span><span class="p">[</span><span class="n">jobno</span><span class="p">]</span> <span class="o">=</span> <span class="n">job</span>
+
+            <span class="c1"># Send the job dictionary</span>
+            <span class="n">output</span><span class="p">(</span><span class="n">jobs</span><span class="p">)</span>
+
+        <span class="c1"># If there are jobs, try and run them</span>
+        <span class="k">if</span> <span class="n">jobs</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">jobno</span><span class="p">,</span> <span class="n">job_info</span> <span class="ow">in</span> <span class="n">jobs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="c1"># Skip completed jobs</span>
+                <span class="k">if</span> <span class="n">job_info</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;done&#39;</span><span class="p">:</span>
+                    <span class="k">continue</span>
+
+                <span class="c1"># Check dependencies</span>
+                <span class="n">ready</span> <span class="o">=</span> <span class="bp">True</span>
+                <span class="k">if</span> <span class="n">job_info</span><span class="o">.</span><span class="n">depends</span><span class="p">:</span>
+                    <span class="k">for</span> <span class="n">depend</span> <span class="ow">in</span> <span class="n">job_info</span><span class="o">.</span><span class="n">depends</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">depend</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">done</span><span class="p">:</span>
+                            <span class="n">ready</span> <span class="o">=</span> <span class="bp">False</span>
+                            <span class="n">job_info</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;waiting&#39;</span>
+                            <span class="n">output</span><span class="p">(</span><span class="n">jobs</span><span class="p">)</span>
+
+                <span class="c1"># Start jobs if dependencies are met and they aren&#39;t started.</span>
+                <span class="c1"># We use daemon mode so that child jobs are killed on exit.</span>
+                <span class="k">if</span> <span class="n">ready</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">jobno</span> <span class="ow">in</span> <span class="n">started</span><span class="p">:</span>
+                    <span class="n">ver</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="o">.</span><span class="n">major</span>
+                    <span class="c1"># Python 2 doesn&#39;t support daemon, even though the docs</span>
+                    <span class="c1"># say that it does.</span>
+                    <span class="n">gen_args</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">jobno</span><span class="p">))</span> <span class="k">if</span> <span class="n">ver</span> <span class="o">==</span> <span class="mi">2</span> \
+                        <span class="k">else</span> <span class="nb">dict</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">jobno</span><span class="p">),</span> <span class="n">daemon</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">job_info</span><span class="o">.</span><span class="n">args</span> <span class="ow">and</span> <span class="n">job_info</span><span class="o">.</span><span class="n">kwargs</span><span class="p">:</span>
+                        <span class="n">queue</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">mp</span><span class="o">.</span><span class="n">Process</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">job_info</span><span class="o">.</span><span class="n">function</span><span class="p">,</span>
+                                                 <span class="n">args</span><span class="o">=</span><span class="n">job_info</span><span class="o">.</span><span class="n">args</span><span class="p">,</span>
+                                                 <span class="n">kwargs</span><span class="o">=</span><span class="n">job_info</span><span class="o">.</span><span class="n">kwargs</span><span class="p">,</span>
+                                                 <span class="o">**</span><span class="n">gen_args</span><span class="p">),</span>
+                                      <span class="n">job_info</span><span class="o">.</span><span class="n">cores</span><span class="p">))</span>
+                    <span class="k">elif</span> <span class="n">job_info</span><span class="o">.</span><span class="n">args</span><span class="p">:</span>
+                        <span class="n">queue</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">mp</span><span class="o">.</span><span class="n">Process</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">job_info</span><span class="o">.</span><span class="n">function</span><span class="p">,</span>
+                                                 <span class="n">args</span><span class="o">=</span><span class="n">job_info</span><span class="o">.</span><span class="n">args</span><span class="p">,</span>
+                                                 <span class="o">**</span><span class="n">gen_args</span><span class="p">),</span>
+                                      <span class="n">job_info</span><span class="o">.</span><span class="n">cores</span><span class="p">))</span>
+                    <span class="k">elif</span> <span class="n">job_info</span><span class="o">.</span><span class="n">kwargs</span><span class="p">:</span>
+                        <span class="n">queue</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">mp</span><span class="o">.</span><span class="n">Process</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">job_info</span><span class="o">.</span><span class="n">function</span><span class="p">,</span>
+                                                 <span class="n">kwargs</span><span class="o">=</span><span class="n">job_info</span><span class="o">.</span><span class="n">kwargs</span><span class="p">,</span>
+                                                 <span class="o">**</span><span class="n">gen_args</span><span class="p">),</span>
+                                      <span class="n">job_info</span><span class="o">.</span><span class="n">cores</span><span class="p">))</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">queue</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">mp</span><span class="o">.</span><span class="n">Process</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">job_info</span><span class="o">.</span><span class="n">function</span><span class="p">,</span>
+                                                 <span class="o">**</span><span class="n">gen_args</span><span class="p">),</span>
+                                      <span class="n">job_info</span><span class="o">.</span><span class="n">cores</span><span class="p">))</span>
+                    <span class="n">job_info</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;queued&#39;</span>
+                    <span class="n">started</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">jobno</span><span class="p">)</span>
+                    <span class="n">output</span><span class="p">(</span><span class="n">jobs</span><span class="p">)</span>
+
+        <span class="c1"># Actually run jobs</span>
+        <span class="k">if</span> <span class="n">queue</span><span class="p">:</span>
+            <span class="c1"># Get currently used cores, ignore ourself</span>
+            <span class="n">running_cores</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">running</span><span class="p">]:</span>
+                <span class="n">running_cores</span> <span class="o">+=</span> <span class="n">i</span>
+            <span class="c1"># Look for a job to run</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">queue</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">j</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">running_cores</span> <span class="o">&lt;=</span> <span class="n">cores</span><span class="p">:</span>
+                    <span class="n">j</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+                    <span class="n">jobs</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">j</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">)]</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;running&#39;</span>
+                    <span class="n">jobs</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">j</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">)]</span><span class="o">.</span><span class="n">pid</span> <span class="o">=</span> <span class="n">j</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">pid</span>
+                    <span class="n">running</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">queue</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">queue</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">j</span><span class="p">)))</span>
+                    <span class="n">output</span><span class="p">(</span><span class="n">jobs</span><span class="p">)</span>
+                    <span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>  <span class="c1"># Wait for a second to allow job to start</span>
+                    <span class="k">break</span>
+
+        <span class="c1"># Clean out running jobs</span>
+        <span class="k">if</span> <span class="n">running</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">running</span><span class="p">:</span>
+                <span class="n">j</span> <span class="o">=</span> <span class="n">i</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">j</span><span class="o">.</span><span class="n">is_alive</span><span class="p">():</span>
+                    <span class="n">jobs</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">j</span><span class="o">.</span><span class="n">name</span><span class="p">)]</span><span class="o">.</span><span class="n">out</span> <span class="o">=</span> <span class="n">j</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+                    <span class="n">jobs</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">j</span><span class="o">.</span><span class="n">name</span><span class="p">)]</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;done&#39;</span>
+                    <span class="n">jobs</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">j</span><span class="o">.</span><span class="n">name</span><span class="p">)]</span><span class="o">.</span><span class="n">exitcode</span> <span class="o">=</span> <span class="n">j</span><span class="o">.</span><span class="n">exitcode</span>
+                    <span class="n">done</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">j</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+                    <span class="n">running</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">running</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">i</span><span class="p">))</span>
+                    <span class="n">output</span><span class="p">(</span><span class="n">jobs</span><span class="p">)</span>
+
+        <span class="c1"># Wait for half a second before looping again</span>
+        <span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2016, Michael Dacre <mike.dacre@gmail.com>.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.4.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.8</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

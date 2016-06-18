@@ -1,0 +1,167 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Welcome to Python Cluster’s documentation! &mdash; Python Cluster 0.6.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.6.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Python Cluster 0.6.1 documentation" href="#" />
+    <link rel="next" title="Basic Usage" href="usage.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body role="document">
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="welcome-to-python-cluster-s-documentation">
+<h1>Welcome to Python Cluster&#8217;s documentation!<a class="headerlink" href="#welcome-to-python-cluster-s-documentation" title="Permalink to this headline">¶</a></h1>
+<p>Submit jobs to slurm or torque, or with multiprocessing.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="15%" />
+<col width="85%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>Author</td>
+<td>Michael D Dacre &lt;<a class="reference external" href="mailto:mike&#46;dacre&#37;&#52;&#48;gmail&#46;com">mike<span>&#46;</span>dacre<span>&#64;</span>gmail<span>&#46;</span>com</a>&gt;</td>
+</tr>
+<tr class="row-even"><td>License</td>
+<td>MIT License, property of Stanford, use as you wish</td>
+</tr>
+<tr class="row-odd"><td>Version</td>
+<td>0.6.1</td>
+</tr>
+</tbody>
+</table>
+<p>Allows simple job submission with <em>dependency tracking and queue waiting</em> with
+either torque, slurm, or locally with the multiprocessing module. It uses simple
+techiques to avoid overwhelming the queue and to catch bugs on the fly.</p>
+<p>Contents:</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Basic Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#installation">Installation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="usage.html#prerequisites">Prerequisites</a></li>
+<li class="toctree-l3"><a class="reference internal" href="usage.html#function-submission">Function Submission</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#simple-usage">Simple Usage</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="usage.html#setting-environment">Setting Environment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="usage.html#simple-job-submission">Simple Job Submission</a></li>
+<li class="toctree-l3"><a class="reference internal" href="usage.html#functions">Functions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="usage.html#file-submission">File Submission</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#queue-management">Queue Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#advanced-usage">Advanced Usage</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="usage.html#keyword-arguments">Keyword Arguments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="usage.html#profiles-and-the-config-file">Profiles and the Config File</a></li>
+<li class="toctree-l3"><a class="reference internal" href="usage.html#job-files">Job Files</a></li>
+<li class="toctree-l3"><a class="reference internal" href="usage.html#dependecy-tracking">Dependecy Tracking</a></li>
+<li class="toctree-l3"><a class="reference internal" href="usage.html#logging">Logging</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#code-overview">Code Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#issues-and-contributing">Issues and Contributing</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="scripts.html">Scripts</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="scripts.html#clean-job-files">clean_job_files</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api.html#queueing">Queueing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#job-management">Job Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#options">Options</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#config-file">Config File</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#local-queue-implementation">Local Queue Implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#logme">Logme</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#other-functions">Other Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#indices-and-tables">Indices and tables</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<ul class="simple">
+<li><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></li>
+<li><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></li>
+</ul>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="#">Documentation overview</a><ul>
+      <li>Next: <a href="usage.html" title="next chapter">Basic Usage</a></li>
+  </ul></li>
+</ul>
+</div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/index.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2016, Michael Dacre <mike.dacre@gmail.com>.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.4.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.8</a>
+      
+      |
+      <a href="_sources/index.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

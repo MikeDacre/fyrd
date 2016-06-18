@@ -1,0 +1,592 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>cluster.options &mdash; Python Cluster 0.6.1 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.6.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="Python Cluster 0.6.1 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body role="document">
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for cluster.options</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Available options for job submission.</span>
+
+<span class="sd">===============================================================================</span>
+
+<span class="sd">        AUTHOR: Michael D Dacre, mike.dacre@gmail.com</span>
+<span class="sd">  ORGANIZATION: Stanford University</span>
+<span class="sd">       LICENSE: MIT License, property of Stanford, use as you wish</span>
+<span class="sd">       CREATED: 2016-31-17 08:04</span>
+<span class="sd"> Last modified: 2016-06-17 17:45</span>
+
+<span class="sd">   DESCRIPTION: All keyword arguments that can be used with Job() objects are</span>
+<span class="sd">                defined in this file. These can be editted by the end user to</span>
+<span class="sd">                increase functionality.</span>
+
+<span class="sd">                Options are defined in dictionaries with the syntax:</span>
+<span class="sd">                    &#39;name&#39;: {&#39;slurm&#39;: The command to be used for slurm</span>
+<span class="sd">                             &#39;torque&#39;: The command to be used for torque</span>
+<span class="sd">                             &#39;default&#39;: The default to use if not set</span>
+<span class="sd">                             &#39;type&#39;: The python object type for the option</span>
+<span class="sd">                             &#39;help&#39;: A string with help information</span>
+
+<span class="sd">                All of these fields are required except in the case that:</span>
+<span class="sd">                    1. The option is managed in options_to_string explicitly</span>
+<span class="sd">                    2. The option is in NORMAL, TORQUE, or SLURM dictionaries,</span>
+<span class="sd">                       in which case flags used by other queue systems can be</span>
+<span class="sd">                       skipped.</span>
+
+<span class="sd">===============================================================================</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">from</span> <span class="nn">textwrap</span> <span class="kn">import</span> <span class="n">wrap</span><span class="p">,</span> <span class="n">fill</span>
+<span class="kn">from</span> <span class="nn">itertools</span> <span class="kn">import</span> <span class="n">groupby</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">OrderedDict</span>
+
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">run</span>
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">logme</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;option_help&#39;</span><span class="p">]</span>
+
+<span class="c1">###############################################################################</span>
+<span class="c1">#                       Possible Job Submission Options                       #</span>
+<span class="c1">###############################################################################</span>
+
+<span class="c1"># Defined by dictionaries:</span>
+<span class="c1">#      type: python type to convert option into</span>
+<span class="c1">#     slurm: the string to format args into for slurm</span>
+<span class="c1">#    torque: the string to format args into for torque</span>
+<span class="c1"># [s|t]join: used to join list types for slurm or torque</span>
+<span class="c1">#      help: Info for the user on the option</span>
+
+<span class="c1"># Options available in all modes</span>
+<span class="n">COMMON</span>  <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">([</span>
+    <span class="p">(</span><span class="s1">&#39;cores&#39;</span><span class="p">,</span>
+     <span class="p">{</span><span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="s1">&#39;Number of cores to use for the job&#39;</span><span class="p">,</span>
+      <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="nb">int</span><span class="p">}),</span>
+    <span class="p">(</span><span class="s1">&#39;modules&#39;</span><span class="p">,</span>
+     <span class="p">{</span><span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="s1">&#39;Modules to load with the `module load` command&#39;</span><span class="p">,</span>
+      <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="bp">None</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="nb">list</span><span class="p">}),</span>
+    <span class="p">(</span><span class="s1">&#39;imports&#39;</span><span class="p">,</span>
+     <span class="p">{</span><span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="s1">&#39;Imports to be used in function calls (e.g. sys, os) &#39;</span>
+              <span class="s1">&#39;if not provided, defaults to all current imports, which &#39;</span>
+              <span class="s1">&#39;may not work if you use complex imports. The list can include &#39;</span>
+              <span class="s1">&#39;the import call, or just be a name, e.g. &#39;</span>
+              <span class="s2">&quot;[&#39;from os import path&#39;, &#39;sys&#39;]&quot;</span><span class="p">,</span>
+      <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="bp">None</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="nb">list</span><span class="p">}),</span>
+    <span class="p">(</span><span class="s1">&#39;filedir&#39;</span><span class="p">,</span>
+     <span class="p">{</span><span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="s1">&#39;Folder to write cluster files to, must be accessible &#39;</span> <span class="o">+</span>
+              <span class="s1">&#39;to the compute nodes.&#39;</span><span class="p">,</span>
+      <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">}),</span>
+    <span class="p">(</span><span class="s1">&#39;dir&#39;</span><span class="p">,</span>
+     <span class="p">{</span><span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="s1">&#39;The working directory for the job&#39;</span><span class="p">,</span>
+      <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="s1">&#39;path argument&#39;</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+      <span class="s1">&#39;slurm&#39;</span><span class="p">:</span> <span class="s1">&#39;--workdir={}&#39;</span><span class="p">,</span> <span class="s1">&#39;torque&#39;</span><span class="p">:</span> <span class="s1">&#39;-d {}&#39;</span><span class="p">}),</span>
+    <span class="p">(</span><span class="s1">&#39;suffix&#39;</span><span class="p">,</span>
+     <span class="p">{</span><span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="s1">&#39;A suffix to append to job files (e.g. job.suffix.qsub)&#39;</span><span class="p">,</span>
+      <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="s1">&#39;cluster&#39;</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">}),</span>
+    <span class="p">(</span><span class="s1">&#39;outfile&#39;</span><span class="p">,</span>
+     <span class="p">{</span><span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="s1">&#39;File to write STDOUT to&#39;</span><span class="p">,</span>
+      <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="bp">None</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+      <span class="s1">&#39;slurm&#39;</span><span class="p">:</span> <span class="s1">&#39;-o {}&#39;</span><span class="p">,</span> <span class="s1">&#39;torque&#39;</span><span class="p">:</span> <span class="s1">&#39;-o {}&#39;</span><span class="p">}),</span>
+    <span class="p">(</span><span class="s1">&#39;errfile&#39;</span><span class="p">,</span>
+     <span class="p">{</span><span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="s1">&#39;File to write STDERR to&#39;</span><span class="p">,</span>
+      <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="bp">None</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+      <span class="s1">&#39;slurm&#39;</span><span class="p">:</span> <span class="s1">&#39;-e {}&#39;</span><span class="p">,</span> <span class="s1">&#39;torque&#39;</span><span class="p">:</span> <span class="s1">&#39;-e {}&#39;</span><span class="p">}),</span>
+<span class="p">])</span>
+
+<span class="c1"># Options used in only local runs</span>
+<span class="n">NORMAL</span>  <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">([</span>
+    <span class="p">(</span><span class="s1">&#39;threads&#39;</span><span class="p">,</span>
+     <span class="p">{</span><span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="s1">&#39;Number of threads to use on the local machine&#39;</span><span class="p">,</span>
+      <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="nb">int</span><span class="p">}),</span>
+<span class="p">])</span>
+
+<span class="c1"># Options used in both torque and slurm</span>
+<span class="n">CLUSTER_CORE</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">([</span>
+    <span class="p">(</span><span class="s1">&#39;nodes&#39;</span><span class="p">,</span>
+     <span class="p">{</span><span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="s1">&#39;Number of nodes to request&#39;</span><span class="p">,</span>
+      <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="nb">int</span><span class="p">}),</span>
+    <span class="p">(</span><span class="s1">&#39;features&#39;</span><span class="p">,</span>
+     <span class="p">{</span><span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="s1">&#39;A comma-separated list of node features to require&#39;</span><span class="p">,</span>
+      <span class="s1">&#39;slurm&#39;</span><span class="p">:</span> <span class="s1">&#39;--constraint={}&#39;</span><span class="p">,</span> <span class="c1"># Torque in options_to_string()</span>
+      <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="bp">None</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="s1">&#39;sjoin&#39;</span><span class="p">:</span> <span class="s1">&#39;&amp;&#39;</span><span class="p">}),</span>
+    <span class="p">(</span><span class="s1">&#39;time&#39;</span><span class="p">,</span>
+     <span class="p">{</span><span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="s1">&#39;Walltime in HH:MM:SS&#39;</span><span class="p">,</span>
+      <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="s1">&#39;12:00:00&#39;</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+      <span class="s1">&#39;slurm&#39;</span><span class="p">:</span> <span class="s1">&#39;--time={}&#39;</span><span class="p">,</span> <span class="s1">&#39;torque&#39;</span><span class="p">:</span> <span class="s1">&#39;walltime={}&#39;</span><span class="p">}),</span>
+    <span class="c1"># We explictly set MB in torque</span>
+    <span class="p">(</span><span class="s1">&#39;mem&#39;</span><span class="p">,</span>
+     <span class="p">{</span><span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="s1">&#39;Memory to use in MB (e.g. 4000)&#39;</span><span class="p">,</span>
+      <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="mi">4000</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">),</span>
+      <span class="s1">&#39;slurm&#39;</span><span class="p">:</span> <span class="s1">&#39;--mem={}&#39;</span><span class="p">,</span> <span class="s1">&#39;torque&#39;</span><span class="p">:</span> <span class="s1">&#39;mem={}MB&#39;</span><span class="p">}),</span>
+    <span class="p">(</span><span class="s1">&#39;partition&#39;</span><span class="p">,</span>
+     <span class="p">{</span><span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="s1">&#39;The partition/queue to run in (e.g. local/batch)&#39;</span><span class="p">,</span>
+      <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="bp">None</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+      <span class="s1">&#39;slurm&#39;</span><span class="p">:</span> <span class="s1">&#39;-p {}&#39;</span><span class="p">,</span> <span class="s1">&#39;torque&#39;</span><span class="p">:</span> <span class="s1">&#39;-q {}&#39;</span><span class="p">}),</span>
+<span class="p">])</span>
+
+<span class="c1">### Note: There are many more options, as them as need to the following lists,</span>
+<span class="c1">###       CLUSTER_OPTS should be used for options that work on both systems,</span>
+<span class="c1">###       the TORQUE and SLURM dictionaries should be used for options that are</span>
+<span class="c1">###       unique to one.</span>
+
+<span class="c1"># Additional options shared between systems</span>
+<span class="n">CLUSTER_OPTS</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">([</span>
+    <span class="p">(</span><span class="s1">&#39;account&#39;</span><span class="p">,</span>
+     <span class="p">{</span><span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="s1">&#39;Account to be charged&#39;</span><span class="p">,</span> <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="bp">None</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+      <span class="s1">&#39;slurm&#39;</span><span class="p">:</span> <span class="s1">&#39;--account={}&#39;</span><span class="p">,</span> <span class="s1">&#39;torque&#39;</span><span class="p">:</span> <span class="s1">&#39;-A {}&#39;</span><span class="p">}),</span>
+    <span class="p">(</span><span class="s1">&#39;export&#39;</span><span class="p">,</span>
+     <span class="p">{</span><span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="s1">&#39;Comma separated list of environmental variables to export&#39;</span><span class="p">,</span>
+      <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="bp">None</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+      <span class="s1">&#39;slurm&#39;</span><span class="p">:</span> <span class="s1">&#39;--export={}&#39;</span><span class="p">,</span> <span class="s1">&#39;torque&#39;</span><span class="p">:</span> <span class="s1">&#39;-v {}&#39;</span><span class="p">}),</span>
+<span class="p">])</span>
+
+<span class="c1">###############################################################################</span>
+<span class="c1">#                                Torque Options                               #</span>
+<span class="c1">#  from: adaptivecomputing.com/torque/4-0-2/Content/topics/commands/qsub.htm  #</span>
+<span class="c1">###############################################################################</span>
+
+<span class="n">TORQUE</span> <span class="o">=</span>  <span class="n">OrderedDict</span><span class="p">()</span>
+
+<span class="c1">#####################################################</span>
+<span class="c1">#                   SLURM Options                   #</span>
+<span class="c1">#  from: http://slurm.schedmd.com/pdfs/summary.pdf  #</span>
+<span class="c1">#####################################################</span>
+
+<span class="n">SLURM</span>  <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">([</span>
+    <span class="p">(</span><span class="s1">&#39;begin&#39;</span><span class="p">,</span>
+     <span class="p">{</span><span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="s1">&#39;Start after this much time&#39;</span><span class="p">,</span>
+      <span class="s1">&#39;slurm&#39;</span><span class="p">:</span> <span class="s1">&#39;--begin={}&#39;</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+      <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="bp">None</span><span class="p">}),</span>
+<span class="p">])</span>
+
+
+<span class="c1">###############################################################################</span>
+<span class="c1">#                     Composites for Checking and Lookup                      #</span>
+<span class="c1">###############################################################################</span>
+
+
+<span class="n">SLURM_KWDS</span> <span class="o">=</span> <span class="n">COMMON</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+<span class="k">for</span> <span class="n">kds</span> <span class="ow">in</span> <span class="p">[</span><span class="n">CLUSTER_CORE</span><span class="p">,</span> <span class="n">CLUSTER_OPTS</span><span class="p">,</span> <span class="n">SLURM</span><span class="p">]:</span>
+    <span class="n">SLURM_KWDS</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">kds</span><span class="p">)</span>
+
+<span class="n">TORQUE_KWDS</span> <span class="o">=</span> <span class="n">COMMON</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+<span class="k">for</span> <span class="n">kds</span> <span class="ow">in</span> <span class="p">[</span><span class="n">CLUSTER_CORE</span><span class="p">,</span> <span class="n">CLUSTER_OPTS</span><span class="p">,</span> <span class="n">TORQUE</span><span class="p">]:</span>
+    <span class="n">TORQUE_KWDS</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">kds</span><span class="p">)</span>
+
+<span class="n">CLUSTER_KWDS</span> <span class="o">=</span> <span class="n">SLURM_KWDS</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+<span class="n">CLUSTER_KWDS</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">TORQUE_KWDS</span><span class="p">)</span>
+
+<span class="n">NORMAL_KWDS</span> <span class="o">=</span> <span class="n">COMMON</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+<span class="k">for</span> <span class="n">kds</span> <span class="ow">in</span> <span class="p">[</span><span class="n">NORMAL</span><span class="p">]:</span>
+    <span class="n">NORMAL_KWDS</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">kds</span><span class="p">)</span>
+
+<span class="n">ALL_KWDS</span> <span class="o">=</span> <span class="n">CLUSTER_KWDS</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+<span class="n">ALL_KWDS</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">NORMAL_KWDS</span><span class="p">)</span>
+
+<span class="c1"># Will be &#39;name&#39; -&gt; type</span>
+<span class="n">ALLOWED_KWDS</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">info</span> <span class="ow">in</span> <span class="n">ALL_KWDS</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="n">ALLOWED_KWDS</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">info</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="k">if</span> <span class="s1">&#39;type&#39;</span> <span class="ow">in</span> <span class="n">info</span> <span class="k">else</span> <span class="bp">None</span>
+
+<span class="c1">###############################################################################</span>
+<span class="c1">#                          Option Handling Functions                          #</span>
+<span class="c1">###############################################################################</span>
+
+
+<div class="viewcode-block" id="check_arguments"><a class="viewcode-back" href="../../api.html#cluster.options.check_arguments">[docs]</a><span class="k">def</span> <span class="nf">check_arguments</span><span class="p">(</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Make sure all keywords are allowed.</span>
+
+<span class="sd">    Raises Exception on error, returns sanitized dictionary on success.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">new_kwds</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="c1"># Make sure types are correct</span>
+    <span class="k">for</span> <span class="n">arg</span><span class="p">,</span> <span class="n">opt</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">arg</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ALLOWED_KWDS</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s1">&#39;Unrecognized argument {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">arg</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">opt</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">opt</span><span class="p">,</span> <span class="n">ALLOWED_KWDS</span><span class="p">[</span><span class="n">arg</span><span class="p">]):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">newtype</span> <span class="o">=</span> <span class="n">ALLOWED_KWDS</span><span class="p">[</span><span class="n">arg</span><span class="p">]</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">newtype</span> <span class="ow">is</span> <span class="nb">list</span> <span class="ow">or</span> <span class="n">newtype</span> <span class="ow">is</span> <span class="nb">tuple</span><span class="p">)</span> \
+                        <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
+                    <span class="k">if</span> <span class="n">newtype</span> <span class="ow">is</span> <span class="nb">list</span><span class="p">:</span>
+                        <span class="n">opt2</span> <span class="o">=</span> <span class="p">[</span><span class="n">opt</span><span class="p">]</span>
+                    <span class="k">elif</span> <span class="n">newtype</span> <span class="ow">is</span> <span class="nb">tuple</span><span class="p">:</span>
+                        <span class="n">opt2</span> <span class="o">=</span> <span class="p">(</span><span class="n">opt</span><span class="p">,)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Shouldn&#39;t be here&quot;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">opt2</span> <span class="o">=</span> <span class="n">newtype</span><span class="p">(</span><span class="n">opt</span><span class="p">)</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;arg must be {}, is {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                    <span class="n">ALLOWED_KWDS</span><span class="p">[</span><span class="n">arg</span><span class="p">],</span> <span class="nb">type</span><span class="p">(</span><span class="n">opt</span><span class="p">)))</span>
+            <span class="n">new_kwds</span><span class="p">[</span><span class="n">arg</span><span class="p">]</span> <span class="o">=</span> <span class="n">opt2</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">new_kwds</span><span class="p">[</span><span class="n">arg</span><span class="p">]</span> <span class="o">=</span> <span class="n">opt</span>
+
+    <span class="c1"># Parse individual complex options</span>
+    <span class="k">for</span> <span class="n">arg</span><span class="p">,</span> <span class="n">opt</span> <span class="ow">in</span> <span class="n">new_kwds</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">arg</span> <span class="o">==</span> <span class="s1">&#39;time&#39;</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">if</span> <span class="s1">&#39;-&#39;</span> <span class="ow">in</span> <span class="n">opt</span><span class="p">:</span>
+                    <span class="n">day</span><span class="p">,</span> <span class="n">time</span> <span class="o">=</span> <span class="n">opt</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">day</span> <span class="o">=</span> <span class="mi">0</span>
+                    <span class="n">time</span> <span class="o">=</span> <span class="n">opt</span>
+                <span class="n">time</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">time</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">)]</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">time</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+                    <span class="n">hours</span><span class="p">,</span> <span class="n">mins</span><span class="p">,</span> <span class="n">secs</span> <span class="o">=</span> <span class="n">time</span>
+                <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">time</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                    <span class="n">hours</span> <span class="o">=</span> <span class="mi">0</span>
+                    <span class="n">mins</span><span class="p">,</span> <span class="n">secs</span> <span class="o">=</span> <span class="n">time</span>
+                <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">time</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">hours</span> <span class="o">=</span> <span class="n">mins</span> <span class="o">=</span> <span class="mi">0</span>
+                    <span class="n">secs</span> <span class="o">=</span> <span class="n">time</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="n">hours</span> <span class="o">=</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">day</span><span class="p">)</span><span class="o">*</span><span class="mi">24</span><span class="p">)</span> <span class="o">+</span> <span class="n">hours</span>
+                <span class="n">opt</span> <span class="o">=</span> <span class="s1">&#39;{}:{}:{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">hours</span><span class="p">)</span><span class="o">.</span><span class="n">rjust</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="s1">&#39;0&#39;</span><span class="p">),</span>
+                                        <span class="nb">str</span><span class="p">(</span><span class="n">mins</span><span class="p">)</span><span class="o">.</span><span class="n">rjust</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="s1">&#39;0&#39;</span><span class="p">),</span>
+                                        <span class="nb">str</span><span class="p">(</span><span class="n">secs</span><span class="p">)</span><span class="o">.</span><span class="n">rjust</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="s1">&#39;0&#39;</span><span class="p">))</span>
+                <span class="n">new_kwds</span><span class="p">[</span><span class="n">arg</span><span class="p">]</span> <span class="o">=</span> <span class="n">opt</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s1">&#39;time must be formatted as D-HH:MM:SS &#39;</span> <span class="o">+</span>
+                                <span class="s1">&#39;or a fragment of that (e.g. MM:SS) &#39;</span> <span class="o">+</span>
+                                <span class="s1">&#39;it is formatted as {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">opt</span><span class="p">))</span>
+
+        <span class="c1"># Force memory into an integer of megabytes</span>
+        <span class="k">elif</span> <span class="n">arg</span> <span class="o">==</span> <span class="s1">&#39;mem&#39;</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">opt</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">opt</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
+                <span class="n">opt</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">opt</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># Try to guess unit by suffix</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">groups</span> <span class="o">=</span> <span class="n">groupby</span><span class="p">(</span><span class="n">opt</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="nb">str</span><span class="o">.</span><span class="n">isdigit</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;mem is malformatted, should be a number of &#39;</span> <span class="o">+</span>
+                                     <span class="s1">&#39;MB or a string like 24MB or 10GB, &#39;</span> <span class="o">+</span>
+                                     <span class="s1">&#39;it is: {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">opt</span><span class="p">))</span>
+                <span class="n">sval</span>  <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">groups</span><span class="p">)[</span><span class="mi">1</span><span class="p">]))</span>
+                <span class="n">sunit</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">groups</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">sunit</span> <span class="o">==</span> <span class="s1">&#39;b&#39;</span><span class="p">:</span>
+                    <span class="n">opt</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">sval</span><span class="p">)</span><span class="o">/</span><span class="nb">float</span><span class="p">(</span><span class="mi">1024</span><span class="p">)</span><span class="o">/</span><span class="nb">float</span><span class="p">(</span><span class="mi">1024</span><span class="p">))</span>
+                <span class="k">elif</span> <span class="n">sunit</span> <span class="o">==</span> <span class="s1">&#39;kb&#39;</span> <span class="ow">or</span> <span class="n">sunit</span> <span class="o">==</span> <span class="s1">&#39;k&#39;</span><span class="p">:</span>
+                    <span class="n">opt</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">sval</span><span class="p">)</span><span class="o">/</span><span class="nb">float</span><span class="p">(</span><span class="mi">1024</span><span class="p">))</span>
+                <span class="k">elif</span> <span class="n">sunit</span> <span class="o">==</span> <span class="s1">&#39;mb&#39;</span> <span class="ow">or</span> <span class="n">sunit</span> <span class="o">==</span> <span class="s1">&#39;m&#39;</span><span class="p">:</span>
+                    <span class="n">opt</span> <span class="o">=</span> <span class="n">sval</span>
+                <span class="k">elif</span> <span class="n">sunit</span> <span class="o">==</span> <span class="s1">&#39;gb&#39;</span> <span class="ow">or</span> <span class="n">sunit</span> <span class="o">==</span> <span class="s1">&#39;g&#39;</span><span class="p">:</span>
+                    <span class="n">opt</span> <span class="o">=</span> <span class="n">sval</span><span class="o">*</span><span class="mi">1024</span>
+                <span class="k">elif</span> <span class="n">sunit</span> <span class="o">==</span> <span class="s1">&#39;tb&#39;</span> <span class="ow">or</span> <span class="n">sunit</span> <span class="o">==</span> <span class="s1">&#39;t&#39;</span><span class="p">:</span>
+                    <span class="c1"># Crazy people</span>
+                    <span class="n">opt</span> <span class="o">=</span> <span class="n">sval</span><span class="o">*</span><span class="mi">1024</span><span class="o">*</span><span class="mi">1024</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s1">&#39;Unknown memory unit opt {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">sunit</span><span class="p">))</span>
+                <span class="c1"># Don&#39;t allow 0, minimum memory req is 5MB</span>
+                <span class="k">if</span> <span class="n">opt</span> <span class="o">&lt;</span> <span class="mi">5</span><span class="p">:</span>
+                    <span class="n">opt</span> <span class="o">=</span> <span class="mi">5</span>
+
+    <span class="k">return</span> <span class="n">new_kwds</span></div>
+
+
+<div class="viewcode-block" id="option_to_string"><a class="viewcode-back" href="../../api.html#cluster.options.option_to_string">[docs]</a><span class="k">def</span> <span class="nf">option_to_string</span><span class="p">(</span><span class="n">option</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">qtype</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return a string with an appropriate flag for slurm or torque.</span>
+
+<span class="sd">    :option: An allowed option definied in options.all_options</span>
+<span class="sd">    :value:  A value for that option if required (if None, default used)</span>
+<span class="sd">    :qtype:  &#39;torque&#39;, &#39;slurm&#39;, or &#39;local&#39;: override queue.MODE</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Import a couple of queue functions here</span>
+    <span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">queue</span>
+    <span class="n">qtype</span> <span class="o">=</span> <span class="n">qtype</span> <span class="k">if</span> <span class="n">qtype</span> <span class="k">else</span> <span class="n">queue</span><span class="o">.</span><span class="n">MODE</span>
+    <span class="n">queue</span><span class="o">.</span><span class="n">check_queue</span><span class="p">(</span><span class="n">qtype</span><span class="p">)</span>
+
+    <span class="n">option</span> <span class="o">=</span> <span class="n">option</span><span class="o">.</span><span class="n">rstrip</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">option</span> <span class="o">==</span> <span class="s1">&#39;cores&#39;</span> <span class="ow">or</span> <span class="n">option</span> <span class="o">==</span> <span class="s1">&#39;nodes&#39;</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s1">&#39;Cannot handle cores or nodes here, use &#39;</span> <span class="o">+</span>
+                        <span class="s1">&#39;options_to_string&#39;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">qtype</span> <span class="o">==</span> <span class="s1">&#39;slurm&#39;</span><span class="p">:</span>
+        <span class="n">kwds</span> <span class="o">=</span> <span class="n">SLURM_KWDS</span>
+    <span class="k">elif</span> <span class="n">qtype</span> <span class="o">==</span> <span class="s1">&#39;torque&#39;</span><span class="p">:</span>
+        <span class="n">kwds</span> <span class="o">=</span> <span class="n">TORQUE_KWDS</span>
+    <span class="k">elif</span> <span class="n">qtype</span> <span class="o">==</span> <span class="s1">&#39;local&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s1">&#39;&#39;</span>  <span class="c1"># There is no need of this in local mode</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># This should never happen</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s1">&#39;Invalid qtype {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">qtype</span><span class="p">))</span>
+
+    <span class="c1"># Make sure argument allowed</span>
+    <span class="n">option</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">check_arguments</span><span class="p">({</span><span class="n">option</span><span class="p">:</span> <span class="n">value</span><span class="p">})</span><span class="o">.</span><span class="n">items</span><span class="p">())[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="c1"># Fail with debug error if option not available in this mode</span>
+    <span class="k">if</span> <span class="n">option</span> <span class="ow">in</span> <span class="n">ALLOWED_KWDS</span> <span class="ow">and</span> <span class="n">option</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwds</span><span class="p">:</span>
+        <span class="n">logme</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;{} not available in {} mode.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">option</span><span class="p">,</span> <span class="n">qtype</span><span class="p">),</span>
+                  <span class="s1">&#39;debug&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="s1">&#39;&#39;</span>
+
+    <span class="c1"># Try to get default</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">value</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">kwds</span><span class="p">[</span><span class="n">option</span><span class="p">][</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="nb">bool</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s1">&#39;default&#39;</span> <span class="ow">in</span> <span class="n">kwds</span><span class="p">[</span><span class="n">option</span><span class="p">]:</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="n">kwds</span><span class="p">[</span><span class="n">option</span><span class="p">][</span><span class="s1">&#39;default&#39;</span><span class="p">]</span>
+                <span class="n">logme</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;Using default value {} for {}&#39;</span>
+                          <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">option</span><span class="p">),</span> <span class="s1">&#39;debug&#39;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s1">&#39;{} requires a value&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">option</span><span class="p">))</span>
+
+    <span class="c1"># Return formatted string</span>
+    <span class="n">prefix</span> <span class="o">=</span> <span class="s1">&#39;#SBATCH&#39;</span> <span class="k">if</span> <span class="n">qtype</span> <span class="o">==</span> <span class="s1">&#39;slurm&#39;</span> <span class="k">else</span> <span class="s1">&#39;#PBS&#39;</span>
+    <span class="k">if</span> <span class="s1">&#39;{}&#39;</span> <span class="ow">in</span> <span class="n">kwds</span><span class="p">[</span><span class="n">option</span><span class="p">][</span><span class="n">qtype</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s1">&#39;Cannot use None as an argument for option {}&#39;</span>
+                            <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">option</span><span class="p">))</span>
+        <span class="k">return</span> <span class="s1">&#39;{prefix} {optarg}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="n">prefix</span><span class="o">=</span><span class="n">prefix</span><span class="p">,</span> <span class="n">optarg</span><span class="o">=</span><span class="n">kwds</span><span class="p">[</span><span class="n">option</span><span class="p">][</span><span class="n">qtype</span><span class="p">]</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s1">&#39;{prefix} {option}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="n">prefix</span><span class="p">,</span>
+                                          <span class="n">option</span><span class="o">=</span><span class="n">kwds</span><span class="p">[</span><span class="n">option</span><span class="p">][</span><span class="n">qtype</span><span class="p">])</span></div>
+
+
+<div class="viewcode-block" id="options_to_string"><a class="viewcode-back" href="../../api.html#cluster.options.options_to_string">[docs]</a><span class="k">def</span> <span class="nf">options_to_string</span><span class="p">(</span><span class="n">option_dict</span><span class="p">,</span> <span class="n">qtype</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return a multi-line string for slurm or torque job submission.</span>
+
+<span class="sd">    :option_dict: Dict in format {option: value} where value can be None.</span>
+<span class="sd">                  If value is None, default used.</span>
+<span class="sd">    :qtype:       &#39;torque&#39;, &#39;slurm&#39;, or &#39;local&#39;: override queue.MODE</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Import a couple of queue functions here</span>
+    <span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">queue</span>
+
+    <span class="c1"># Sanitize arguments</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">option_dict</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;option_dict must be dict is {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="nb">type</span><span class="p">(</span><span class="n">option_dict</span><span class="p">)))</span>
+
+    <span class="n">option_dict</span> <span class="o">=</span> <span class="n">check_arguments</span><span class="p">(</span><span class="n">option_dict</span><span class="o">.</span><span class="n">copy</span><span class="p">())</span>
+
+    <span class="n">qtype</span> <span class="o">=</span> <span class="n">qtype</span> <span class="k">if</span> <span class="n">qtype</span> <span class="k">else</span> <span class="n">queue</span><span class="o">.</span><span class="n">MODE</span>
+
+    <span class="n">queue</span><span class="o">.</span><span class="n">check_queue</span><span class="p">(</span><span class="n">qtype</span><span class="p">)</span>
+
+    <span class="n">outlist</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># Handle cores separately</span>
+    <span class="n">nodes</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">option_dict</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;nodes&#39;</span><span class="p">))</span> <span class="k">if</span> <span class="s1">&#39;nodes&#39;</span> <span class="ow">in</span> <span class="n">option_dict</span> <span class="k">else</span> <span class="mi">1</span>
+    <span class="n">cores</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">option_dict</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;cores&#39;</span><span class="p">))</span> <span class="k">if</span> <span class="s1">&#39;cores&#39;</span> <span class="ow">in</span> <span class="n">option_dict</span> <span class="k">else</span> <span class="mi">1</span>
+
+    <span class="c1"># Set path if required</span>
+    <span class="k">if</span> <span class="s1">&#39;filedir&#39;</span> <span class="ow">in</span> <span class="n">option_dict</span><span class="p">:</span>
+        <span class="n">filedir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">option_dict</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;filedir&#39;</span><span class="p">))</span>
+        <span class="k">if</span> <span class="s1">&#39;outfile&#39;</span> <span class="ow">in</span> <span class="n">option_dict</span><span class="p">:</span>
+            <span class="n">option_dict</span><span class="p">[</span><span class="s1">&#39;outfile&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                <span class="n">filedir</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">option_dict</span><span class="p">[</span><span class="s1">&#39;outfile&#39;</span><span class="p">]))</span>
+        <span class="k">if</span> <span class="s1">&#39;errfile&#39;</span> <span class="ow">in</span> <span class="n">option_dict</span><span class="p">:</span>
+            <span class="n">option_dict</span><span class="p">[</span><span class="s1">&#39;errfile&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                <span class="n">filedir</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">option_dict</span><span class="p">[</span><span class="s1">&#39;errfile&#39;</span><span class="p">]))</span>
+
+    <span class="k">if</span> <span class="n">qtype</span> <span class="o">==</span> <span class="s1">&#39;slurm&#39;</span><span class="p">:</span>
+        <span class="n">outlist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;#SBATCH --ntasks {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">nodes</span><span class="p">))</span>
+        <span class="n">outlist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;#SBATCH --cpus-per-task {}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cores</span><span class="p">))</span>
+    <span class="k">elif</span> <span class="n">qtype</span> <span class="o">==</span> <span class="s1">&#39;torque&#39;</span><span class="p">:</span>
+        <span class="n">outstring</span> <span class="o">=</span> <span class="s1">&#39;#PBS -l nodes={}:ppn={}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">nodes</span><span class="p">,</span> <span class="n">cores</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s1">&#39;features&#39;</span> <span class="ow">in</span> <span class="n">option_dict</span><span class="p">:</span>
+            <span class="n">outstring</span> <span class="o">+=</span> <span class="s1">&#39;:&#39;</span> <span class="o">+</span> <span class="s1">&#39;:&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                <span class="n">run</span><span class="o">.</span><span class="n">opt_split</span><span class="p">(</span><span class="n">option_dict</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;features&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">,</span> <span class="s1">&#39;:&#39;</span><span class="p">)))</span>
+        <span class="n">outlist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">outstring</span><span class="p">)</span>
+
+    <span class="c1"># Loop through all options</span>
+    <span class="k">for</span> <span class="n">option</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">option_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">outlist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">option_to_string</span><span class="p">(</span><span class="n">option</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">qtype</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outlist</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="option_help"><a class="viewcode-back" href="../../api.html#cluster.options.option_help">[docs]</a><span class="k">def</span> <span class="nf">option_help</span><span class="p">(</span><span class="n">qtype</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;string&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Print a sting to stdout displaying information on all options.</span>
+
+<span class="sd">    :qtype: If provided only return info on that queue type.</span>
+<span class="sd">    :mode:  string: Return a formatted string</span>
+<span class="sd">            print:  Print the string to stdout</span>
+<span class="sd">            table:  Return a table of lists</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">hlp</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+
+    <span class="c1"># Expicitly get the function call help out of core to treat separately</span>
+    <span class="n">common</span> <span class="o">=</span> <span class="n">COMMON</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">impts</span>  <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;imports&#39;</span><span class="p">)</span>
+
+    <span class="n">hlp</span><span class="p">[</span><span class="s1">&#39;common&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;summary&#39;</span><span class="p">:</span> <span class="s1">&#39;Used in every mode&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="n">common</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="n">hlp</span><span class="p">[</span><span class="s1">&#39;func&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;summary&#39;</span><span class="p">:</span> <span class="s1">&#39;Used for function calls&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="n">OrderedDict</span><span class="p">([(</span><span class="s1">&#39;imports&#39;</span><span class="p">,</span> <span class="n">impts</span><span class="p">)]),</span>
+    <span class="p">}</span>
+
+    <span class="n">hlp</span><span class="p">[</span><span class="s1">&#39;local&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;summary&#39;</span><span class="p">:</span> <span class="s1">&#39;Used only in local mode&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="n">NORMAL</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="c1"># Include all cluster options in one</span>
+    <span class="n">cluster</span> <span class="o">=</span> <span class="n">CLUSTER_CORE</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">cluster</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">CLUSTER_OPTS</span><span class="p">)</span>
+    <span class="n">hlp</span><span class="p">[</span><span class="s1">&#39;cluster&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;summary&#39;</span><span class="p">:</span> <span class="s1">&#39;Options that work in both slurm and torque&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="n">cluster</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="k">if</span> <span class="n">TORQUE</span><span class="p">:</span>
+        <span class="n">hlp</span><span class="p">[</span><span class="s1">&#39;torque&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;summary&#39;</span><span class="p">:</span> <span class="s2">&quot;Used for torque only&quot;</span><span class="p">,</span>
+            <span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="n">TORQUE</span><span class="p">,</span>
+        <span class="p">}</span>
+
+    <span class="k">if</span> <span class="n">SLURM</span><span class="p">:</span>
+        <span class="n">hlp</span><span class="p">[</span><span class="s1">&#39;slurm&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;summary&#39;</span><span class="p">:</span> <span class="s2">&quot;Used for slurm only&quot;</span><span class="p">,</span>
+            <span class="s1">&#39;help&#39;</span><span class="p">:</span> <span class="n">SLURM</span><span class="p">,</span>
+        <span class="p">}</span>
+
+    <span class="k">if</span> <span class="n">qtype</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">qtype</span> <span class="o">==</span> <span class="s1">&#39;local&#39;</span><span class="p">:</span>
+            <span class="n">hlp</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;cluster&#39;</span><span class="p">)</span>
+            <span class="n">hlp</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;torque&#39;</span><span class="p">)</span>
+            <span class="n">hlp</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;slurm&#39;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">qtype</span> <span class="o">==</span> <span class="s1">&#39;slurm&#39;</span><span class="p">:</span>
+            <span class="n">hlp</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;torque&#39;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">qtype</span> <span class="o">==</span> <span class="s1">&#39;torque&#39;</span><span class="p">:</span>
+            <span class="n">hlp</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;slurm&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s1">&#39;qtype must be &quot;torque&quot;, &quot;slurm&quot;, or &quot;local&quot;&#39;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s1">&#39;print&#39;</span> <span class="ow">or</span> <span class="n">mode</span> <span class="o">==</span> <span class="s1">&#39;string&#39;</span><span class="p">:</span>
+        <span class="n">outstr</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+        <span class="k">for</span> <span class="n">option_class</span><span class="p">,</span> <span class="n">hlp_info</span> <span class="ow">in</span> <span class="n">hlp</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">tmpstr</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+            <span class="k">for</span> <span class="n">option</span><span class="p">,</span> <span class="n">inf</span> <span class="ow">in</span> <span class="n">hlp_info</span><span class="p">[</span><span class="s1">&#39;help&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">default</span> <span class="o">=</span> <span class="n">inf</span><span class="p">[</span><span class="s1">&#39;default&#39;</span><span class="p">]</span> <span class="k">if</span> <span class="s1">&#39;default&#39;</span> <span class="ow">in</span> <span class="n">inf</span> <span class="k">else</span> <span class="bp">None</span>
+                <span class="nb">type</span> <span class="o">=</span> <span class="n">inf</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span>
+                <span class="n">helpitems</span> <span class="o">=</span> <span class="n">wrap</span><span class="p">(</span><span class="n">inf</span><span class="p">[</span><span class="s1">&#39;help&#39;</span><span class="p">])</span>
+                <span class="n">helpstr</span>   <span class="o">=</span> <span class="n">helpitems</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">helpitems</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">helpstr</span>  <span class="o">+=</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">            &#39;</span>
+                    <span class="n">helpstr</span>  <span class="o">+=</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">            &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">helpitems</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="nb">type</span><span class="p">,</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">list</span><span class="p">,</span> <span class="nb">set</span><span class="p">)):</span>
+                    <span class="nb">type</span> <span class="o">=</span> <span class="p">[</span><span class="n">t</span><span class="o">.</span><span class="n">__name__</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">type</span><span class="p">]</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="nb">type</span> <span class="o">=</span> <span class="nb">type</span><span class="o">.</span><span class="n">__name__</span>
+                <span class="n">tmpstr</span> <span class="o">+=</span> <span class="p">(</span><span class="s1">&#39;{o:&lt;12}{h}</span><span class="se">\n</span><span class="s1">{s:&lt;12}Type: {t}; Default: {d}</span><span class="se">\n</span><span class="s1">&#39;</span>
+                           <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">o</span><span class="o">=</span><span class="n">option</span> <span class="o">+</span> <span class="s1">&#39;:&#39;</span><span class="p">,</span> <span class="n">h</span><span class="o">=</span><span class="n">helpstr</span><span class="p">,</span> <span class="n">s</span><span class="o">=</span><span class="s1">&#39; &#39;</span><span class="p">,</span>
+                                   <span class="n">t</span><span class="o">=</span><span class="nb">type</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="n">default</span><span class="p">))</span>
+            <span class="n">outstr</span> <span class="o">+=</span> <span class="s1">&#39;{}::</span><span class="se">\n</span><span class="s1">{}</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">hlp_info</span><span class="p">[</span><span class="s1">&#39;summary&#39;</span><span class="p">],</span> <span class="n">tmpstr</span><span class="p">)</span>
+        <span class="n">outstr</span> <span class="o">=</span> <span class="n">outstr</span><span class="o">.</span><span class="n">rstrip</span><span class="p">()</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+
+        <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s1">&#39;print&#39;</span><span class="p">:</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">outstr</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">outstr</span>
+    <span class="k">elif</span> <span class="n">mode</span> <span class="o">==</span> <span class="s1">&#39;table&#39;</span><span class="p">:</span>
+        <span class="n">tables</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">option_class</span><span class="p">,</span> <span class="n">hlp_info</span> <span class="ow">in</span> <span class="n">hlp</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">tmptable</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">option</span><span class="p">,</span> <span class="n">inf</span> <span class="ow">in</span> <span class="n">hlp_info</span><span class="p">[</span><span class="s1">&#39;help&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">helpitems</span> <span class="o">=</span> <span class="n">wrap</span><span class="p">(</span><span class="n">inf</span><span class="p">[</span><span class="s1">&#39;help&#39;</span><span class="p">])</span>
+                <span class="n">default</span> <span class="o">=</span> <span class="n">inf</span><span class="p">[</span><span class="s1">&#39;default&#39;</span><span class="p">]</span> <span class="k">if</span> <span class="s1">&#39;default&#39;</span> <span class="ow">in</span> <span class="n">inf</span> <span class="k">else</span> <span class="bp">None</span>
+                <span class="nb">type</span> <span class="o">=</span> <span class="n">inf</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="nb">type</span><span class="p">,</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">list</span><span class="p">,</span> <span class="nb">set</span><span class="p">)):</span>
+                    <span class="nb">type</span> <span class="o">=</span> <span class="p">[</span><span class="n">t</span><span class="o">.</span><span class="n">__name__</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">type</span><span class="p">]</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="nb">type</span> <span class="o">=</span> <span class="nb">type</span><span class="o">.</span><span class="n">__name__</span>
+                <span class="n">tmptable</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">option</span><span class="p">,</span> <span class="s1">&#39;{:&lt;70}&#39;</span>
+                                 <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">helpitems</span><span class="p">[</span><span class="mi">0</span><span class="p">])))</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">helpitems</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="k">for</span> <span class="n">helpitem</span> <span class="ow">in</span> <span class="n">helpitems</span><span class="p">[</span><span class="mi">1</span><span class="p">:]:</span>
+                        <span class="n">tmptable</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;{}&#39;</span>
+                                         <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">helpitem</span><span class="p">)))</span>
+                <span class="n">tmptable</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;Type: {}; Default: {}&#39;</span>
+                                 <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">type</span><span class="p">,</span> <span class="n">default</span><span class="p">)))</span>
+            <span class="n">tables</span><span class="p">[</span><span class="n">option_class</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;summary&#39;</span><span class="p">:</span> <span class="n">hlp_info</span><span class="p">[</span><span class="s1">&#39;summary&#39;</span><span class="p">],</span>
+                            <span class="s1">&#39;table&#39;</span><span class="p">:</span> <span class="n">tmptable</span><span class="p">}</span>
+        <span class="k">return</span> <span class="n">tables</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s1">&#39;mode must be &quot;print&quot;, &quot;string&quot;, or &quot;table&quot;&#39;</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2016, Michael Dacre <mike.dacre@gmail.com>.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.4.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.8</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>
