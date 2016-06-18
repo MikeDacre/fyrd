@@ -18,6 +18,9 @@ Allows simple job submission with *dependency tracking and queue waiting* with
 either torque, slurm, or locally with the multiprocessing module. It uses simple
 techiques to avoid overwhelming the queue and to catch bugs on the fly.
 
+For complete documentation see `the documentation site <https://mikedacre.github.io/python-cluster>`_
+and the `PythonCluster.pdf <PythonCluster.pdf>`_ document in this repository.
+
 .. contents:: **Contents**
 
 Installation
