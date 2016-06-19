@@ -6,7 +6,11 @@ python:
   - "3.5"
   - "3.5-dev"
   - "nightly"
+
 # command to install dependencies
 install: "pip install dill"
-# command to run tests
-script: py.test
+
+# Run py.test and also a separate local queue test
+script:
+  - py.test
+  - python tests/local_queue.py
