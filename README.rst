@@ -394,3 +394,24 @@ https://github.com/MikeDacre/python-cluster/issues
 If you want to help improve it, please fork the repo and send me pull requests
 when you are done.
  
+
+Roadmap
+=======
+
+Right now this software is in _beta_, to get to version 1.0 it needs to be
+tested by users and demonstrated to be stable. In addition, I would like to
+implement the following features prior to the release of v1.0:
+
+ - Profile managing script in bin
+ - Update of all bin scripts to work with new options
+ - Persistent job tracking in an sqlite database stored in $HOME
+ - Mac OS X functionality
+ - Autoadjusting of job options based on queue features (i.e. implement a 'max'
+   option and try to guess the max cores available for a request on any machine)
+ - Allow users to define their own keyword arguments in their configuration
+ - Move queue parsing code out of the queue class and into separate parsing
+   functions. Right now the `update()` method of `Queue` is definitely a god
+   function and could potentially become unstable.
+
+If you have any other feature suggestions please email them to me at
+mike.dacre@gmail.com or open an issue.
