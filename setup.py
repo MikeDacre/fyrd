@@ -12,6 +12,7 @@ ez_setup.use_setuptools()
 import setuptools
 from setuptools import setup
 from setuptools.command.install import install
+from setuptools.command.test import test as TestCommand
 log = setuptools.distutils.log
 
 here = os.path.abspath(os.path.dirname(__file__))
@@ -50,6 +51,17 @@ class ScriptInstaller(install):
         # Call the main installer
         install.run(self)
 
+
+class TestRunner(TestCommand):
+
+    """Run script in tests directory."""
+
+    def run_tests(self):
+        """Run the test script, skip remote tests here."""
+        import sys
+        from subprocess import check_call
+        check_call([sys.executable, 'tests/run_tests.py', '-l'])
+
 setup(
     name='python-cluster',
     version='0.6.1',
@@ -84,7 +96,9 @@ setup(
     keywords='slurm cluster job_management',
 
     requires=['dill'],
+    tests_require=['pytest'],
     packages=['cluster'],
-    cmdclass={'install': ScriptInstaller},
+    cmdclass={'install': ScriptInstaller,
+              'test': TestRunner},
     scripts=scpts,
 )
