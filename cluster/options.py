@@ -7,7 +7,7 @@ Available options for job submission.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-31-17 08:04
- Last modified: 2016-06-18 15:19
+ Last modified: 2016-06-22 15:51
 
    DESCRIPTION: All keyword arguments that can be used with Job() objects are
                 defined in this file. These can be editted by the end user to
@@ -18,7 +18,7 @@ Available options for job submission.
                              'torque': The command to be used for torque
                              'default': The default to use if not set
                              'type': The python object type for the option
-                             'help': A string with help information
+                             'help': A string with help information}
 
                 All of these fields are required except in the case that:
                     1. The option is managed in options_to_string explicitly
@@ -30,7 +30,7 @@ Available options for job submission.
 """
 import os
 import sys
-from textwrap import wrap, fill
+from textwrap import wrap
 from itertools import groupby
 from collections import OrderedDict
 
@@ -53,6 +53,9 @@ __all__ = ['option_help']
 
 # Options available in all modes
 COMMON  = OrderedDict([
+    ('depends',
+     {'help': 'A job or list of jobs to depend on',
+      'default': None, 'type': list}),
     ('cores',
      {'help': 'Number of cores to use for the job',
       'default': 1, 'type': int}),
@@ -153,6 +156,25 @@ SLURM  = OrderedDict([
       'default': None}),
 ])
 
+################################################################
+#                         SYNONYMS                             #
+#  These allow alternate keyword arguments for common options  #
+################################################################
+
+
+SYNONYMS = {
+    'depend':       'depends',
+    'dependency':   'depends',
+    'dependencies': 'depends',
+    'stdout':       'outfile',
+    'stderr':       'errfile',
+    'queue':        'partition',
+    'memory':       'mem',
+    'cpus':         'cores',
+    'walltime':     'time',
+}
+
+
 ###############################################################################
 #                       DO NOT EDIT BELOW THIS LINE!!!                        #
 ###############################################################################
@@ -206,13 +228,20 @@ class OptionsError(ClusterError):
 def check_arguments(kwargs):
     """Make sure all keywords are allowed.
 
-    Raises Exception on error, returns sanitized dictionary on success.
+    Raises OptionsError on error, returns sanitized dictionary on success.
+
+    Note: Checks in SYNONYMS if argument is not recognized, raises OptionsError
+          if it is not found there either.
     """
     new_kwds = {}
     # Make sure types are correct
     for arg, opt in kwargs.items():
         if arg not in ALLOWED_KWDS:
-            raise OptionsError('Unrecognized argument {}'.format(arg))
+            if arg in SYNONYMS:
+                arg = SYNONYMS[arg]
+                assert arg in ALLOWED_KWDS
+            else:
+                raise OptionsError('Unrecognized argument {}'.format(arg))
         if opt is not None and not isinstance(opt, ALLOWED_KWDS[arg]):
             try:
                 newtype = ALLOWED_KWDS[arg]
@@ -315,7 +344,7 @@ def option_to_string(option, value=None, qtype=None):
 
     if option == 'cores' or option == 'nodes':
         raise OptionsError('Cannot handle cores or nodes here, use ' +
-                        'options_to_string')
+                           'options_to_string')
 
     if qtype == 'slurm':
         kwds = SLURM_KWDS
@@ -351,7 +380,7 @@ def option_to_string(option, value=None, qtype=None):
     if '{}' in kwds[option][qtype]:
         if value is None:
             raise OptionsError('Cannot use None as an argument for option {}'
-                            .format(option))
+                               .format(option))
         return '{prefix} {optarg}'.format(
             prefix=prefix, optarg=kwds[option][qtype].format(value))
     else:
@@ -464,7 +493,6 @@ def option_help(qtype=None, mode='string'):
         }
 
     if qtype:
-        cluster.queue.check_queue(qtype)
         if qtype == 'local':
             hlp.pop('cluster')
             hlp.pop('torque')
@@ -482,19 +510,19 @@ def option_help(qtype=None, mode='string'):
             tmpstr = ''
             for option, inf in hlp_info['help'].items():
                 default = inf['default'] if 'default' in inf else None
-                type = inf['type']
+                typ = inf['type']
                 helpitems = wrap(inf['help'])
                 helpstr   = helpitems[0]
                 if len(helpitems) > 1:
                     helpstr  += '\n            '
                     helpstr  += '\n            '.join(helpitems[1:])
-                if isinstance(type, (tuple, list, set)):
-                    type = [t.__name__ for t in type]
+                if isinstance(typ, (tuple, list, set)):
+                    typ = [t.__name__ for t in typ]
                 else:
-                    type = type.__name__
+                    typ = typ.__name__
                 tmpstr += ('{o:<12}{h}\n{s:<12}Type: {t}; Default: {d}\n'
                            .format(o=option + ':', h=helpstr, s=' ',
-                                   t=type, d=default))
+                                   t=typ, d=default))
             outstr += '{}::\n{}\n'.format(hlp_info['summary'], tmpstr)
         outstr = outstr.rstrip() + '\n'
 
@@ -509,11 +537,11 @@ def option_help(qtype=None, mode='string'):
             for option, inf in hlp_info['help'].items():
                 helpitems = wrap(inf['help'])
                 default = inf['default'] if 'default' in inf else None
-                type = inf['type']
-                if isinstance(type, (tuple, list, set)):
-                    type = [t.__name__ for t in type]
+                typ = inf['type']
+                if isinstance(typ, (tuple, list, set)):
+                    typ = [t.__name__ for t in typ]
                 else:
-                    type = type.__name__
+                    typ = typ.__name__
                 tmptable.append((option, '{:<70}'
                                  .format(helpitems[0])))
                 if len(helpitems) > 1:
@@ -521,9 +549,9 @@ def option_help(qtype=None, mode='string'):
                         tmptable.append(('', '{}'
                                          .format(helpitem)))
                 tmptable.append(('', 'Type: {}; Default: {}'
-                                 .format(type, default)))
+                                 .format(typ, default)))
             tables[option_class] = {'summary': hlp_info['summary'],
-                            'table': tmptable}
+                                    'table': tmptable}
         return tables
     else:
         raise ClusterError('mode must be "print", "string", or "table"')

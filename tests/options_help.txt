@@ -1,4 +1,6 @@
 Used in every mode::
+depends:    A job or list of jobs to depend on
+            Type: list; Default: None
 cores:      Number of cores to use for the job
             Type: int; Default: 1
 modules:    Modules to load with the `module load` command

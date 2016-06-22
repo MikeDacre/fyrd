@@ -227,6 +227,13 @@ The following is a complete list of arguments that can be used in this version::
   begin:      Start after this much time
               Type: str; Default: None
 
+In addition some synonyms are allowed::
+
+  cpus:                             cores
+  memory:                           mem
+  queue:                            partition
+  depend, dependencies, dependency: depends
+
 *Note:* Type is enforced, any provided argument must match that python type
 (automatic conversion is attempted), the default is just a recommendation and is
 not currently used. These arguments are passed like regular arguments to the
