@@ -7,7 +7,7 @@ Monitor the queue for torque or slurm.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-06-22 16:42
+ Last modified: 2016-06-22 17:33
 
    DESCRIPTION: Provides a class to monitor the torque, slurm, or local
                 jobqueue queues with identical syntax.
@@ -75,14 +75,6 @@ _defaults = DEFAULTS['queue']
 
 # This is set in the get_cluster_environment() function.
 MODE = ''
-
-# Reset broken multithreading
-# Some of the numpy C libraries can break multithreading, this command
-# fixes the issue.
-try:
-    check_output("taskset -p 0xff %d &>/dev/null" % os.getpid(), shell=True)
-except CalledProcessError:
-    pass  # This doesn't work on Macs or Windows
 
 
 ###############################################################################
