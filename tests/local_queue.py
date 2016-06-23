@@ -4,10 +4,12 @@ import sys
 sys.path.append(os.path.abspath('.'))
 import cluster
 
+
 def write_to_file(string, file):
     """Write a string to a file."""
     with open(file, 'w') as fout:
         fout.write(string + '\n')
+    return 0
 
 
 def test_job_creation():
@@ -37,31 +39,45 @@ def test_job_cleaning():
     job = test_job_execution()
     job.clean()
     assert 'echo.cluster' not in os.listdir('.')
+    return 0
 
 
 def test_function_submission():
     """Submit a function."""
+    failed = False
     cluster.queue.MODE = 'local'
     job = cluster.Job(write_to_file, ('42', 'bobfile'))
     job.submit()
     code, stdout, stderr = job.get()
     assert code == 0
     assert stdout == '\n'
-    assert stderr == ''
+    if stderr != '':
+        sys.stderr.write('STDERR should be empty, but contains:\n')
+        sys.stderr.write(stderr)
+        failed = True
     with open('bobfile') as fin:
         assert fin.read().rstrip() == '42'
     os.remove('bobfile')
     job.clean()
+    if failed:
+        return 1
+    return 0
 
 
 def test_dir_clean():
     """Clean all job files in this dir."""
     cluster.job.clean_dir()
+    return 0
+
 
 if __name__ == "__main__":
+    count = 0
     test_job_creation()
     test_job_execution()
-    test_job_cleaning()
-    test_function_submission()
-    test_dir_clean()
+    count += test_job_cleaning()
+    count += test_function_submission()
+    count += test_dir_clean()
+    if count > 0:
+        sys.stderr.write('Some tests failed')
+        sys.exit(1)
     sys.stdout.write('Tests complete\n')

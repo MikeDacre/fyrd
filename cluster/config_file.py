@@ -7,7 +7,7 @@ Get and set config file options.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-06-22 17:07
+ Last modified: 2016-06-22 17:29
 
    DESCRIPTION: The functions defined here provide an easy way to access the
                 config file defined by CONFIG_FILE (default ~/.python-cluster).
@@ -134,7 +134,6 @@ class Profile(object):
 def get_profile(profile=None):
     """Return a profile if it exists, if None, return all profiles."""
     if profile:
-        sys.stderr.write('{}\n'.format(get_option('prof', profile)))
         prof = Profile(profile, get_option('prof', profile))
         if not prof and profile == 'default':
             logme.log('default profile missing, recreating. You can '

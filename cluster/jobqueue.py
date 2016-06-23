@@ -7,7 +7,7 @@ Manage job dependency tracking with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-56-14 14:04
- Last modified: 2016-06-22 16:36
+ Last modified: 2016-06-22 17:26
 
    DESCRIPTION: Runs jobs with a multiprocessing.Pool, but manages dependency
                 using an additional Process that loops through all submitted
@@ -64,7 +64,8 @@ THREADS  = _cnt()
 # Some of the numpy C libraries can break multithreading, this command
 # fixes the issue.
 try:
-    check_output("taskset -p 0xff %d &>/dev/null" % os.getpid(), shell=True)
+    check_output("taskset -p 0xff %d >/dev/null 2>/dev/null" % os.getpid(),
+                 shell=True)
 except CalledProcessError:
     pass  # This doesn't work on Macs or Windows
 
