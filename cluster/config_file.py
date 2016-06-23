@@ -7,7 +7,7 @@ Get and set config file options.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-06-18 00:03
+ Last modified: 2016-06-22 17:07
 
    DESCRIPTION: The functions defined here provide an easy way to access the
                 config file defined by CONFIG_FILE (default ~/.python-cluster).
@@ -134,7 +134,8 @@ class Profile(object):
 def get_profile(profile=None):
     """Return a profile if it exists, if None, return all profiles."""
     if profile:
-        prof = Profile(profile, get('prof', profile))
+        sys.stderr.write('{}\n'.format(get_option('prof', profile)))
+        prof = Profile(profile, get_option('prof', profile))
         if not prof and profile == 'default':
             logme.log('default profile missing, recreating. You can '
                       'override the defaults by editing {}'
@@ -143,7 +144,7 @@ def get_profile(profile=None):
             prof.write()
         return prof
     else:
-        profiles = get('prof')
+        profiles = get_option('prof')
         pfls = {}
         for profile, args in profiles.items():
             pfls[profile] = Profile(profile, args)
@@ -155,7 +156,8 @@ def set_profile(name, args):
     if not isinstance(args, dict):
         raise Exception('Profile arguments must be a dictionary')
     args = options.check_arguments(args)
-    set('prof', name, args)
+    for arg, opt in args.items():
+        set_option('prof_' + name, arg, opt)
 
 
 ###############################################################################
@@ -163,7 +165,7 @@ def set_profile(name, args):
 ###############################################################################
 
 
-def get(section=None, key=None, default=None):
+def get_option(section=None, key=None, default=None):
     """Get a single key or section.
 
     :section: The config section to use (e.g. queue, prof)
@@ -176,8 +178,8 @@ def get(section=None, key=None, default=None):
         return defaults
     if not section in defaults:
         if key and default:
-            set(section, key, default)
-            return get(section, key)
+            set_option(section, key, default)
+            return get_option(section, key)
         else:
             return None
     if key:
@@ -187,15 +189,15 @@ def get(section=None, key=None, default=None):
             if default:
                 logme.log('Creating new config entry {}:{} with val {}'.format(
                     section, key, default), 'debug')
-                set(section, key, default)
-                return get(section, key)
+                set_option(section, key, default)
+                return get_option(section, key)
             else:
                 return None
     else:
         return defaults[section]
 
 
-def set(section, key, value):
+def set_option(section, key, value):
     """Write a config key to the config file."""
     # Sanitize arguments
     section = str(section)

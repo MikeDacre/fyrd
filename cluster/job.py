@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-04-20 23:03
- Last modified: 2016-06-18 00:01
+ Last modified: 2016-06-22 16:40
 
 ===============================================================================
 """
@@ -157,7 +157,7 @@ class Job(object):
             kwargs = default_args
 
         # Get required options
-        req_options = config_file.get('opts')
+        req_options = config_file.get_option('opts')
         if req_options:
             for k,v in req_options.items():
                 if k not in kwargs:
@@ -468,8 +468,6 @@ class Job(object):
                               .format(code, stdout, stderr),
                               'critical')
                     raise CalledProcessError(code, args, stdout, stderr)
-                    logme.log('qsub failed with err {}. Resubmitting.'
-                              .format(stderr), 'debug')
             self.submitted = True
 
             sleep(0.5)  # Give submission a chance
@@ -747,9 +745,9 @@ class Function(Script):
         # This will work on standard linux systems only, and will silently fail
         # on other systems.
         ver = sys.version_info.major
-        modules = run.cmd("pip{} freeze --local | ".format(ver) +
-                          "grep -v '^\-e' | cut -d = -f 1 > " +
-                          "~/python_module_list")
+        run.cmd("pip{} freeze --local | ".format(ver) +
+                "grep -v '^\-e' | cut -d = -f 1 > " +
+                "~/python_module_list")
         # Create a sane set of imports
         filtered_imports = []
         for imp in imports:

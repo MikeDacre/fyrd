@@ -315,13 +315,13 @@ see these run:
 
 .. code:: python
 
-  cluster.config_file.get()
+  cluster.config_file.get_option()
 
 You can set options with:
 
 .. code:: python
 
-  cluster.config_file.set()
+  cluster.config_file.set_option()
 
 The defaults can be directly edited in ``config_file.py``, they are clearly
 documented.

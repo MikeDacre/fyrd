@@ -7,7 +7,7 @@ Manage job dependency tracking with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-56-14 14:04
- Last modified: 2016-06-18 00:02
+ Last modified: 2016-06-22 16:36
 
    DESCRIPTION: Runs jobs with a multiprocessing.Pool, but manages dependency
                 using an additional Process that loops through all submitted
@@ -82,7 +82,8 @@ class JobQueue(object):
         """Spawn a job_runner process to interact with."""
         self._jobqueue = mp.Queue()
         self._outputs  = mp.Queue()
-        self.jobno     = int(config_file.get('jobqueue', 'jobno', str(1)))
+        self.jobno     = int(config_file.get_option('jobqueue', 'jobno',
+                                                    str(1)))
         self.cores     = int(cores) if cores else THREADS
         self.runner    = mp.Process(target=job_runner,
                                     args=(self._jobqueue,
@@ -122,7 +123,7 @@ class JobQueue(object):
             self.jobs.update(self._outputs.get_nowait())
         if self.jobs:
             self.jobno = max(self.jobs.keys())
-            config_file.set('jobqueue', 'jobno', str(self.jobno))
+            config_file.set_option('jobqueue', 'jobno', str(self.jobno))
 
     def add(self, function, args=None, kwargs=None, dependencies=None,
             cores=1):
@@ -334,7 +335,7 @@ def job_runner(jobqueue, outputs, cores=None, jobno=None):
 
     # Initialize job objects
     jobno   = int(jobno) if jobno \
-              else int(config_file.get('jobqueue', 'jobno', str(1)))
+              else int(config_file.get_option('jobqueue', 'jobno', str(1)))
     jobs    = {} # This will hold job numbers
     started = [] # A list of started jobs to check against
     cores   = cores if cores else THREADS

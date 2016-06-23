@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
         LICENSE: MIT License, property of Stanford, use as you wish
         VERSION: 0.6.1
         CREATED: 2015-12-11 22:19
-  Last modified: 2016-06-18 15:15
+  Last modified: 2016-06-22 16:37
  =============== ===================================================
 
 Allows simple job submission with *dependency tracking and queue waiting* with
@@ -87,11 +87,11 @@ Other options are defined in the config file, including the maximum number of
 jobs in the queue, the time to sleep between submissions, and other options. To
 see these run::
 
-    config_file.get()
+    config_file.get_option()
 
 You can set options with::
 
-    config_file.set()
+    config_file.set_option()
 
 Feel free to alter the defaults in config_file.py and options.py, they are
 clearly documented.

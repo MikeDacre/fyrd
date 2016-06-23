@@ -7,7 +7,7 @@ Monitor the queue for torque or slurm.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-06-18 15:02
+ Last modified: 2016-06-22 16:42
 
    DESCRIPTION: Provides a class to monitor the torque, slurm, or local
                 jobqueue queues with identical syntax.
@@ -223,7 +223,7 @@ class Queue(object):
         If max_queue_len is None, default from config is used.
         """
         qlen = max_queue_len if max_queue_len else \
-            config_file.get('queue', 'max_jobs', 3000)
+            config_file.get_option('queue', 'max_jobs', 3000)
         qlen = int(qlen)
         assert qlen > 0
         self.update()
@@ -235,7 +235,7 @@ class Queue(object):
 
         If max_queue_len is None, default from config is used.
         """
-        sleep_len = config_file.get('queue', 'sleep_len', 5)
+        sleep_len = config_file.get_option('queue', 'sleep_len', 5)
         count   = 50
         written = False
         while True:
@@ -742,9 +742,9 @@ def wait(jobs):
             # Build a list of jobs
             complete = [i[0] for i in q if i[1] == 'CD']
             failed   = [i[0] for i in q if i[1] == 'F']
-            all      = [i[0] for i in q]
+            allj     = [i[0] for i in q]
             # Trim down job list, ignore failures
-            jobs = [i for i in jobs if i not in all]
+            jobs = [i for i in jobs if i not in allj]
             jobs = [i for i in jobs if i not in complete]
             jobs = [i for i in jobs if i not in failed]
             if len(jobs) == 0:

@@ -3,7 +3,7 @@ Setup Script for Slurmy
 """
 import os
 import sys
-from codecs import open
+import codecs
 
 # Make setuptools work everywhere
 import ez_setup
@@ -18,7 +18,7 @@ log = setuptools.distutils.log
 here = os.path.abspath(os.path.dirname(__file__))
 
 # Get the long description from the README file
-with open(os.path.join(here, 'README.rst'), encoding='utf-8') as f:
+with codecs.open(os.path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 # Generate a list of python scripts

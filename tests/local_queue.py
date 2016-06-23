@@ -47,7 +47,7 @@ def test_function_submission():
     code, stdout, stderr = job.get()
     assert code == 0
     assert stdout == '\n'
-    #  assert stderr == ''
+    assert stderr == ''
     with open('bobfile') as fin:
         assert fin.read().rstrip() == '42'
     os.remove('bobfile')
