@@ -62,13 +62,11 @@ this issue.
 Simple Usage
 ============
 
-Setting up the Environment
---------------------------
+Setting Environment
+-------------------
 
-No environment setup is required, the package will auto-detect the environment
-at runtime. However, if you wish to manually override the queue system, set
-queue.MODE to one of ['torque', 'slurm', 'local'], or run
-get_cluster_environment().
+To set the environement, set queue.MODE to one of ['torque', 'slurm', 'local'],
+or run get_cluster_environment().
 
 Simple Job Submission
 ---------------------
@@ -88,8 +86,8 @@ To run with dependency tracking, run:
   job2 = cluster.submit(<command2>, dependencies=job1)
   exitcode, stdout, stderr = job2.get()  # Will block until job completes
 
-Submitting Functions
---------------------
+Functions
+---------
 
 The submit function works well with python functions as well as with shell
 scripts and shell commands.
@@ -120,6 +118,32 @@ If you want to just submit a file, that can be done like this:
 
 This will return the job number and will enter the job into the queue as
 dependant on jobs 007 and 009. The dependencies can be omitted.
+
+The Job Class
+-------------
+
+The core of this submission system is a `Job` class, this class allows easy
+job handling and debugging. All of the above commands work well with the Job
+class also, but more fine grained control is possible. For example:
+
+.. code:: python
+  
+  my_job = """#!/bin/bash
+  parallel /usr/bin/parser {} ::: folder/*.txt
+  for i in folder/*.txt; do
+      echo $i >> my_output.txt
+      echo job_$i done!
+  fi"""
+  job = cluster.Job(my_job, cores=16)
+  job.submit()
+  job.wait()
+  print(job.stdout)
+  if job.exitcode != 0:
+      print(job.stderr)
+
+More is also possible, for a full description, see the API documentation here:
+`Job Documentation <https://mikedacre.github.io/python-cluster/api.html#job-management>`_
+
 
 Queue Management
 ================
@@ -210,6 +234,13 @@ The following is a complete list of arguments that can be used in this version::
   begin:      Start after this much time
               Type: str; Default: None
 
+In addition some synonyms are allowed::
+
+  cpus:                             cores
+  memory:                           mem
+  queue:                            partition
+  depend, dependencies, dependency: depends
+
 *Note:* Type is enforced, any provided argument must match that python type
 (automatic conversion is attempted), the default is just a recommendation and is
 not currently used. These arguments are passed like regular arguments to the
@@ -291,13 +322,13 @@ see these run:
 
 .. code:: python
 
-  cluster.config_file.get()
+  cluster.config_file.get_option()
 
 You can set options with:
 
 .. code:: python
 
-  cluster.config_file.set()
+  cluster.config_file.set_option()
 
 The defaults can be directly edited in ``config_file.py``, they are clearly
 documented.
@@ -366,14 +397,3 @@ You can also wait for many jobs with the Queue class:
   q.wait([job1, job2])
 
 The jobs in this case can be either a Job class or a job number.
-
-
-Issues and Contributing
-=======================
-
-If you have any trouble with this software add an issue in
-https://github.com/MikeDacre/python-cluster/issues
-
-If you want to help improve it, please fork the repo and send me pull requests
-when you are done.
- 

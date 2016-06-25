@@ -13,6 +13,19 @@ cluster type (torque, slurm, normal) and sets the global cluster type for the
 whole file. Finally, the `wait()` function accepts a list of jobs and will block
 until those jobs are complete.
 
+The Queue class is actually a wrapper for a few simple queue parsers, these call
+`qstat -x` or `squeue` and `sacct` to get job information, and return a simple
+tuple of that data with the following members::
+
+  job_id, name, userid, partition, state, node-list, node-count, cpu-per-node, exit-code
+
+The Queue class then converts this information into a Queue.QueueJob object and
+adds it to the internal `jobs` dictionary within the Queue class. This list is
+now the basis for all of the other functionality encoded by the Queue class. It
+can be accessed directly, or sliced by accessing the `completed`, `queued`, and
+`running` attributes of the Queue class, these are used to simply divided up the
+jobs dictionary to make finding information easy.
+
 .. autoclass:: cluster.Queue
    :members:
 
@@ -21,6 +34,12 @@ until those jobs are complete.
 .. autofunction:: cluster.queue.wait 
 
 .. autofunction:: cluster.queue.check_queue 
+
+.. autofunction:: cluster.queue.queue_parser 
+
+.. autofunction:: cluster.queue.torque_queue_parser
+
+.. autofunction:: cluster.queue.slurm_queue_parser
 
 Job Management
 --------------
@@ -106,8 +125,8 @@ Profiles are combinations of keyword arguments that can be called in any of the
 submission functions. They are handled in the `config_file.py` file which just
 adds an abstraction layer on top of the builtin python ConfigParser script.
 
-The config file also contains other options that can be managed with the `get()`
-and `set()` functions. Profiles are wrapped in a `Profile()` class to make
+The config file also contains other options that can be managed with the `get_option()`
+and `set_option()` functions. Profiles are wrapped in a `Profile()` class to make
 attribute access easy, but they are fundamentally just dictionaries of keyword
 arguments. They can be created with `cluster.config_file.Profile({kewywds})` and
 then written to a file with that class' `write()` method. The easiest way to
@@ -121,9 +140,9 @@ function or Job class.
 .. autoclass:: cluster.config_file.Profile
    :members:
 
-.. autofunction:: cluster.config_file.get
+.. autofunction:: cluster.config_file.get_option
 
-.. autofunction:: cluster.config_file.set
+.. autofunction:: cluster.config_file.set_option
 
 .. autofunction:: cluster.config_file.set_profile
 

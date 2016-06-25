@@ -7,7 +7,7 @@ Monitor the queue for torque or slurm.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-06-25 13:11
+ Last modified: 2016-06-25 13:35
 
    DESCRIPTION: Provides a class to monitor the torque, slurm, or local
                 jobqueue queues with identical syntax.
@@ -467,8 +467,8 @@ def queue_parser(qtype=None, user=None):
     :qtype:   Either 'torque' or 'slurm', defaults to current MODE
     :user:    optional user name to pass to queue to filter queue with
 
-    :returns: job_id, name, userid, partition, state, nodelist,
-              numnodes, ntpernode, exit_code] in sqtype
+    :yields:  job_id, name, userid, partition, state, nodelist,
+              numnodes, ntpernode, exit_code
     """
     if not qtype:
         qtype = get_cluster_environment()
@@ -488,8 +488,8 @@ def torque_queue_parser(user=None):
 
     :user:    optional user name to pass to qstat to filter queue with
 
-    :returns: job_id, name, userid, partition, state, nodelist,
-              numnodes, ntpernode, exit_code] in squeue
+    :yields:  job_id, name, userid, partition, state, nodelist,
+              numnodes, ntpernode, exit_code
 
     numcpus is currently always 1 as most torque queues treat every core as a
     node.
@@ -567,8 +567,8 @@ def slurm_queue_parser(user=None):
 
     :user:    optional user name to pass to squeue to filter queue with
 
-    :returns: job_id, name, userid, partition, state, nodelist,
-              numnodes, ntpernode, exit_code] in squeue
+    :yields:  job_id, name, userid, partition, state, nodelist,
+              numnodes, ntpernode, exit_code
     """
     qargs = ['squeue', '-h', '-O',
              'jobid:40,name:400,userid:40,partition:40,state,' +
