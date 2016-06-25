@@ -60,7 +60,10 @@ class TestRunner(TestCommand):
         """Run the test script, skip remote tests here."""
         import sys
         from subprocess import check_call
+        # The remote queue testing can fail for a variety of config reasons
+        # so we won't run it here
         check_call([sys.executable, 'tests/run_tests.py', '-l'])
+        #  check_call([sys.executable, 'tests/run_tests.py'])
 
 setup(
     name='python-cluster',

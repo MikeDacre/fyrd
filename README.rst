@@ -138,6 +138,32 @@ If you want to just submit a file, that can be done like this:
 This will return the job number and will enter the job into the queue as
 dependant on jobs 007 and 009. The dependencies can be omitted.
 
+The Job Class
+-------------
+
+The core of this submission system is a `Job` class, this class allows easy
+job handling and debugging. All of the above commands work well with the Job
+class also, but more fine grained control is possible. For example:
+
+.. code:: python
+  
+  my_job = """#!/bin/bash
+  parallel /usr/bin/parser {} ::: folder/*.txt
+  for i in folder/*.txt; do
+      echo $i >> my_output.txt
+      echo job_$i done!
+  fi"""
+  job = cluster.Job(my_job, cores=16)
+  job.submit()
+  job.wait()
+  print(job.stdout)
+  if job.exitcode != 0:
+      print(job.stderr)
+
+More is also possible, for a full description, see the API documentation here:
+`Job Documentation <https://mikedacre.github.io/python-cluster/api.html#job-management>`_
+
+
 Queue Management
 ================
 
@@ -409,6 +435,8 @@ Right now this software is in _beta_, to get to version 1.0 it needs to be
 tested by users and demonstrated to be stable. In addition, I would like to
 implement the following features prior to the release of v1.0:
 
+ - Auto update Job scripts when attributes are changed until files are already
+   written.
  - Profile managing script in bin
  - Update of all bin scripts to work with new options
  - Persistent job tracking in an sqlite database stored in $HOME
@@ -416,9 +444,6 @@ implement the following features prior to the release of v1.0:
  - Autoadjusting of job options based on queue features (i.e. implement a 'max'
    option and try to guess the max cores available for a request on any machine)
  - Allow users to define their own keyword arguments in their configuration
- - Move queue parsing code out of the queue class and into separate parsing
-   functions. Right now the `update()` method of `Queue` is definitely a god
-   function and could potentially become unstable.
 
 If you have any other feature suggestions please email them to me at
 mike.dacre@gmail.com or open an issue.

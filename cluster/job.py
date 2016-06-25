@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-04-20 23:03
- Last modified: 2016-06-22 16:40
+ Last modified: 2016-06-25 13:12
 
 ===============================================================================
 """
@@ -71,7 +71,7 @@ class Job(object):
     queue information to the job as they go.
 
     If the job disappears from the queue with no information, it will be listed
-    as 'complete'.
+    as 'completed'.
 
     All jobs have a .submission attribute, which is a Script object containing
     the submission script for the job and the file name, plus a 'written' bool
@@ -164,9 +164,11 @@ class Job(object):
                     kwargs[k] = v
 
         # Get environment
+        if not queue.MODE:
+            queue.MODE = queue.get_cluster_environment()
         self.qtype = qtype if qtype else queue.MODE
         self.queue = queue.Queue(user='self', qtype=self.qtype)
-        self.state = 'Not Submitted'
+        self.state = 'Not_Submitted'
 
         # Set name
         if not name:
@@ -287,20 +289,23 @@ class Job(object):
         # Create queue-dependent scripts
         sub_script = ''
         if self.qtype == 'slurm':
-            scrpt = os.path.join(filedir, '{}.cluster.sbatch'.format(name))
+            scrpt = os.path.join(filedir, '{}.{}.sbatch'.format(name, suffix))
 
             # We use a separate script and a single srun command to avoid
             # issues with multiple threads running at once
-            exe_scrpt  = os.path.join(filedir, name + '.script')
-            exe_script = run.CMND_RUNNER_TRACK.format(
+            exec_script  = os.path.join(filedir, '{}.{}.script'.format(name,
+                                                                       suffix))
+            exe_script   = run.CMND_RUNNER_TRACK.format(
                 precmd=precmd, usedir=usedir, name=name, command=command)
+            # Create the exec_script Script object
+            self.exec_script = Script(script=exe_script, file_name=exec_script)
 
             # Add all of the keyword arguments at once
             precmd += options.options_to_string(kwargs, self.qtype)
 
-            ecmnd = 'srun bash {}.script'.format(exe_scrpt)
+            ecmnd = 'srun bash {}'.format(exec_script)
             sub_script = run.SCRP_RUNNER.format(precmd=precmd,
-                                                script=exe_script,
+                                                script=exec_script,
                                                 command=ecmnd)
 
         elif self.qtype == 'torque':
@@ -323,13 +328,14 @@ class Job(object):
             sub_script = run.CMND_RUNNER_TRACK.format(
                 precmd=precmd, usedir=usedir, name=name, command=command)
 
-        # Create the Script objects
+        else:
+            raise ClusterError('Invalid queue type')
+
+        # Create the submission Script object
         self.submission = Script(script=sub_script,
                                  file_name=scrpt)
-        if hasattr(self, 'exe_scrpt'):
-            self.exec_script = Script(script='\n'.join(exe_script),
-                                      file_name=exe_scrpt)
 
+        # Save the keyword arguments for posterity
         self.kwargs = kwargs
 
     ####################
@@ -412,7 +418,7 @@ class Job(object):
                                           dependencies=dependencies,
                                           cores=self.cores)
             self.submitted = True
-            return self
+            self.state = 'submitted'
 
         elif self.qtype == 'slurm':
             if self.dependencies:
@@ -438,7 +444,7 @@ class Job(object):
                           'critical')
                 raise CalledProcessError(code, args, stdout, stderr)
             self.submitted = True
-            return self
+            self.state = 'submitted'
 
         elif self.qtype == 'torque':
             if self.dependencies:
@@ -469,9 +475,16 @@ class Job(object):
                               'critical')
                     raise CalledProcessError(code, args, stdout, stderr)
             self.submitted = True
+            self.state = 'submitted'
+        else:
+            raise ClusterError("Invalid queue type {}".format(self.qtype))
 
-            sleep(0.5)  # Give submission a chance
-            return self
+        if not self.submitted:
+            raise ClusterError('Submission appears to have failed, this '
+                               "shouldn't happen")
+
+        sleep(0.5)  # Give submission a chance
+        return self
 
     def update(self):
         """Update status from the queue."""
@@ -484,7 +497,7 @@ class Job(object):
                 assert self.id == queue_info.id
                 self.queue_info = queue_info
                 self.state = self.queue_info.state
-                if self.state == 'complete':
+                if self.state == 'completed':
                     self.done = True
                     self.get_stdout(False)
                     self.get_stderr(False)
@@ -506,9 +519,9 @@ class Job(object):
             logme.log('Cannot wait for result as job has not been submitted',
                       'warn')
             return
-        sleep(0.1)
+        sleep(0.2)
         self.wait()
-        return self.exitcode, self.stdout, self.stderr
+        return self.get_exitcode(), self.get_stdout(), self.get_stderr()
 
     def get_stdout(self, update=True):
         """Read stdout file if exists and set self.stdout, return it."""
@@ -527,6 +540,7 @@ class Job(object):
         else:
             logme.log('No file at {}, cannot get stdout'
                       .format(self.kwargs['outfile']), 'debug')
+            return -1
 
     def get_stderr(self, update=True):
         """Read stdout file if exists and set self.stdout, return it."""
@@ -611,8 +625,8 @@ class Job(object):
             outstr += ':{}'.format(self.id)
         outstr += "(command:{cmnd};args:{args})".format(
             cmnd=self.command, args=self.args)
-        if self.done:
-            outstr += "COMPLETED"
+        if self.submitted or self.done:
+            outstr += self.state.upper()
         elif self.written:
             outstr += "WRITTEN"
         else:
@@ -624,7 +638,7 @@ class Job(object):
         """Print job name and ID + status."""
         self.update()
         if self.done:
-            state = 'complete'
+            state = 'completed'
             id1 = self.id
         elif self.written:
             state = 'written'
@@ -727,7 +741,7 @@ class Function(Script):
                 rootname, self.function.__name__)
             modstr += 'except ImportError:\n    pass\n'
         else:
-            modstr  = 'try:\n    import {}'.format(self.function.__name__)
+            modstr  = 'try:\n    import {}\n'.format(self.function.__name__)
             modstr += 'except ImportError:\n    pass\n'
 
         # Take care of imports, either use manual or all current imports
@@ -834,7 +848,7 @@ def submit(command, args=None, name=None, path=None, qtype=None,
 
     job.write()
     job.submit()
-    job._update()
+    job.update()
 
     return job
 
@@ -1037,7 +1051,7 @@ def clean_dir(directory='.', suffix='cluster', qtype=None, confirm=False):
              extensions matching those these::
                  .<suffix>.err
                  .<suffix>.out
-                 .<suffix>.sbatch & .cluster.script for slurm mode
+                 .<suffix>.sbatch & .<suffix>.script for slurm mode
                  .<suffix>.qsub for torque mode
                  .<suffix> for local mode
                  _func.<suffix>.py
@@ -1105,7 +1119,7 @@ def clean_dir(directory='.', suffix='cluster', qtype=None, confirm=False):
                     break
                 else:
                     sys.stdout.write('Invalid response {}, please try again\n'
-                                    .format(answer))
+                                     .format(answer))
             if answer == 'y':
                 delete  = True
                 sys.stdout.write('Deleting...\n')

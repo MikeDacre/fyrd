@@ -7,7 +7,7 @@ Monitor the queue for torque or slurm.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-06-22 17:33
+ Last modified: 2016-06-25 13:11
 
    DESCRIPTION: Provides a class to monitor the torque, slurm, or local
                 jobqueue queues with identical syntax.
@@ -37,6 +37,7 @@ Monitor the queue for torque or slurm.
 """
 import os
 import re
+import sys
 import pwd      # Used to get usernames for queue
 import socket   # Used to get the hostname
 from time import time, sleep
@@ -252,7 +253,7 @@ class Queue(object):
         if int(time()) - self.last_update > int(_defaults['queue_update']):
             self._update()
         else:
-            logme.log('Skipping update as last update to recent', 'debug')
+            logme.log('Skipping update as last update too recent', 'debug')
         return self
 
     ######################
@@ -292,192 +293,52 @@ class Queue(object):
                     or job_info.state == 'running':
                     job.state = 'running'
                 elif job_info.state == 'done':
-                    job.state = 'complete'
+                    job.state = 'completed'
                     job.exitcode = int(job_info.exitcode)
                 else:
                     raise Exception('Unrecognized state')
 
                 # Assign the job to self.
                 self.jobs[job_id] = job
+                jobs.append(job_id)
 
-        elif self.qtype == 'torque':
-            try_count = 0
-            # Get an XML queue from torque
-            while True:
-                try:
-                    sleep(1)
-                    qargs = ['qstat', '-x']
-                    xmlqueue = ET.fromstring(check_output(qargs))
-                except CalledProcessError:
-                    sleep(1)
-                    if try_count == 5:
-                        raise
-                    else:
-                        try_count += 1
-                except ET.ParseError:
-                    # ElementTree throws error when string is empty
-                    sleep(1)
-                    if try_count == 1:
-                        xmlqueue = None
-                        break
-                    else:
-                        try_count += 1
+        else:
+            for [job_id, job_name, job_user, job_partition,
+                 job_state, job_nodelist, job_nodecount,
+                 job_cpus, job_exitcode] in queue_parser(self.qtype,
+                                                         self.user):
+                if self.user and self.user != job_user:
+                    logme.log('{} is not owned by current user, skipping'
+                              .format(job_id), 'debug')
+                    continue
+                if job_id not in self.jobs:
+                    job = self.QueueJob()
                 else:
-                    break
+                    job = self.jobs[job_id]
+                jobs.append(job_id)
+                job.id    = job_id
+                job.name  = job_name
+                job.owner = job_user
+                job.queue = job_partition
+                job.state = job_state.lower()
+                if job.state == 'pending':
+                    continue
+                job.nodes = job_nodelist
 
-            # Create QueueJob objects for all entries that match user
-            if xmlqueue is not None:
-                for xmljob in xmlqueue:
-                    job_id = int(xmljob.find('Job_Id').text.split('.')[0])
-                    job_owner = xmljob.find('Job_Owner').text.split('@')[0]
-                    if self.user and self.user != job_owner:
-                        logme.log('{} is not owned by current user, skipping'
-                                  .format(job_id), 'debug')
-                        continue
-                    if job_id not in self.jobs:
-                        logme.log('{} not in existing queue, adding'
-                                  .format(job_id), 'debug')
-                        job = self.QueueJob()
-                    else:
-                        job = self.jobs[job_id]
-                    job.owner = job_owner
-                    jobs.append(job_id)
-                    job.id    = job_id
-                    job.name  = xmljob.find('Job_Name').text
-                    job.queue = xmljob.find('queue').text
-                    job_state = xmljob.find('job_state').text
-                    if job_state == 'Q':
-                        job.state = 'pending'
-                    elif job_state == 'R' or job_state == 'E':
-                        job.state = 'running'
-                    elif job_state == 'C':
-                        job.state = 'complete'
-                    logme.log('Job {} state: {}'.format(job_id, job_state),
-                              'debug')
-                    if job.state == 'pending':
-                        continue
-                    nodes = xmljob.find('exec_host').text.split('+')
-                    # I assume that every 'node' is a core, as that is the
-                    # default for torque, but it isn't always true
-                    job.threads  = len(nodes)
-                    if nodes:
-                        job.nodes = []
-                        for node in nodes:
-                            node = node.split('/')[0]
-                            if node not in job.nodes:
-                                job.nodes.append(node)
-                        # Maintain slurm consistency
-                        job.nodes = ','.join(job.nodes)
-                    exitcode     = xmljob.find('exit_status')
-                    if hasattr(exitcode, 'text'):
-                        job.exitcode = int(exitcode.text)
+                # Threads is number of nodes * jobs per node
+                job.threads = int(job_nodecount) * int(job_cpus)
+                if job.state == 'completed' or job.state == 'failed':
+                    job.exitcode = job_exitcode
 
-                    # Assign the job to self.
-                    self.jobs[job_id] = job
-
-            else:
-                logme.log('There are no jobs in the queue', 'debug')
-
-        elif self.qtype == 'slurm':
-            try_count = 0
-            while True:
-                try:
-                    sleep(1)
-                    qargs = ['squeue', '-h', '-O',
-                             'jobid:40,name:400,userid:40,partition:40,state,' +
-                             'nodelist:100,numnodes,ntpernode,exit_code']
-                    if self.user:
-                        qargs += ['-u', self.user]
-                    squeue = [tuple(re.split(r' +', i.rstrip())) for i in \
-                              check_output(qargs).decode().rstrip().split('\n')]
-                except CalledProcessError:
-                    if try_count == 5:
-                        raise
-                    else:
-                        try_count += 1
-                else:
-                    break
-            # SLURM sometimes clears the queue extremely fast, so we use sacct
-            # to get old jobs by the current user
-            try_count = 0
-            while True:
-                try:
-                    sleep(1)
-                    qargs = ['sacct',
-                             '--format=jobid,jobname,user,partition,state,' +
-                             'exitcode,ncpus,nodelist']
-                    sacct = [tuple(re.split(r' +', i.rstrip())) for i in \
-                             check_output(qargs).decode().rstrip().split('\n')]
-                    sacct = sacct[2:]
-                except CalledProcessError:
-                    if try_count == 5:
-                        raise
-                    else:
-                        try_count += 1
-                else:
-                    break
-
-            # Loop through the queues
-            if squeue:
-                for sjob in squeue:
-                    job_id = int(sjob[0])
-                    if job_id not in self.jobs:
-                        job = self.QueueJob()
-                    else:
-                        job = self.jobs[job_id]
-                    jobs.append(job_id)
-                    job.id = job_id
-                    job.name, job.owner, job.queue = sjob[1:4]
-                    job.state = sjob[5].lower()
-                    if job.state == 'pending':
-                        continue
-                    job.nodes = sjob[6]
-
-                    # Threads is number of nodes * jobs per node
-                    job.threads = int(sjob[7]) * int(sjob[8])
-                    if job.state == 'complete' or job.state == 'failed':
-                        job.exitcode = int(sjob[9])
-
-                    # Assign the job to self.
-                    self.jobs[job_id] = job
-
-            # Add job info from sacct that isn't in the main queue
-            if sacct:
-                for sjob in sacct:
-                    # Skip job steps, only index whole jobs
-                    if '.' in sjob[0]:
-                        continue
-                    job_id = int(sjob[0])
-                    if job_id in jobs:
-                        continue
-                    if job_id not in self.job:
-                        job = self.QueueJob()
-                    else:
-                        job = self.jobs[job_id]
-                    jobs.append(job_id)
-                    job.id = job_id
-                    if not job.name:
-                        job.name = sjob[1]
-                    if not job.owner:
-                        job.owner = sjob[2]
-                    if not job.queue:
-                        job.queue = sjob[3]
-                    job.state = sjob[4].lower()
-                    if not job.exitcode:
-                        job.exitcode = int(sjob[5].split(':')[-1])
-                    if not job.threads:
-                        job.threads = int(sjob[6])
-                    if not job.nodes:
-                        job.nodes = sjob[7]
-
-                    # Assign the job to self.
-                    self.jobs[job_id] = job
+                # Assign the job to self.
+                self.jobs[job_id] = job
+                jobs.append(job_id)
 
         # We assume that if a job just disappeared it completed
         if self.jobs:
             for qjob in self.jobs.values():
                 if qjob.id not in jobs:
-                    qjob.state = 'complete'
+                    qjob.state = 'completed'
                     qjob.disappeared = True
 
     def _get_jobs(self, key):
@@ -492,9 +353,9 @@ class Queue(object):
     def __getattr__(self, key):
         """Make running and queued attributes dynamic."""
         key = key.lower()
-        if key == 'completed':
-            key = 'complete'
-        if key == 'running' or key == 'queued' or key == 'complete':
+        if key == 'complete':
+            key = 'completed'
+        if key == 'running' or key == 'queued' or key == 'completed':
             return self._get_jobs(key)
         # Define whether the queue is open
         if key == 'can_submit':
@@ -527,7 +388,7 @@ class Queue(object):
         self.update()
         if self.user:
             outstr = 'Queue<jobs:{};completed:{};queued:{};user={}>'.format(
-                len(self), len(self.complete), len(self.queued), self.user)
+                len(self), len(self.cmnd), len(self.queued), self.user)
         else:
             outstr = 'Queue<jobs:{};completed:{};queued:{};user=ALL>'.format(
                 len(self), len(self.complete), len(self.queued))
@@ -596,6 +457,188 @@ class Queue(object):
 ###############################################################################
 
 
+###################
+#  Queue Parsers  #
+###################
+
+def queue_parser(qtype=None, user=None):
+    """Call either torque or slurm qtype parsers depending on qtype.
+
+    :qtype:   Either 'torque' or 'slurm', defaults to current MODE
+    :user:    optional user name to pass to queue to filter queue with
+
+    :returns: job_id, name, userid, partition, state, nodelist,
+              numnodes, ntpernode, exit_code] in sqtype
+    """
+    if not qtype:
+        qtype = get_cluster_environment()
+    if qtype == 'torque':
+        return torque_queue_parser(user)
+    elif qtype == 'slurm':
+        return slurm_queue_parser(user)
+    else:
+        raise ClusterError("Invalid qtype type {}, must be 'torque' or 'slurm'"
+                           .format(qtype))
+
+
+def torque_queue_parser(user=None):
+    """Iterator for torque queues.
+
+    Use the `qstat -x` command to get an XML queue for compatibility.
+
+    :user:    optional user name to pass to qstat to filter queue with
+
+    :returns: job_id, name, userid, partition, state, nodelist,
+              numnodes, ntpernode, exit_code] in squeue
+
+    numcpus is currently always 1 as most torque queues treat every core as a
+    node.
+    """
+    # I am not using run.cmd because I want to catch XML errors also
+    try_count = 0
+    qargs = ['qstat', '-x']
+    while True:
+        try:
+            sleep(1)
+            xmlqueue = ET.fromstring(check_output(qargs))
+        except CalledProcessError:
+            sleep(1)
+            if try_count == 5:
+                raise
+            else:
+                try_count += 1
+        except ET.ParseError:
+            # ElementTree throws error when string is empty
+            sleep(1)
+            if try_count == 1:
+                xmlqueue = None
+                break
+            else:
+                try_count += 1
+        else:
+            break
+
+    # Create QueueJob objects for all entries that match user
+    if xmlqueue is not None:
+        for xmljob in xmlqueue:
+            job_id    = int(xmljob.find('Job_Id').text.split('.')[0])
+            job_owner = xmljob.find('Job_Owner').text.split('@')[0]
+            if user and job_owner != user:
+                continue
+            job_name  = xmljob.find('Job_Name').text
+            job_queue = xmljob.find('queue').text
+            job_state = xmljob.find('job_state').text
+            if job_state == 'Q':
+                job_state = 'pending'
+            elif job_state == 'R' or job_state == 'E':
+                job_state = 'running'
+            elif job_state == 'C':
+                job_state = 'completed'
+            logme.log('Job {} state: {}'.format(job_id, job_state),
+                      'debug')
+            nds = xmljob.find('exec_host').text.split('+')
+            nodes = []
+            for node in nds:
+                if '-' in node:
+                    nm, num = node.split('/')
+                    for i in range(*[int(i) for i in num.split('-')]):
+                        nodes.append(nm + '/' + str(i).zfill(2))
+                else:
+                    nodes.append(node)
+            # I assume that every 'node' is a core, as that is the
+            # default for torque, but it isn't always true
+            job_threads  = len(nodes)
+            exitcode     = xmljob.find('exit_status')
+            if hasattr(exitcode, 'text'):
+                exitcode = int(exitcode.text)
+
+            yield (job_id, job_name, job_owner, job_queue, job_state,
+                   nodes, job_threads, 1, exitcode)
+
+
+def slurm_queue_parser(user=None):
+    """Iterator for slurm queues.
+
+    Use the `squeue -O` command to get standard data across implementation,
+    supplement this data with the results of `sacct`. sacct returns data only
+    for the current user but retains a much longer job history. Only jobs not
+    returned by squeue are added with sacct, and they are added to *the end* of
+    the returned queue, i.e. *out of order with respect to the actual queue*.
+
+    :user:    optional user name to pass to squeue to filter queue with
+
+    :returns: job_id, name, userid, partition, state, nodelist,
+              numnodes, ntpernode, exit_code] in squeue
+    """
+    qargs = ['squeue', '-h', '-O',
+             'jobid:40,name:400,userid:40,partition:40,state,' +
+             'nodelist:100,numnodes,numcpus,exit_code']
+    if user:
+        qargs += ['-u', user]
+    squeue = [tuple(re.split(r' +', i.rstrip())) for i in \
+              run.cmd(qargs)[1].split('\n')]
+    for sinfo in squeue:
+        if len(sinfo) != 9:
+            squeue.remove(sinfo)
+    # SLURM sometimes clears the queue extremely fast, so we use sacct
+    # to get old jobs by the current user
+    qargs = ['sacct',
+             '--format=jobid,jobname,user,partition,state,' +
+             'nodelist,reqnodes,ncpus,exitcode']
+    try:
+        sacct = [tuple(re.split(r'  +', i.rstrip())) for i in \
+                 run.cmd(qargs)[1].split('\n')]
+        sacct = sacct[2:]
+    # This command isn't super stable and we don't care that much, so I will
+    # just let it die no matter what
+    except:
+        logme.log('Sacct failed', 'debug')
+        sacct = []
+
+    if sacct and len(sacct[0]) == 9:
+        jobids = [i[0] for i in squeue]
+        for sinfo in sacct:
+            # Skip job steps, only index whole jobs
+            if '.' in sinfo[0]:
+                continue
+            # These are the values I expect
+            [sid, sname, suser, spartition, sstate,
+             snodelist, snodes, scpus, scode] = sinfo
+            # Skip jobs that were already in squeue
+            if sid in jobids:
+                continue
+            scode = int(scode.split(':')[-1])
+            squeue.append((sid, sname, suser, spartition, sstate,
+                           snodelist, snodes, scpus, scode))
+
+    # Sanitize data
+    outqueue = []
+    for sinfo in squeue:
+        # Squeue doesn't include nodes in recent 'PENDING' jobs
+        if len(sinfo) == 8:
+            [sid, sname, suser, spartition, sstate,
+             snodes, scpus, scode] = sinfo
+        elif len(sinfo) == 9:
+            [sid, sname, suser, spartition, sstate, snodelist,
+             snodes, scpus, scode] = sinfo
+        else:
+            sys.stderr.write('{}'.format(repr(squeue)))
+            raise ClusterError('Queue parsing error, expected 8 or 9 items '
+                               'in output of squeue and sacct, got {}\n'
+                               .format(len(sinfo)))
+        sid    = int(sid)
+        snodes = int(snodes)
+        scpus  = int(scpus)
+        # Convert user from ID to name
+        if sname.isdigit():
+            sname = pwd.getpwuid(int(sname)).pw_name
+        outqueue.append((sid, sname, suser, spartition, sstate, snodelist,
+                         snodes, scpus, scode))
+    if outqueue:
+        for sinfo in outqueue:
+            yield sinfo
+
+
 ###########################################################
 #  Set the global cluster type: slurm, torque, or local  #
 ###########################################################
@@ -634,6 +677,8 @@ def check_queue(qtype=None):
     """Raise exception if MODE is incorrect."""
     if 'MODE' not in globals():
         global MODE
+        MODE = get_cluster_environment()
+    if not MODE:
         MODE = get_cluster_environment()
     if qtype:
         if qtype not in ALLOWED_MODES:

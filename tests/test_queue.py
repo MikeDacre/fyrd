@@ -1,6 +1,7 @@
 """Test remote queues, we can't test local queues in py.test."""
 import os
 import sys
+import pytest
 sys.path.append(os.path.abspath('.'))
 import cluster
 env = cluster.get_cluster_environment()
@@ -24,3 +25,9 @@ def test_queue_creation():
     queue = cluster.Queue()
     assert queue.qtype == env
     len(queue)
+
+
+def test_queue_parsers():
+    """Test the queue parsers."""
+    with pytest.raises(cluster.ClusterError):
+        cluster.queue.queue_parser('local')

@@ -7,7 +7,7 @@ File management and execution functions.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-02-11 16:03
- Last modified: 2016-06-16 19:15
+ Last modified: 2016-06-25 09:45
 
 ============================================================================
 """
@@ -33,9 +33,9 @@ SCRP_RUNNER = """\
 #!/bin/bash
 {precmd}
 mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
-if [ -f {script}]:
+if [ -f {script} ]; then
     {command}
-else:
+else
     echo "{script} does not exist, make sure you set your filepath to a "
     echo "directory that is available to the compute nodes."
     exit 1
@@ -46,7 +46,7 @@ SCRP_RUNNER_TRACK = """\
 #!/bin/bash
 {precmd}
 mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
-if [ -f {script}]:
+if [ -f {script} ]; then
     cd {usedir}
     date +'%d-%H:%M:%S'
     echo "Running {name}"
@@ -57,7 +57,7 @@ if [ -f {script}]:
     if [[ $exitcode != 0 ]]; then
         echo Exited with code: $exitcode >&2
     fi
-else:
+else
     echo "{script} does not exist, make sure you set your filepath to a "
     echo "directory that is available to the compute nodes."
     exit 1
@@ -260,6 +260,8 @@ def cmd(command, args=None, stdout=None, stderr=None, tries=1):
     :stdout:  File or open file like object to write STDOUT to.
     :stderr:  File or open file like object to write STDERR to.
     :tries:   Int: Number of times to try to execute 1+
+
+    :returns: exit_code, STDOUT, STDERR
     """
     tries = int(tries)
     assert tries > 0
