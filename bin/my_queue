@@ -6,10 +6,8 @@ Print simple and fast queue information for only the current user.
 
         AUTHOR: Michael D Dacre, mike.dacre@gmail.com
   ORGANIZATION: Stanford University
-       LICENSE: MIT License, property of Stanford, use as you wish
-       VERSION: 0.1
        CREATED: 2015-12-18 12:43
- Last modified: 2016-02-23 09:25
+ Last modified: 2016-06-26 10:30
 
    DESCRIPTION: Uses slurmpy and pyslurm to check the job queue for only
                 one user's jobs. Produces a very simple display, for full
@@ -25,50 +23,25 @@ Print simple and fast queue information for only the current user.
 
 ============================================================================
 """
+from __future__ import print_function
 import sys
-import slurmy
+import argparse
+import cluster
 
 
-def main(running=False, queued=False, outputcount=False, outputlist=False):
-    """ Run everything """
-    # Check that the user isn't a dumbass
-    if running and queued:
-        sys.stderr.write("ERROR --> You can't specify both " +
-                         "'running' and 'queued'\n")
-        sys.exit(1)
-    if outputcount and outputlist:
-        sys.stderr.write("ERROR --> You can't specify both " +
-                         "'count' and 'list'\n")
+def get_arguments(argv=None):
+    """Parse command line arguments from argv and return an argparse parser.
 
-    # Create queue object
-    queue = slurmy.queue()
-    if running:
-        jobs = queue.running
-    elif queued:
-        jobs = queue.queued
-    else:
-        jobs = queue.queue
+    :argv:    A list of command line arguments.
+    :returns: An argparse ArgumentParser object, fully built.
 
-    # Print requested output
-    if outputcount:
-        sys.stdout.write("{0}\n".format(str(len(jobs))))
-    elif outputlist:
-        sys.stdout.write("{0}\n".format(
-            ' '.join(list([str(i) for i in jobs.keys()]))))
-    else:
-        for k, v in jobs.items():
-            try:
-                sys.stdout.write('{0}\t{1}\n'.format(
-                    k, str(v['name']).strip("b'")))
-            except IOError:
-                break
+    """
+    if not argv:
+        argv = sys.argv[1:]
 
-if __name__ == '__main__' and '__file__' in globals():
-    import argparse
-
-    f_class = argparse.RawDescriptionHelpFormatter
-    parser  = argparse.ArgumentParser(description=__doc__,
-                                      formatter_class=f_class)
+    parser  = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
 
     j = parser.add_argument_group('Choose jobs to show, default is all')
     j.add_argument('-r', '--running', action='store_true',
@@ -82,12 +55,50 @@ if __name__ == '__main__' and '__file__' in globals():
     o.add_argument('-l', '--list', action='store_true',
                    help="Print space separated list of job numbers")
 
-    args = parser.parse_args()
+    return parser
 
-    # Run the script
-    main(running=args.running,
-         queued=args.queued,
-         outputcount=args.count,
-         outputlist=args.list)
 
-# vim:fenc=utf-8 tabstop=4 expandtab shiftwidth=4 softtabstop=4
+def main(argv=None):
+    """Parse command line options and print queue information."""
+
+    parser = get_arguments(argv)
+    args   = parser.parse_args(argv)
+
+    if args.running and args.queued:
+        sys.stderr.write("ERROR --> You can't specify both " +
+                         "'running' and 'queued'\n")
+        return 1
+
+    if args.count and args.list:
+        sys.stderr.write("ERROR --> You can't specify both " +
+                         "'count' and 'list'\n")
+        return 2
+
+    # Create queue object
+    queue = cluster.Queue(user='self')
+    if args.running:
+        jobs = queue.running
+    elif args.queued:
+        jobs = queue.queued
+    else:
+        jobs = queue.jobs
+
+    # Print requested output
+    if args.count:
+        print("{0}".format(str(len(jobs))))
+    elif args.list:
+        print("{0}".format(
+            ' '.join(list([str(i) for i in jobs.keys()]))))
+    else:
+        for jid, job in jobs.items():
+            try:
+                print('{0}\t{1}'
+                      .format(jid, job.name))
+            except IOError:
+                break
+
+    # Done
+    return 0
+
+if __name__ == '__main__' and '__file__' in globals():
+    sys.exit(main())
