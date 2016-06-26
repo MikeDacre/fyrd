@@ -7,7 +7,7 @@ Monitor the queue for torque or slurm.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-06-25 13:35
+ Last modified: 2016-06-26 10:30
 
    DESCRIPTION: Provides a class to monitor the torque, slurm, or local
                 jobqueue queues with identical syntax.
@@ -40,6 +40,7 @@ import re
 import sys
 import pwd      # Used to get usernames for queue
 import socket   # Used to get the hostname
+import getpass  # Used to get usernames for queue
 from time import time, sleep
 from subprocess import check_output, CalledProcessError
 
@@ -107,13 +108,14 @@ class Queue(object):
         # Get user ID as an int UID
         if user:
             if user == 'self' or user == 'current':
-                self.uid = pwd.getpwnam(os.environ['USER']).pw_uid
+                self.user = getpass.getuser()
+                self.uid  = pwd.getpwnam(self.user).pw_uid
             elif user == 'ALL':
                 self.user = None
             else:
-                if isinstance(user, int) or isinstance(user, str) \
-                        and user.isdigit():
-                    self.uid = pwd.getpwuid(int(user))
+                if isinstance(user, int) or (isinstance(user, str)
+                                             and user.isdigit()):
+                    self.uid  = int(user)
                 else:
                     self.uid = pwd.getpwnam(str(user)).pw_uid
         else:
@@ -536,7 +538,11 @@ def torque_queue_parser(user=None):
                 job_state = 'completed'
             logme.log('Job {} state: {}'.format(job_id, job_state),
                       'debug')
-            nds = xmljob.find('exec_host').text.split('+')
+            ndsx = xmljob.find('exec_host')
+            if ndsx:
+                nds = ndsx.text.split('+')
+            else:
+                nds = []
             nodes = []
             for node in nds:
                 if '-' in node:
