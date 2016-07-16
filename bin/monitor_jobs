@@ -1,77 +1,86 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Monitor the slurm queue for specific jobs and auto-resubmit jobs on fail.
+Monitor the torque or slurm queues, block until jobs complete and return stats.
 
-=============================================================================
+===============================================================================
 
         AUTHOR: Michael D Dacre, mike.dacre@gmail.com
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
-       VERSION: 0.1
        CREATED: 2016-07-23 10:02
- Last modified: 2016-02-23 11:53
+ Last modified: 2016-06-27 21:56
 
-   DESCRIPTION:
+   DESCRIPTION: Provide a list of jobs and/or a partition, plus an optional
+                user, and this script will block until all jobs are complete
+                and then will print some basic stats on whether they were
+                sucessful.
+
+     EXIT CODE: The exit code will be the number of jobs that failed, so if
+                the script exits with code 0, all jobs completed successfully.
 
          USAGE: auto_resubmit -p <partition> -u <user> -j <job1,job2,...>
                 Note: Arguments are cumulative except user. For example::
                     auto_resubmit -p bob -j 172436 172437
+                user can be 'self'
                 This command will monitor all jobs in the bob partition as
                 well as the two jobs specified directly.
                 However::
                     auto_resubmit -p bob -u fred
                 This command will only submit fred's jobs in bob (the union).
 
-=============================================================================
+===============================================================================
 """
-import os
+from __future__ import print_function
 import sys
 import argparse
 
 from pwd import getpwnam
 from time import sleep
 
-import pyslurm
+import cluster
 
 # Logging function, MIN_LEVEL should be 'debug', 'info', or 'warn'.
 import logme as lm
 lm.MIN_LEVEL = 'info'
 
 
-def auto_resubmit(job_list):
-    """Check state of every job in job_list and resubmit killed jobs.
+def wait(job_list, user=None, sleep_len=1):
+    """Loop through jobs in job_list and keep track of exit status.
 
-    Uses pyslurm.job to get every running job, then loops through job_list
-    and looks for jobs with a 'Cancelled' state, and resubmits them.
-
-    Failed or timed out jobs are not resubmitted.
-
-    Note: Will silently ignore jobs that are not in the queue.
-
-    :job_list: TODO
-    :returns: TODO
+    :job_list:  A list of job numbers to track.
+    :user:      Limit queue parsing to jobs by this user. 'self' works.
+    :sleep_len: Amount of time to wait between job checks.
+    :returns:   A dictionary of {'completed' -> QueueJob,
+                                 'failed' - > QueueJob}
 
     """
-    # Lists for jobs
-    completed    = []
-    failed       = {}
-    resubmitted  = {}
-    non_existent = []
+    if not isinstance(sleep_len, int):
+        try:
+            sleep_len = int(sleep_len)
+        except ValueError:
+            raise ValueError('sleep_len must be an integer, is {}'
+                             .format(type(sleep_len)))
 
-    while 1:
-        queue = pyslurm.job()  # Must recreate this to update job list.
-        if not job_list:
-            break
+    queue = cluster.Queue(user=user)
+
+    completed = {}
+    failed    = {}
+
+    count = len(job_list)
+
+    while count:
         for job in job_list:
-            info = queue.find_id(job)
-            if not info and (job not in failed or job not in completed):
-                log('{} not in queue'.format(job), level='warn')
-                non_existent.append(job)
-                job_list.remove(job)
-            if info['job_state'] == 'PENDING':
-                continue
-        sleep 1
+            queue.update()
+            if job in queue.completed:
+                completed[job] = queue.jobs[job]
+                count -= 1
+            elif job in queue.failed:
+                failed[job] = queue.jobs[job]
+                count -= 1
+            sleep(sleep_len)
+
+    return {'completed': completed, 'failed': failed}
 
 
 def make_job_list(user=None, partition=None, jobs=None ):
@@ -94,27 +103,19 @@ def make_job_list(user=None, partition=None, jobs=None ):
         elif isinstance(jobs, (list, tuple)):
             job_list = list(jobs)
         else:
-            raise Exception('Invalid type for jobs: {}'.format(type(jobs)))
+            raise TypeError('Invalid type for jobs: {}'.format(type(jobs)))
     else:
         job_list = []
 
-    queue = pyslurm.job()
-
-    user_list = []
-    if user:
-        if isinstance(user, (str, int)):
-            user = [user]
-        for i in user:
-            if isinstance(i, str):
-                i = int(i) if i.isdigit() else getpwnam(i).pw_uid
-            user_list = user_list + queue.find('user_id', i)
+    queue = cluster.Queue(user=user)
 
     partition_list = []
-    if partition:
-        if isinstance(partition, str):
-            partition = [partition]
-        for i in partition:
-            partition_list = partition_list + queue.find('partition', i)
+    # TODO: Queue has no means of searching by partition
+    #  if partition:
+        #  if isinstance(partition, str):
+            #  partition = [partition]
+        #  for i in partition:
+            #  partition_list = partition_list + queue.find('partition', i)
 
     # Take the union of the user and partion lists
     job_list = job_list + list(set(user_list) & set(partition_list))
@@ -125,8 +126,8 @@ def make_job_list(user=None, partition=None, jobs=None ):
     return job_list
 
 
-def main(argv=None):
-    """ Run as a script """
+def parse_arguments(argv=None):
+    """Parse the command line arguments."""
     if not argv:
         argv = sys.argv[1:]
 
@@ -143,7 +144,13 @@ def main(argv=None):
     jobs.add_argument('-j', '--jobs', nargs='+',
                       help="A list of additional jobs, optional.")
 
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv=None):
+    """Run as a script."""
+    parser = parse_arguments(argv)
+    args   = parser.parse_args(argv)
 
     # Check that at least one option specified
     if not args.partition and not args.user and not args.jobs:
@@ -154,9 +161,22 @@ def main(argv=None):
     job_list = make_job_list(jobs=args.jobs, user=args.user,
                              partition=args.partition)
 
-    return auto_resubmit(job_list)
+    job_info = wait(job_list)
+
+    if job_info['completed']:
+        print('Completed Jobs:')
+        for job_id, qinfo in job_info['completed'].items():
+            print('ID: {}; Name: {}; Exit Code: {}'
+                  .format(job_id, qinfo.name, qinfo.exitcode))
+    if job_info['failed']:
+        print('Failed Jobs:')
+        for job_id, qinfo in job_info['failed'].items():
+            print('ID: {}; Name: {}; Exit Code: {}'
+                  .format(job_id, qinfo.name, qinfo.exitcode))
+
+    retcode = len(job_info['failed'])
+
+    return retcode
 
 if __name__ == '__main__' and '__file__' in globals():
     sys.exit(main())
-
-#vim:set et sw=4 ts=4 tw=79:
