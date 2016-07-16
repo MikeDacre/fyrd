@@ -67,7 +67,7 @@ class TestRunner(TestCommand):
 
 setup(
     name='python-cluster',
-    version='0.6.1',
+    version='0.6.1b',
     description='Submit functions and shell scripts to torque, slurm, ' +
                 'or local machines',
     long_description=long_description,
