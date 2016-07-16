@@ -11,7 +11,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
 +---------+----------------------------------------------------+
 | License | MIT License, property of Stanford, use as you wish |
 +---------+----------------------------------------------------+
-| Version | 0.6.1                                              |
+| Version | 0.6.1b                                             |
 +---------+----------------------------------------------------+
 
 Allows simple job submission with *dependency tracking and queue waiting* with
@@ -20,6 +20,11 @@ techiques to avoid overwhelming the queue and to catch bugs on the fly.
 
 For complete documentation see `the documentation site <https://mikedacre.github.io/python-cluster>`_
 and the `PythonCluster.pdf <PythonCluster.pdf>`_ document in this repository.
+
+NOTE: This software is still in beta, the scripts in bin/ do not all function
+properly and the software has not been fully tested on slurm systems. Please
+report any problems to the github issues page. Version 0.6.2 will resolve all
+of these outstanding bugs.
 
 .. contents:: **Contents**
 

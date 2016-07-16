@@ -8,7 +8,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
 +---------+----------------------------------------------------+
 | License | MIT License, property of Stanford, use as you wish |
 +---------+----------------------------------------------------+
-| Version | 0.6.1                                              |
+| Version | 0.6.1b                                             |
 +---------+----------------------------------------------------+
 
 Allows easy job submission with *dependency tracking and queue waiting* with
