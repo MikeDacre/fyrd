@@ -26,6 +26,10 @@ properly and the software has not been fully tested on slurm systems. Please
 report any problems to the github issues page. Version 0.6.2 will resolve all
 of these outstanding bugs.
 
+NOTE: While this software is extremely powerful for pure python-based cluster job
+submission, `snakemake <https://bitbucket.org/snakemake/snakemake/wiki/Home>`_ is
+possibly a better choice for very large workflows.
+
 .. contents:: **Contents**
 
 Installation
