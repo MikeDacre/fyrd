@@ -191,9 +191,9 @@ class Queue(object):
             else:
                 if isinstance(job, self._Job):
                     job = job.id
+                not_found = 0
                 while True:
                     self.update()
-                    not_found = 0
                     # Allow two seconds to elapse before job is found in queue,
                     # if it is not in the queue by then, raise exception.
                     if job not in self.jobs:
