@@ -7,7 +7,7 @@ Monitor the queue for torque or slurm.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-08-31 15:26
+ Last modified: 2016-08-31 15:30
 
    DESCRIPTION: Provides a class to monitor the torque, slurm, or local
                 jobqueue queues with identical syntax.
@@ -198,8 +198,9 @@ class Queue(object):
                     # if it is not in the queue by then, raise exception.
                     if job not in self.jobs:
                         sleep(1)
+                        self.update()
                         not_found += 1
-                        if not_found == 3:
+                        if not_found == 6:
                             raise self.QueueError(
                                 '{} not in queue'.format(job))
                         continue
