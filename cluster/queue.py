@@ -7,7 +7,7 @@ Monitor the queue for torque or slurm.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-06-26 10:30
+ Last modified: 2016-08-31 15:26
 
    DESCRIPTION: Provides a class to monitor the torque, slurm, or local
                 jobqueue queues with identical syntax.
@@ -390,7 +390,7 @@ class Queue(object):
         self.update()
         if self.user:
             outstr = 'Queue<jobs:{};completed:{};queued:{};user={}>'.format(
-                len(self), len(self.cmnd), len(self.queued), self.user)
+                len(self), len(self.complete), len(self.queued), self.user)
         else:
             outstr = 'Queue<jobs:{};completed:{};queued:{};user=ALL>'.format(
                 len(self), len(self.complete), len(self.queued))
@@ -576,23 +576,28 @@ def slurm_queue_parser(user=None):
     :yields:  job_id, name, userid, partition, state, nodelist,
               numnodes, ntpernode, exit_code
     """
+    nodequery = re.compile(r'([^\[,]+)(\[[^\[]+\])?')
     qargs = ['squeue', '-h', '-O',
-             'jobid:40,name:400,userid:40,partition:40,state,' +
-             'nodelist:100,numnodes,numcpus,exit_code']
+             'jobid:400,name:400,userid:400,partition:400,state:400,' +
+             'nodelist:400,numnodes:400,numcpus:400,exit_code:400']
     if user:
         qargs += ['-u', user]
-    squeue = [tuple(re.split(r' +', i.rstrip())) for i in \
-              run.cmd(qargs)[1].split('\n')]
+    # Parse queue info by length
+    squeue = [
+        tuple(
+            [ k[i:i+200].rstrip() for i in range(0, 3600, 400) ]
+        ) for k in run.cmd(qargs)[1].split('\n')
+    ]
     for sinfo in squeue:
         if len(sinfo) != 9:
             squeue.remove(sinfo)
     # SLURM sometimes clears the queue extremely fast, so we use sacct
     # to get old jobs by the current user
-    qargs = ['sacct',
+    qargs = ['sacct', '-p',
              '--format=jobid,jobname,user,partition,state,' +
              'nodelist,reqnodes,ncpus,exitcode']
     try:
-        sacct = [tuple(re.split(r'  +', i.rstrip())) for i in \
+        sacct = [tuple(re.split(r'|', i.rstrip())) for i in \
                  run.cmd(qargs)[1].split('\n')]
         sacct = sacct[2:]
     # This command isn't super stable and we don't care that much, so I will
@@ -608,8 +613,18 @@ def slurm_queue_parser(user=None):
             if '.' in sinfo[0]:
                 continue
             # These are the values I expect
-            [sid, sname, suser, spartition, sstate,
-             snodelist, snodes, scpus, scode] = sinfo
+            try:
+                [sid, sname, suser, spartition, sstate,
+                snodelist, snodes, scpus, scode] = sinfo
+            except ValueError as err:
+                logme.log('sacct parsing failed with error {} '.format(err) +
+                          'due to an incorrect number of entries.\n' +
+                          'Contents of sinfo:\n{}\n'.format(sinfo) +
+                          'Expected 9 values\n:' +
+                          '[sid, sname, suser, spartition, sstate, ' +
+                          'snodelist, snodes, scpus, scode]',
+                          'critical')
+                raise
             # Skip jobs that were already in squeue
             if sid in jobids:
                 continue
@@ -620,24 +635,42 @@ def slurm_queue_parser(user=None):
     # Sanitize data
     outqueue = []
     for sinfo in squeue:
-        # Squeue doesn't include nodes in recent 'PENDING' jobs
-        if len(sinfo) == 8:
-            [sid, sname, suser, spartition, sstate,
-             snodes, scpus, scode] = sinfo
-        elif len(sinfo) == 9:
-            [sid, sname, suser, spartition, sstate, snodelist,
+        if len(sinfo) == 9:
+            [sid, sname, suser, spartition, sstate, sndlst,
              snodes, scpus, scode] = sinfo
         else:
-            sys.stderr.write('{}'.format(repr(squeue)))
+            sys.stderr.write('{}'.format(repr(sinfo)))
             raise ClusterError('Queue parsing error, expected 8 or 9 items '
                                'in output of squeue and sacct, got {}\n'
                                .format(len(sinfo)))
-        sid    = int(sid)
-        snodes = int(snodes)
-        scpus  = int(scpus)
+        sid    = int(sid) if sid else None
+        snodes = int(snodes) if snodes else None
+        scpus  = int(scpus) if snodes else None
+        scode  = int(scode) if scode else None
         # Convert user from ID to name
-        if sname.isdigit():
-            sname = pwd.getpwuid(int(sname)).pw_name
+        if suser.isdigit():
+            suser = pwd.getpwuid(int(suser)).pw_name
+        # Attempt to parse nodelist
+        snodelist = []
+        if sndlst:
+            if nodequery.search(sndlst):
+                nsplit = nodequery.findall(sndlst)
+                for nrg in nsplit:
+                    node, rge = nrg
+                    if not rge:
+                        snodelist.append(node)
+                    else:
+                        for reg in rge.strip('[]').split(','):
+                            # Node range
+                            if '-' in reg:
+                                start, end = [int(i) for i in reg.split('-')]
+                                for i in range(start, end):
+                                    snodelist.append('{}{}'.format(node, i))
+                            else:
+                                snodelist.append('{}{}'.format(node, reg))
+            else:
+                snodelist = sndlst.split(',')
+
         outqueue.append((sid, sname, suser, spartition, sstate, snodelist,
                          snodes, scpus, scode))
     if outqueue:
