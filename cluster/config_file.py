@@ -7,7 +7,7 @@ Get and set config file options.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-06-22 17:29
+ Last modified: 2016-08-30 18:24
 
    DESCRIPTION: The functions defined here provide an easy way to access the
                 config file defined by CONFIG_FILE (default ~/.python-cluster).
@@ -130,11 +130,27 @@ class Profile(object):
         """Display useful info."""
         return "{}<{}>".format(self.name, self.args)
 
+    def __str__(self):
+        """Pretty print."""
+        return "{}:\n\t{}".format(
+            self.name.title(),
+            '\n\t'.join(['{}:\t{}'.format(i,j) for i,j in self.args.items()])
+        )
+
 
 def get_profile(profile=None):
-    """Return a profile if it exists, if None, return all profiles."""
+    """Return a profile if it exists, if None, return all profiles.
+
+    Will return None if profile is supplied but does not exist.
+
+    :profile: The name of a profile to search for.
+
+    """
     if profile:
-        prof = Profile(profile, get_option('prof', profile))
+        popt = get_option('prof', profile)
+        if not popt:
+            return None
+        prof = Profile(profile, popt)
         if not prof and profile == 'default':
             logme.log('default profile missing, recreating. You can '
                       'override the defaults by editing {}'
@@ -151,12 +167,25 @@ def get_profile(profile=None):
 
 
 def set_profile(name, args):
-    """Write profile to config file."""
+    """Write profile to config file.
+
+    :name: The name of the profile to add/edit.
+    :args: Keyword arguments to add to the profile.
+
+    """
     if not isinstance(args, dict):
         raise Exception('Profile arguments must be a dictionary')
     args = options.check_arguments(args)
     for arg, opt in args.items():
         set_option('prof_' + name, arg, opt)
+
+def del_profile(name):
+    """Delete a profile.
+
+    :name: The name of the profile to delete.
+
+    """
+    delete('prof_{}'.format(name))
 
 
 ###############################################################################
@@ -283,7 +312,7 @@ def create_config():
                'control your job submission options, potentially saving you '
                'a lot of time. Please review this file and edit the defaults '
                'to fit your cluster configuration. In particular, edit the '
-               '[opts] section to include and job submission options that '
+               '[opts] section to include job submission options that '
                'must be included every time on this cluster.')
               .format(CONFIG_FILE), 'info')
     return get_config()

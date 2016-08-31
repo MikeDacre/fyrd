@@ -1,0 +1,280 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+Edit your cluster profiles.
+
+============================================================================
+
+        AUTHOR: Michael D Dacre, mike.dacre@gmail.com
+  ORGANIZATION: Stanford University
+       LICENSE: MIT License, property of Stanford, use as you wish
+       CREATED: 2016-40-30 15:08
+ Last modified: 2016-08-30 18:49
+
+   DESCRIPTION: Edit your cluster profiles.
+
+============================================================================
+"""
+from __future__ import print_function
+import sys
+import argparse
+
+# Import ourself
+from cluster import config_file
+from cluster import options
+
+MODES = """\
+Mode Information
+----------------
+
+This module allows the user to save cluster keyword arguments in a config file
+located at ~/.python-cluster.
+
+Rather than edit that file directly, use this script to add profiles and
+options.
+
+There are two classes of options: global options, and profiles.
+
+Global options will be used in all profiles, but only if the option is not
+already present in the profile definition. Profiles must be called every time
+and allow bundled keyword arguments, they can also be overridden by providing
+keyword arguments at runtime.
+
+Global options are great for saving a default queue.
+
+Modes
+-----
+
+General:
+    :list:   Display all global options and profiles.
+
+Profile Management:
+    :add:    Add a profile
+             Usage: add profile_name keyword:arg [keyword:arg ...]
+    :edit:   Edit an existing profile
+             Usage: edit profile_name keyword:arg [keyword:arg ...]
+    :remove: Delete an existing profile (The default profile will be recreated
+             if it does not exist when a job is submitted.
+             Usage: remove|del profile_name
+
+Global Option Management:
+    :add-global:    Add a global keyword
+                    Usage: add-global keyword:arg [keyword:arg ...]
+    :remove-global: Remove a global keyword
+                    Usage: remove-global|del-global keyword [keyword ...]
+
+Dangerous:
+    :reset: Completely reset your entire profile to the defaults.
+"""
+
+try:
+    get_input = raw_input
+except NameError:
+    get_input = input
+
+
+######################
+#  Helper functions  #
+######################
+
+
+def get_values(keywords):
+    """Return a dictionary of {keyword: arg} from a list of 'keyword:arg'.
+
+    :keywords: A list of strings in the format keyword:arg.
+    :returns:  A dictionary.
+
+    """
+    values = {}
+    for arg in keywords:
+        try:
+            key, value = arg.split(':', 1)
+        except ValueError:
+            sys.stderr.write('Arguments must be in the format keyword:arg\n')
+            sys.exit(1)
+        values[key] = value
+    return values
+
+
+def add_edit_profile(args, overwrite):
+    """Add or edit a profile.
+
+    :args:      Command line arguments defined in main.
+    :overwrite: Edit a profile instead of adding one.
+
+    """
+    values = get_values(args.values)
+
+    if not overwrite and config_file.get_profile(args.name):
+        sys.stderr.write("Profile '{}' already exists, use edit to change."
+                         .format(args.name))
+        sys.exit(2)
+
+    # Try to set the profile
+    try:
+        config_file.set_profile(args.name, values)
+        print('Success')
+    except options.OptionsError as err:
+        sys.stderr.write(err + '\n')
+        sys.exit(3)
+
+
+#####################################################
+#  Parsing functions (use args from main/argparse)  #
+#####################################################
+
+
+def list_profiles(args):
+    """List all profiles.
+
+    :args: Command line arguments defined in main. Not used.
+
+    """
+    # Get global arguments
+    req_options = config_file.get_option('opts')
+    if req_options:
+        print('Global defaults (overriden by profile options):')
+        print('\t' + '\n\t'
+              .join(['{}:\t{}'.format(i, j) for i,j in req_options.items()])
+             )
+    profiles = config_file.get_profile()
+    for profile in profiles.values():
+        print(profile)
+
+
+def add_profile(args):
+    """Add a profile.
+
+    :args: Command line arguments defined in main.
+
+    """
+    add_edit_profile(args, False)
+
+
+def edit_profile(args):
+    """Edit a profile.
+
+    :args: Command line arguments defined in main.
+
+    """
+    add_edit_profile(args, True)
+
+
+def del_profile(args):
+    """Delete a profile.
+
+    :args: Command line arguments defined in main.
+
+    """
+    print('This will delete the {} profile.'.format(args.name))
+    if input('Are you sure? [y/N] ') == 'y':
+        config_file.del_profile(args.name)
+        print('Done')
+    else:
+        print('Aborting')
+
+
+
+def add_option(args):
+    """Add a global keyword.
+
+    :args: Command line arguments defined in main.
+
+    """
+    values = get_values(args.values)
+    for key, value in values.items():
+        config_file.set_option('opts', key, value)
+    print('Success')
+
+
+def del_option(args):
+    """Delete an option.
+
+    :args: Command line arguments defined in main.
+
+    """
+    for keyword in args.keywords:
+        val = config_file.get_option('opts', keyword)
+        if val:
+            if input('Keyword {} is currently {}, delete? [y/N] '
+                     .format(keyword, val)) == 'y':
+                config_file.delete('opts', keyword)
+                print('Done')
+            else:
+                print('Skipping {}'.format(keyword))
+        else:
+            print('Global option {} is not set.'.format(keyword))
+
+
+def reset(args):
+    """Reset all options.
+
+    :args: Command line arguments defined in main. Not used.
+
+    """
+    print('This will overwrite your entire profile!')
+    confirmation = get_input('Are you sure? [y/N] ')
+    if confirmation == 'y':
+        config_file.create_config()
+    else:
+        print('Aborting')
+
+
+def main(argv=None):
+    """User interaction."""
+    if not argv:
+        argv = sys.argv[1:]
+
+    parser  = argparse.ArgumentParser(
+        description=__doc__, epilog=MODES,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+
+    # Optional flags
+    #  parser.add_argument('-f', '--force', action="store_true",
+                        #  help="Force overwrite")
+
+    # Mode based arguments
+    modes = 'list||add|edit|remove||add_option|remove_option||reset'
+    subparsers = parser.add_subparsers(title='Run Modes', dest='mode',
+                                       metavar=modes)
+    listmode   = subparsers.add_parser('list')
+    addmode    = subparsers.add_parser('add')
+    editmode   = subparsers.add_parser('edit')
+    delmode    = subparsers.add_parser('remove', aliases=['del'])
+    aoptmode   = subparsers.add_parser('add-global')
+    doptmode   = subparsers.add_parser('remove-global', aliases=['del-global'])
+    resetmode  = subparsers.add_parser('reset')
+
+    # Define functions for different modes
+    listmode.set_defaults(func=list_profiles)
+    addmode.set_defaults(func=add_profile)
+    editmode.set_defaults(func=edit_profile)
+    delmode.set_defaults(func=del_profile)
+    aoptmode.set_defaults(func=add_option)
+    doptmode.set_defaults(func=del_option)
+    resetmode.set_defaults(func=reset)
+
+    # Add sub-arguments
+    addmode.add_argument('name', help='A name for the profile')
+    addmode.add_argument('values', nargs='+',
+                         help='Keyword:value pairs (e.g. time:00:02:00)')
+    editmode.add_argument('name', help='The name of the profile')
+    editmode.add_argument('values', nargs='+',
+                          help='Keyword:value pairs (e.g. time:00:02:00)')
+    delmode.add_argument('name', help='The name of the profile')
+    aoptmode.add_argument('values', nargs='+',
+                          help='Keyword:value pairs (e.g. queue:batch)')
+    doptmode.add_argument('keywords', nargs='+',
+                          help='Keywords to delete (e.g. queue)')
+
+    args = parser.parse_args(argv)
+
+    # Run the requisite function
+    if args.mode:
+        args.func(args)
+    else:
+        parser.print_help()
+
+
+if __name__ == '__main__' and '__file__' in globals():
+    sys.exit(main())

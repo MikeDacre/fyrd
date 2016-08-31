@@ -1,9 +1,5 @@
 .. This file is based on the README.rst file for the whole project.
 
-===========
-Basic Usage
-===========
-
 Installation
 ============
 
@@ -301,6 +297,52 @@ where <name> is whatever you want it to be called. e.g.::
 *Note:* a default profile must always exist, it will be added back if it does
 not exist.
 
+The easiest way to manage profiles is with the cluster_profile script in bin. It
+defines several easy methods to manage both profiles and global options::
+
+    Mode Information
+    ----------------
+
+    This module allows the user to save cluster keyword arguments in a config file
+    located at ~/.python-cluster.
+
+    Rather than edit that file directly, use this script to add profiles and
+    options.
+
+    There are two classes of options: global options, and profiles.
+
+    Global options will be used in all profiles, but only if the option is not
+    already present in the profile definition. Profiles must be called every time
+    and allow bundled keyword arguments, they can also be overridden by providing
+    keyword arguments at runtime.
+
+    Global options are great for saving a default queue.
+
+    Modes
+    -----
+
+    General:
+        :list:   Display all global options and profiles.
+
+    Profile Management:
+        :add:    Add a profile
+                 Usage: add profile_name keyword:arg [keyword:arg ...]
+        :edit:   Edit an existing profile
+                 Usage: edit profile_name keyword:arg [keyword:arg ...]
+        :remove: Delete an existing profile (The default profile will be recreated
+                 if it does not exist when a job is submitted.
+                 Usage: remove|del profile_name
+
+    Global Option Management:
+        :add-global:    Add a global keyword
+                        Usage: add-global keyword:arg [keyword:arg ...]
+        :remove-global: Remove a global keyword
+                        Usage: remove-global|del-global keyword [keyword ...]
+
+    Dangerous:
+        :reset: Completely reset your entire profile to the defaults. 
+
+
 Alternatively, the functions ``cluster.config_file.set_profile()`` and
 ``cluster.config_file.get_profile()`` can be used:
 
@@ -397,3 +439,34 @@ You can also wait for many jobs with the Queue class:
   q.wait([job1, job2])
 
 The jobs in this case can be either a Job class or a job number.
+
+
+Issues and Contributing
+=======================
+
+If you have any trouble with this software add an issue in
+https://github.com/MikeDacre/python-cluster/issues
+
+If you want to help improve it, please fork the repo and send me pull requests
+when you are done.
+ 
+
+Roadmap
+=======
+
+Right now this software is in _beta_, to get to version 1.0 it needs to be
+tested by users and demonstrated to be stable. In addition, I would like to
+implement the following features prior to the release of v1.0:
+
+ - Auto update Job scripts when attributes are changed until files are already
+   written.
+ - DONE: Profile managing script in bin
+ - Update of all bin scripts to work with new options
+ - Persistent job tracking in an sqlite database stored in $HOME
+ - Mac OS X functionality
+ - Autoadjusting of job options based on queue features (i.e. implement a 'max'
+   option and try to guess the max cores available for a request on any machine)
+ - Allow users to define their own keyword arguments in their configuration
+
+If you have any other feature suggestions please email them to me at
+mike.dacre@gmail.com or open an issue.
