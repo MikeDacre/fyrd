@@ -9,7 +9,7 @@ Clean all intermediate files created by the cluster module from this dir.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-34-15 15:06
- Last modified: 2016-06-16 10:42
+ Last modified: 2016-08-31 18:24
 
    DESCRIPTION: Uses the cluster.job.clean_dir() function
 
@@ -45,10 +45,11 @@ def main(argv=None):
                         help="Directory to clean")
     parser.add_argument('-q', '--qtype', choices=('torque', 'slurm', 'local'),
                         help="Limit deletions to this qtype")
+
     # We store this as false as the question is a negative
     parser.add_argument('-n', '--no-confirm', action='store_false',
                         help="Do not confirm before deleting (for scripts)")
-    parser.add_argument('-v', '--verbose',
+    parser.add_argument('-v', '--verbose', action='store_true',
                         help="Show debug information")
 
     args = parser.parse_args(argv)

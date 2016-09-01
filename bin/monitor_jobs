@@ -9,13 +9,13 @@ Monitor the torque or slurm queues, block until jobs complete and return stats.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-07-23 10:02
- Last modified: 2016-08-31 18:03
+ Last modified: 2016-08-31 18:19
 
    DESCRIPTION: Provide a list of jobs and/or a partition, plus an optional
                 user, and this script will block until all jobs are complete.
 
          USAGE: monitor_jobs -p <partition> -u <user> -j <job1,job2,...>
-                Note: Arguments are cumulative except user. For example::
+                Arguments are cumulative except user. For example::
                     auto_resubmit -p bob -j 172436 172437
                 user can be 'self'
                 This command will monitor all jobs in the bob partition as

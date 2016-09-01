@@ -7,9 +7,9 @@ Print simple and fast queue information for only the current user.
         AUTHOR: Michael D Dacre, mike.dacre@gmail.com
   ORGANIZATION: Stanford University
        CREATED: 2015-12-18 12:43
- Last modified: 2016-06-26 10:30
+ Last modified: 2016-08-31 18:10
 
-   DESCRIPTION: Uses slurmpy and pyslurm to check the job queue for only
+   DESCRIPTION: Uses python-cluster to check the job queue for only
                 one user's jobs. Produces a very simple display, for full
                 job information, the regular tools can be used (e.g squeue)
                 Output:
@@ -29,15 +29,8 @@ import argparse
 import cluster
 
 
-def get_arguments(argv=None):
-    """Parse command line arguments from argv and return an argparse parser.
-
-    :argv:    A list of command line arguments.
-    :returns: An argparse ArgumentParser object, fully built.
-
-    """
-    if not argv:
-        argv = sys.argv[1:]
+def main(argv=None):
+    """Parse command line options and print queue information."""
 
     parser  = argparse.ArgumentParser(
         description=__doc__,
@@ -55,13 +48,6 @@ def get_arguments(argv=None):
     o.add_argument('-l', '--list', action='store_true',
                    help="Print space separated list of job numbers")
 
-    return parser
-
-
-def main(argv=None):
-    """Parse command line options and print queue information."""
-
-    parser = get_arguments(argv)
     args   = parser.parse_args(argv)
 
     if args.running and args.queued:

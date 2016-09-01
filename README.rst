@@ -173,6 +173,115 @@ More is also possible, for a full description, see the API documentation here:
 `Job Documentation <https://mikedacre.github.io/python-cluster/api.html#job-management>`_
 
 
+Scripts
+=======
+
+While this software is designed to be used as a python library, several scripts
+are provided to make life easier.
+
+my_queue
+~~~~~~~~
+
+Uses python-cluster to check the job queue for only one user's jobs.  Produces
+a very simple display, for full job information, the regular tools can be used
+(e.g squeue)::
+
+  Choose jobs to show, default is all:
+    -r, --running  Show running jobs only
+    -q, --queued   Show queued jobs only
+
+  Choose alternate output style:
+    -c, --count    Display count only
+    -l, --list     Print space separated list of job numbers
+
+cluster_profile
+~~~~~~~~~~~~~~~
+
+This script allows the user to save cluster keyword arguments in a config file
+located at ~/.python-cluster.
+
+Rather than edit that file directly, use this script to add profiles and
+options.
+
+There are two classes of options: global options, and profiles.
+
+Global options will be used in all profiles, but only if the option is not
+already present in the profile definition. Profiles must be called every time
+and allow bundled keyword arguments, they can also be overridden by providing
+keyword arguments at runtime.
+
+Global options are great for saving a default queue.
+
+Modes::
+
+    General:
+        :list:   Display all global options and profiles.
+
+    Profile Management:
+        :add:    Add a profile
+                 Usage: add profile_name keyword:arg [keyword:arg ...]
+        :edit:   Edit an existing profile
+                 Usage: edit profile_name keyword:arg [keyword:arg ...]
+        :remove: Delete an existing profile (The default profile will be recreated
+                 if it does not exist when a job is submitted.
+                 Usage: remove|del profile_name
+
+    Global Option Management:
+        :add-global:    Add a global keyword
+                        Usage: add-global keyword:arg [keyword:arg ...]
+        :remove-global: Remove a global keyword
+                        Usage: remove-global|del-global keyword [keyword ...]
+
+    Dangerous:
+        :reset: Completely reset your entire profile to the defaults. 
+
+
+monitor_jobs
+~~~~~~~~~~~~
+ 
+Blocks until provided jobs complete. Allows to monitor by user, partition, or
+simple job list::
+
+  Arguments are cumulative except user. For example::
+    auto_resubmit -p bob -j 172436 172437
+  user can be 'self'
+  This command will monitor all jobs in the bob partition as
+  well as the two jobs specified directly.
+  However::
+    monitor_jobs -p bob -u fred
+  This command will only monitor fred's jobs in bob (the union).
+
+clean_job_files
+~~~~~~~~~~~~~~~
+
+Uses the cluster.job.clean_dir() function to clean all job files in the current
+directory.
+
+Caution: The clean() function will delete **EVERY** file with extensions
+matching those these::
+
+    .<suffix>.err
+    .<suffix>.out
+    .<suffix>.sbatch & .cluster.script for slurm mode
+    .<suffix>.qsub for torque mode
+    .<suffix> for local mode
+    _func.<suffix>.py
+    _func.<suffix>.py.pickle.in
+    _func.<suffix>.py.pickle.out
+
+Usage::
+
+  Will work with no commands.
+
+  optional arguments:
+      -h, --help                      show this help message and exit
+      -d DIR, --dir DIR               Directory to clean
+      -s, --suffix SUFFIX             Directory to clean
+    -q, --qtype {torque,slurm,local}  Limit deletions to this qtype
+    -n, --no-confirm                  Do not confirm before deleting (for scripts)
+    -v, --verbose                     Show debug information
+
+
 Queue Management
 ================
 
@@ -329,50 +438,9 @@ where <name> is whatever you want it to be called. e.g.::
 *Note:* a default profile must always exist, it will be added back if it does
 not exist.
 
-The easiest way to manage profiles is with the cluster_profile script in bin. It
-defines several easy methods to manage both profiles and global options::
-
-    Mode Information
-    ----------------
-
-    This module allows the user to save cluster keyword arguments in a config file
-    located at ~/.python-cluster.
-
-    Rather than edit that file directly, use this script to add profiles and
-    options.
-
-    There are two classes of options: global options, and profiles.
-
-    Global options will be used in all profiles, but only if the option is not
-    already present in the profile definition. Profiles must be called every time
-    and allow bundled keyword arguments, they can also be overridden by providing
-    keyword arguments at runtime.
-
-    Global options are great for saving a default queue.
-
-    Modes
-    -----
-
-    General:
-        :list:   Display all global options and profiles.
-
-    Profile Management:
-        :add:    Add a profile
-                 Usage: add profile_name keyword:arg [keyword:arg ...]
-        :edit:   Edit an existing profile
-                 Usage: edit profile_name keyword:arg [keyword:arg ...]
-        :remove: Delete an existing profile (The default profile will be recreated
-                 if it does not exist when a job is submitted.
-                 Usage: remove|del profile_name
-
-    Global Option Management:
-        :add-global:    Add a global keyword
-                        Usage: add-global keyword:arg [keyword:arg ...]
-        :remove-global: Remove a global keyword
-                        Usage: remove-global|del-global keyword [keyword ...]
-
-    Dangerous:
-        :reset: Completely reset your entire profile to the defaults. 
+The easiest way to manage profiles is with the cluster_profile script in bin.
+It defines several easy methods to manage both profiles and global options, see
+the scripts section above for information.
 
 
 Alternatively, the functions ``cluster.config_file.set_profile()`` and
