@@ -7,7 +7,7 @@ Monitor the queue for torque or slurm.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-08-31 15:30
+ Last modified: 2016-08-31 17:12
 
    DESCRIPTION: Provides a class to monitor the torque, slurm, or local
                 jobqueue queues with identical syntax.
@@ -97,13 +97,13 @@ class Queue(object):
 
     """
 
-    def __init__(self, user=None, qtype=None):
+    def __init__(self, user=None, qtype=None, partition=None):
         """Create a queue object specific to a single queue and user.
 
-        :qtype: 'torque', 'slurm', or 'local', defaults to auto-detect.
-        :user:  An optional username, if provided queue will only contain the
-                jobs of that user. Not required.
-                If user='self' or 'current', the current user will be used.
+        :qtype:     'torque', 'slurm', or 'local', defaults to auto-detect.
+        :user:      Optional usernameto filter the queue with.
+                    If user='self' or 'current', the current user will be used.
+        :partition: Optional partition to filter the queue with.
         """
         # Get user ID as an int UID
         if user:
@@ -121,6 +121,7 @@ class Queue(object):
         else:
             self.uid = None
         self.user = pwd.getpwuid(self.uid).pw_name if self.uid else None
+        self.partition = partition
 
         # Support python2, which hates reciprocal import
         from .job import Job
@@ -134,6 +135,9 @@ class Queue(object):
         else:
             check_queue()
         self.qtype = qtype if qtype else MODE
+
+        # Allow tracking of updates to prevent too many updates
+        self._updating = False
 
         # Will contain a dict of QueueJob objects indexed by ID
         self.jobs = {}
@@ -268,7 +272,8 @@ class Queue(object):
 
         This is the core queue interaction function of this class.
         """
-
+        if self._updating:
+            return
         # Set the update time I don't care about microseconds
         self.last_update = int(time())
 
@@ -309,11 +314,8 @@ class Queue(object):
             for [job_id, job_name, job_user, job_partition,
                  job_state, job_nodelist, job_nodecount,
                  job_cpus, job_exitcode] in queue_parser(self.qtype,
-                                                         self.user):
-                if self.user and self.user != job_user:
-                    logme.log('{} is not owned by current user, skipping'
-                              .format(job_id), 'debug')
-                    continue
+                                                         self.user,
+                                                         self.partition):
                 if job_id not in self.jobs:
                     job = self.QueueJob()
                 else:
@@ -324,8 +326,6 @@ class Queue(object):
                 job.owner = job_user
                 job.queue = job_partition
                 job.state = job_state.lower()
-                if job.state == 'pending':
-                    continue
                 job.nodes = job_nodelist
 
                 # Threads is number of nodes * jobs per node
@@ -346,11 +346,17 @@ class Queue(object):
 
     def _get_jobs(self, key):
         """Return a dict of jobs where state matches key."""
-        self.update()
+        if self._updating:
+            in_progress = True
+        else:
+            self.update()
+            self._updating = True
         retjobs = {}
         for jobid, job in self.jobs.items():
             if job.state == key.lower():
                 retjobs[jobid] = job
+        if not in_progress:
+            self._updating = False
         return retjobs
 
     def __getattr__(self, key):
@@ -358,7 +364,9 @@ class Queue(object):
         key = key.lower()
         if key == 'complete':
             key = 'completed'
-        if key == 'running' or key == 'queued' or key == 'completed':
+        elif key == 'queued':
+            key = 'pending'
+        if key == 'running' or key == 'pending' or key == 'completed':
             return self._get_jobs(key)
         # Define whether the queue is open
         if key == 'can_submit':
@@ -387,19 +395,25 @@ class Queue(object):
         return len(self.jobs)
 
     def __repr__(self):
-        """ For debugging. """
-        self.update()
+        """For debugging."""
+        # For this particular function, enforce 3s minimum update time
+        if int(time()) - self.last_update > 3:
+            self.update()
+        self._updating = True
         if self.user:
             outstr = 'Queue<jobs:{};completed:{};queued:{};user={}>'.format(
                 len(self), len(self.complete), len(self.queued), self.user)
         else:
             outstr = 'Queue<jobs:{};completed:{};queued:{};user=ALL>'.format(
                 len(self), len(self.complete), len(self.queued))
+        self._updating = False
         return outstr
 
     def __str__(self):
         """A list of keys."""
-        self.update()
+        # For this particular function, enforce 3s minimum update time
+        if int(time()) - self.last_update > 3:
+            self.update()
         return str(self.jobs.keys())
 
     ##############################################
@@ -464,7 +478,7 @@ class Queue(object):
 #  Queue Parsers  #
 ###################
 
-def queue_parser(qtype=None, user=None):
+def queue_parser(qtype=None, user=None, partition=None):
     """Call either torque or slurm qtype parsers depending on qtype.
 
     :qtype:   Either 'torque' or 'slurm', defaults to current MODE
@@ -476,23 +490,24 @@ def queue_parser(qtype=None, user=None):
     if not qtype:
         qtype = get_cluster_environment()
     if qtype == 'torque':
-        return torque_queue_parser(user)
+        return torque_queue_parser(user, partition)
     elif qtype == 'slurm':
-        return slurm_queue_parser(user)
+        return slurm_queue_parser(user, partition)
     else:
         raise ClusterError("Invalid qtype type {}, must be 'torque' or 'slurm'"
                            .format(qtype))
 
 
-def torque_queue_parser(user=None):
+def torque_queue_parser(user=None, partition=None):
     """Iterator for torque queues.
 
     Use the `qstat -x` command to get an XML queue for compatibility.
 
-    :user:    optional user name to pass to qstat to filter queue with
+    :user:     optional user name to pass to qstat to filter queue with
+    :partiton: optional partition to filter the queue with
 
-    :yields:  job_id, name, userid, partition, state, nodelist,
-              numnodes, ntpernode, exit_code
+    :yields:   job_id, name, userid, partition, state, nodelist,
+               numnodes, ntpernode, exit_code
 
     numcpus is currently always 1 as most torque queues treat every core as a
     node.
@@ -559,11 +574,13 @@ def torque_queue_parser(user=None):
             if hasattr(exitcode, 'text'):
                 exitcode = int(exitcode.text)
 
+            if partition and job_queue != partition:
+                continue
             yield (job_id, job_name, job_owner, job_queue, job_state,
                    nodes, job_threads, 1, exitcode)
 
 
-def slurm_queue_parser(user=None):
+def slurm_queue_parser(user=None, partition=None):
     """Iterator for slurm queues.
 
     Use the `squeue -O` command to get standard data across implementation,
@@ -572,26 +589,22 @@ def slurm_queue_parser(user=None):
     returned by squeue are added with sacct, and they are added to *the end* of
     the returned queue, i.e. *out of order with respect to the actual queue*.
 
-    :user:    optional user name to pass to squeue to filter queue with
+    :user:      optional user name to filter queue with
+    :partition: optional partition to filter queue with
 
-    :yields:  job_id, name, userid, partition, state, nodelist,
-              numnodes, ntpernode, exit_code
+    :yields:    job_id, name, userid, partition, state, nodelist,
+                numnodes, ntpernode, exit_code
     """
     nodequery = re.compile(r'([^\[,]+)(\[[^\[]+\])?')
     qargs = ['squeue', '-h', '-O',
              'jobid:400,name:400,userid:400,partition:400,state:400,' +
              'nodelist:400,numnodes:400,numcpus:400,exit_code:400']
-    if user:
-        qargs += ['-u', user]
     # Parse queue info by length
     squeue = [
         tuple(
             [ k[i:i+200].rstrip() for i in range(0, 3600, 400) ]
         ) for k in run.cmd(qargs)[1].split('\n')
     ]
-    for sinfo in squeue:
-        if len(sinfo) != 9:
-            squeue.remove(sinfo)
     # SLURM sometimes clears the queue extremely fast, so we use sacct
     # to get old jobs by the current user
     qargs = ['sacct', '-p',
@@ -644,6 +657,8 @@ def slurm_queue_parser(user=None):
             raise ClusterError('Queue parsing error, expected 8 or 9 items '
                                'in output of squeue and sacct, got {}\n'
                                .format(len(sinfo)))
+        if partition and spartition != partition:
+            continue
         sid    = int(sid) if sid else None
         snodes = int(snodes) if snodes else None
         scpus  = int(scpus) if snodes else None
@@ -651,6 +666,8 @@ def slurm_queue_parser(user=None):
         # Convert user from ID to name
         if suser.isdigit():
             suser = pwd.getpwuid(int(suser)).pw_name
+        if user and suser != user:
+            continue
         # Attempt to parse nodelist
         snodelist = []
         if sndlst:

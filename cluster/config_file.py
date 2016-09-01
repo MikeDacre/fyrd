@@ -7,7 +7,7 @@ Get and set config file options.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-08-30 18:24
+ Last modified: 2016-08-31 17:10
 
    DESCRIPTION: The functions defined here provide an easy way to access the
                 config file defined by CONFIG_FILE (default ~/.python-cluster).
@@ -77,8 +77,9 @@ INITIAL_DEFAULTS['queue']        = {'max_jobs':     1000,  # Max jobs in queue
                                     # Between submission attempts (in seconds)
                                     'sleep_len':    1,
                                     # Amount of time between getting fresh
-                                    # queue info (seconds)
-                                    'queue_update': 1}
+                                    # queue info (seconds), 2 is a sensible
+                                    # minimum
+                                    'queue_update': 3}
 
 
 ################################################################################
@@ -178,6 +179,7 @@ def set_profile(name, args):
     args = options.check_arguments(args)
     for arg, opt in args.items():
         set_option('prof_' + name, arg, opt)
+
 
 def del_profile(name):
     """Delete a profile.
