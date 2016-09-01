@@ -7,7 +7,7 @@ Monitor the queue for torque or slurm.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-08-31 17:12
+ Last modified: 2016-08-31 17:54
 
    DESCRIPTION: Provides a class to monitor the torque, slurm, or local
                 jobqueue queues with identical syntax.
@@ -35,7 +35,6 @@ Monitor the queue for torque or slurm.
 
 ===============================================================================
 """
-import os
 import re
 import sys
 import pwd      # Used to get usernames for queue
@@ -113,8 +112,8 @@ class Queue(object):
             elif user == 'ALL':
                 self.user = None
             else:
-                if isinstance(user, int) or (isinstance(user, str)
-                                             and user.isdigit()):
+                if isinstance(user, int) \
+                        or (isinstance(user, str) and user.isdigit()):
                     self.uid  = int(user)
                 else:
                     self.uid = pwd.getpwnam(str(user)).pw_uid
@@ -149,21 +148,21 @@ class Queue(object):
     ########################################
 
     def wait(self, jobs):
-        """ Block until all jobs in jobs are complete.
+        """Block until all jobs in jobs are complete.
 
-        Note: update time is dependant upon the queue_update parameter in
-              your ~/.cluster file.
+        Update time is dependant upon the queue_update parameter in
+        your ~/.python-cluster file.
 
-              In addition, wait() will not return until between 1 and 3
-              seconds after a job has completed, irrespective of queue_update
-              time. This allows time for any copy operations to complete after
-              the job exits.
+        In addition, wait() will not return until between 1 and 3
+        seconds after a job has completed, irrespective of queue_update
+        time. This allows time for any copy operations to complete after
+        the job exits.
 
-        :jobs: A job or list of jobs to check. Can be one of:
-                    Job or multiprocessing.pool.ApplyResult objects, job ID
-                    (int/str), or a object or a list/tuple of multiple Jobs or
-                    job IDs.
-        :returns:  True on success False or nothing on failure.
+        :jobs:    A job or list of jobs to check. Can be one of:
+                  Job or multiprocessing.pool.ApplyResult objects, job ID
+                  (int/str), or a object or a list/tuple of multiple Jobs or
+                  job IDs.
+        :returns: True on success False or None on failure.
         """
         self.update()
 
@@ -179,6 +178,7 @@ class Queue(object):
         # queued sometimes
         sleep(1)
         for job in jobs:
+            logme.log('Checking {}'.format(job))
             qtype = job.qtype if isinstance(job, self._Job) else self.qtype
             if isinstance(job, (self._Job, self._JobQueue)):
                 job = job.id
@@ -229,7 +229,6 @@ class Queue(object):
         self.update()
         return True if len(self.queued)+len(self.running) < qlen else False
 
-
     def wait_to_submit(self, max_queue_len=None):
         """Wait until R/Q jobs are less than max_queue_len.
 
@@ -277,7 +276,7 @@ class Queue(object):
         # Set the update time I don't care about microseconds
         self.last_update = int(time())
 
-        jobs = [] # list of jobs created this session
+        jobs = []  # list of jobs created this session
 
         # Mode specific initialization
         if self.qtype == 'local':
@@ -295,10 +294,10 @@ class Queue(object):
                 if job_info.state == 'Not Submitted':
                     job.state = 'pending'
                 elif job_info.state == 'waiting' \
-                    or job_info.state == 'submitted':
+                        or job_info.state == 'submitted':
                     job.state = 'pending'
                 elif job_info.state == 'started' \
-                    or job_info.state == 'running':
+                        or job_info.state == 'running':
                     job.state = 'running'
                 elif job_info.state == 'done':
                     job.state = 'completed'
@@ -351,6 +350,7 @@ class Queue(object):
         else:
             self.update()
             self._updating = True
+            in_progress = False
         retjobs = {}
         for jobid, job in self.jobs.items():
             if job.state == key.lower():
@@ -384,7 +384,7 @@ class Queue(object):
             return None
 
     def __iter__(self):
-        """Allow us to be iterable"""
+        """Allow us to be iterable."""
         self.update()
         for jb in self.jobs.values():
             yield jb
@@ -464,7 +464,7 @@ class Queue(object):
 
     class QueueError(Exception):
 
-        """ Simple Exception wrapper. """
+        """Simple Exception wrapper."""
 
         pass
 
@@ -602,7 +602,7 @@ def slurm_queue_parser(user=None, partition=None):
     # Parse queue info by length
     squeue = [
         tuple(
-            [ k[i:i+200].rstrip() for i in range(0, 3600, 400) ]
+            [k[i:i+200].rstrip() for i in range(0, 3600, 400)]
         ) for k in run.cmd(qargs)[1].split('\n')
     ]
     # SLURM sometimes clears the queue extremely fast, so we use sacct
@@ -611,12 +611,12 @@ def slurm_queue_parser(user=None, partition=None):
              '--format=jobid,jobname,user,partition,state,' +
              'nodelist,reqnodes,ncpus,exitcode']
     try:
-        sacct = [tuple(re.split(r'|', i.rstrip())) for i in \
+        sacct = [tuple(re.split(r'|', i.rstrip())) for i in
                  run.cmd(qargs)[1].split('\n')]
         sacct = sacct[2:]
     # This command isn't super stable and we don't care that much, so I will
     # just let it die no matter what
-    except:
+    except Exception:
         logme.log('Sacct failed', 'debug')
         sacct = []
 
@@ -629,7 +629,7 @@ def slurm_queue_parser(user=None, partition=None):
             # These are the values I expect
             try:
                 [sid, sname, suser, spartition, sstate,
-                snodelist, snodes, scpus, scode] = sinfo
+                 snodelist, snodes, scpus, scode] = sinfo
             except ValueError as err:
                 logme.log('sacct parsing failed with error {} '.format(err) +
                           'due to an incorrect number of entries.\n' +
@@ -739,7 +739,8 @@ def check_queue(qtype=None):
         MODE = get_cluster_environment()
     if qtype:
         if qtype not in ALLOWED_MODES:
-            raise ClusterError('qtype value {} is not recognized, '.format(qtype) +
+            raise ClusterError('qtype value {} is not recognized, '
+                               .format(qtype) +
                                'should be: local, torque, or slurm')
         else:
             if MODE not in ALLOWED_MODES:

@@ -9,25 +9,20 @@ Monitor the torque or slurm queues, block until jobs complete and return stats.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-07-23 10:02
- Last modified: 2016-06-27 21:56
+ Last modified: 2016-08-31 18:03
 
    DESCRIPTION: Provide a list of jobs and/or a partition, plus an optional
-                user, and this script will block until all jobs are complete
-                and then will print some basic stats on whether they were
-                sucessful.
+                user, and this script will block until all jobs are complete.
 
-     EXIT CODE: The exit code will be the number of jobs that failed, so if
-                the script exits with code 0, all jobs completed successfully.
-
-         USAGE: auto_resubmit -p <partition> -u <user> -j <job1,job2,...>
+         USAGE: monitor_jobs -p <partition> -u <user> -j <job1,job2,...>
                 Note: Arguments are cumulative except user. For example::
                     auto_resubmit -p bob -j 172436 172437
                 user can be 'self'
                 This command will monitor all jobs in the bob partition as
                 well as the two jobs specified directly.
                 However::
-                    auto_resubmit -p bob -u fred
-                This command will only submit fred's jobs in bob (the union).
+                    monitor_jobs -p bob -u fred
+                This command will only monitor fred's jobs in bob (the union).
 
 ===============================================================================
 """
@@ -35,55 +30,10 @@ from __future__ import print_function
 import sys
 import argparse
 
-from pwd import getpwnam
-from time import sleep
-
 import cluster
 
-# Logging function, MIN_LEVEL should be 'debug', 'info', or 'warn'.
-import logme as lm
-lm.MIN_LEVEL = 'info'
 
-
-def wait(job_list, user=None, sleep_len=1):
-    """Loop through jobs in job_list and keep track of exit status.
-
-    :job_list:  A list of job numbers to track.
-    :user:      Limit queue parsing to jobs by this user. 'self' works.
-    :sleep_len: Amount of time to wait between job checks.
-    :returns:   A dictionary of {'completed' -> QueueJob,
-                                 'failed' - > QueueJob}
-
-    """
-    if not isinstance(sleep_len, int):
-        try:
-            sleep_len = int(sleep_len)
-        except ValueError:
-            raise ValueError('sleep_len must be an integer, is {}'
-                             .format(type(sleep_len)))
-
-    queue = cluster.Queue(user=user)
-
-    completed = {}
-    failed    = {}
-
-    count = len(job_list)
-
-    while count:
-        for job in job_list:
-            queue.update()
-            if job in queue.completed:
-                completed[job] = queue.jobs[job]
-                count -= 1
-            elif job in queue.failed:
-                failed[job] = queue.jobs[job]
-                count -= 1
-            sleep(sleep_len)
-
-    return {'completed': completed, 'failed': failed}
-
-
-def make_job_list(user=None, partition=None, jobs=None ):
+def make_job_list(user=None, partition=None, jobs=None):
     """Return a list of jobs for user or in partition.
 
     Will return a job list that is the union of all jobs by user and all jobs
@@ -92,7 +42,7 @@ def make_job_list(user=None, partition=None, jobs=None ):
     returned. Any jobs in 'jobs' are simply added to the list.
 
     :user:    A username, can be a list of usernames.
-    :partion: The slurm partition, can be a list of partitions.
+    :partion: The partition/queue, can be a list of partitions.
     :jobs:    A list of jobs to start with (list).
     :returns: A sorted list of jobs (list of ints).
 
@@ -107,27 +57,46 @@ def make_job_list(user=None, partition=None, jobs=None ):
     else:
         job_list = []
 
-    queue = cluster.Queue(user=user)
+    queue = cluster.Queue()
 
     partition_list = []
-    # TODO: Queue has no means of searching by partition
-    #  if partition:
-        #  if isinstance(partition, str):
-            #  partition = [partition]
-        #  for i in partition:
-            #  partition_list = partition_list + queue.find('partition', i)
+    if partition:
+        if isinstance(partition, str):
+            partition = [partition]
+            cluster.logme.log('Partition list: {}'.format(partition), 'debug')
+        for i in partition:
+            partition_list += [k for k, v in queue.jobs.items()
+                               if v.queue == i]
+    cluster.logme.log("Partitions' jobs: {}".format(partition_list), 'debug')
+
+    user_list = []
+    if user:
+        if isinstance(user, str):
+            user = [user]
+        cluster.logme.log('User list: {}'.format(user), 'debug')
+        for i in user:
+            user_list += [k for k, v in queue.jobs.items()
+                          if v.owner == i]
+    cluster.logme.log("Users' jobs: {}".format(user_list), 'debug')
 
     # Take the union of the user and partion lists
-    job_list = job_list + list(set(user_list) & set(partition_list))
+    if user_list and partition_list:
+        job_list += list(set(user_list) & set(partition_list))
+    elif user_list:
+        job_list += user_list
+    elif partition_list:
+        job_list += partition_list
 
     # Make sure all job numbers are ints and the final list is sorted
     job_list = sorted([int(i) for i in job_list])
 
+    cluster.logme.log('Monitoring {} jobs'.format(len(job_list)))
+    cluster.logme.log('List:\n{}'.format(job_list), 'debug')
     return job_list
 
 
-def parse_arguments(argv=None):
-    """Parse the command line arguments."""
+def main(argv=None):
+    """Run as a script."""
     if not argv:
         argv = sys.argv[1:]
 
@@ -135,48 +104,40 @@ def parse_arguments(argv=None):
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
 
+    # Optional Arguments
+    parser.add_argument('-v', '--verbose', action="store_true",
+                        help="Verbose output")
+    parser.add_argument('-q', '--quiet', action="store_true",
+                        help="Warnings only")
+
     # Jobs
     jobs = parser.add_argument_group('Job List')
     jobs.add_argument('-p', '--partition', nargs='+',
                       help="All jobs in this partition.")
-    jobs.add_argument('-u', '--user',nargs='+',
+    jobs.add_argument('-u', '--user', nargs='+',
                       help="All jobs by this user.")
     jobs.add_argument('-j', '--jobs', nargs='+',
-                      help="A list of additional jobs, optional.")
+                      help="A list of additional jobs.")
 
-    return parser
-
-
-def main(argv=None):
-    """Run as a script."""
-    parser = parse_arguments(argv)
-    args   = parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.verbose:
+        cluster.logme.MIN_LEVEL = 'debug'
+    elif args.quiet:
+        cluster.logme.MIN_LEVEL = 'warn'
 
     # Check that at least one option specified
     if not args.partition and not args.user and not args.jobs:
-        sys.stderr.write("At least one argument required.\n\n")
         parser.print_help()
-        return 1
+        return 0
 
     job_list = make_job_list(jobs=args.jobs, user=args.user,
                              partition=args.partition)
 
-    job_info = wait(job_list)
-
-    if job_info['completed']:
-        print('Completed Jobs:')
-        for job_id, qinfo in job_info['completed'].items():
-            print('ID: {}; Name: {}; Exit Code: {}'
-                  .format(job_id, qinfo.name, qinfo.exitcode))
-    if job_info['failed']:
-        print('Failed Jobs:')
-        for job_id, qinfo in job_info['failed'].items():
-            print('ID: {}; Name: {}; Exit Code: {}'
-                  .format(job_id, qinfo.name, qinfo.exitcode))
-
-    retcode = len(job_info['failed'])
-
-    return retcode
+    queue = cluster.Queue()
+    if queue.wait(job_list):
+        return 0
+    else:
+        return 1
 
 if __name__ == '__main__' and '__file__' in globals():
     sys.exit(main())
