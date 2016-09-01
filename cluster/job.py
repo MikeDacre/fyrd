@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-04-20 23:03
- Last modified: 2016-06-25 13:12
+ Last modified: 2016-08-31 18:34
 
 ===============================================================================
 """
@@ -62,7 +62,7 @@ class Job(object):
     submit() will submit the job if it is ready
     wait()   will block until the job is done
     get()    will block until the job is done and then unpickle a stored
-             output (if defined) and return the contents
+    output (if defined) and return the contents
     clean()  will delete any files created by this object
 
     Printing the class will display detailed job information.
@@ -835,7 +835,8 @@ def submit(command, args=None, name=None, path=None, qtype=None,
     :kwargs:    Keyword arguments to control job options
 
     There are many keyword arguments available for cluster job submission.
-    These vary somewhat by queue type. For info run:
+    These vary somewhat by queue type. For info run::
+
         cluster.options.option_help()
 
     :returns: Job object
@@ -873,7 +874,8 @@ def make_job(command, args=None, name=None, path=None, qtype=None,
     :profile:   The name of a profile saved in the config_file
 
     There are many keyword arguments available for cluster job submission.
-    These vary somewhat by queue type. For info run:
+    These vary somewhat by queue type. For info run::
+
         cluster.options.option_help()
 
     :returns: A Job object
@@ -904,7 +906,8 @@ def make_job_file(command, args=None, name=None, path=None, qtype=None,
     :kwargs:    Keyword arguments to control job options
 
     There are many keyword arguments available for cluster job submission.
-    These vary somewhat by queue type. For info run:
+    These vary somewhat by queue type. For info run::
+
         cluster.options.option_help()
 
     :returns:   Path to job script

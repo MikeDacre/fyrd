@@ -148,7 +148,7 @@ While this software is designed to be used as a python library, several scripts
 are provided to make life easier.
 
 my_queue
-~~~~~~~~
+--------
 
 Uses python-cluster to check the job queue for only one user's jobs.  Produces
 a very simple display, for full job information, the regular tools can be used
@@ -163,7 +163,7 @@ a very simple display, for full job information, the regular tools can be used
     -l, --list     Print space separated list of job numbers
 
 cluster_profile
-~~~~~~~~~~~~~~~
+---------------
 
 This script allows the user to save cluster keyword arguments in a config file
 located at ~/.python-cluster.
@@ -205,7 +205,7 @@ Modes::
 
 
 monitor_jobs
-~~~~~~~~~~~~
+------------
  
 Blocks until provided jobs complete. Allows to monitor by user, partition, or
 simple job list::
@@ -220,7 +220,7 @@ simple job list::
   This command will only monitor fred's jobs in bob (the union).
 
 clean_job_files
-~~~~~~~~~~~~~~~
+---------------
 
 Uses the cluster.job.clean_dir() function to clean all job files in the current
 directory.
