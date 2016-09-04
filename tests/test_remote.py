@@ -22,7 +22,7 @@ def write_to_file(string, file):
 def test_job_creation():
     """Make a job and print it."""
     job = cluster.Job('echo hi', cores=2, time='00:02:00', mem='2000',
-                      threads=4, **kwds)
+                      threads=4, profile='default', **kwds)
     assert job.qtype == env
     return job
 
