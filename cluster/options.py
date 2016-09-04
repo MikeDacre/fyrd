@@ -7,7 +7,7 @@ Available options for job submission.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-31-17 08:04
- Last modified: 2016-06-22 15:51
+ Last modified: 2016-09-04 11:59
 
    DESCRIPTION: All keyword arguments that can be used with Job() objects are
                 defined in this file. These can be editted by the end user to
@@ -104,7 +104,7 @@ CLUSTER_CORE = OrderedDict([
       'default': 1, 'type': int}),
     ('features',
      {'help': 'A comma-separated list of node features to require',
-      'slurm': '--constraint={}', # Torque in options_to_string()
+      'slurm': '--constraint={}',  # Torque in options_to_string()
       'default': None, 'type': list, 'sjoin': '&'}),
     ('time',
      {'help': 'Walltime in HH:MM:SS',
@@ -121,10 +121,10 @@ CLUSTER_CORE = OrderedDict([
       'slurm': '-p {}', 'torque': '-q {}'}),
 ])
 
-### Note: There are many more options, as them as need to the following lists,
-###       CLUSTER_OPTS should be used for options that work on both systems,
-###       the TORQUE and SLURM dictionaries should be used for options that are
-###       unique to one.
+# Note: There are many more options, as them as need to the following lists,
+#       CLUSTER_OPTS should be used for options that work on both systems,
+#       the TORQUE and SLURM dictionaries should be used for options that are
+#       unique to one.
 
 # Additional options shared between systems
 CLUSTER_OPTS = OrderedDict([
@@ -142,7 +142,7 @@ CLUSTER_OPTS = OrderedDict([
 #  from: adaptivecomputing.com/torque/4-0-2/Content/topics/commands/qsub.htm  #
 ###############################################################################
 
-TORQUE =  OrderedDict()
+TORQUE = OrderedDict()
 
 #####################################################
 #                   SLURM Options                   #
@@ -299,8 +299,8 @@ def check_arguments(kwargs):
                 try:
                     groups = groupby(opt, key=str.isdigit)
                 except ValueError:
-                    raise ValueError('mem is malformatted, should be a number of ' +
-                                     'MB or a string like 24MB or 10GB, ' +
+                    raise ValueError('mem is malformatted, should be a number '
+                                     'of MB or a string like 24MB or 10GB, '
                                      'it is: {}'.format(opt))
                 sval  = int(''.join(next(groups)[1]))
                 sunit = ''.join(next(groups)[1]).lower()
@@ -316,7 +316,8 @@ def check_arguments(kwargs):
                     # Crazy people
                     opt = sval*1024*1024
                 else:
-                    raise ValueError('Unknown memory unit opt {}'.format(sunit))
+                    raise ValueError('Unknown memory unit opt {}'
+                                     .format(sunit))
                 # Don't allow 0, minimum memory req is 5MB
                 if opt < 5:
                     opt = 5

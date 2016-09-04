@@ -7,7 +7,7 @@ Get and set config file options.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2015-12-11
- Last modified: 2016-08-31 17:10
+ Last modified: 2016-09-04 12:02
 
    DESCRIPTION: The functions defined here provide an easy way to access the
                 config file defined by CONFIG_FILE (default ~/.python-cluster).
@@ -48,9 +48,9 @@ except ImportError:
 from . import logme
 from . import options
 
-################################################################################
-#                            Configurable Defaults                             #
-################################################################################
+###############################################################################
+#                            Configurable Defaults                            #
+###############################################################################
 
 CONFIG_FILE = os.environ['HOME'] + '/.python-cluster'
 config      = _configparser.ConfigParser()
@@ -61,7 +61,8 @@ DEFAULT_PROFILE = {'nodes': 1,
                    'mem':   4000,
                    'time':  '02:00:00'}
 
-__all__ = ['set', 'get', 'set_profile', 'get_profile', 'delete', 'get_config']
+__all__ = ['set_option', 'get_option', 'set_profile', 'get_profile',
+           'delete', 'get_config', 'create_config']
 INITIAL_DEFAULTS = {}
 
 # Pre-defined profiles, must begin with prof_. 'default' is required.
@@ -82,9 +83,9 @@ INITIAL_DEFAULTS['queue']        = {'max_jobs':     1000,  # Max jobs in queue
                                     'queue_update': 3}
 
 
-################################################################################
-#                         Do Not Edit Below This Point                         #
-################################################################################
+###############################################################################
+#                         Do Not Edit Below This Point                        #
+###############################################################################
 
 
 ############################
@@ -135,7 +136,7 @@ class Profile(object):
         """Pretty print."""
         return "{}:\n\t{}".format(
             self.name.title(),
-            '\n\t'.join(['{}:\t{}'.format(i,j) for i,j in self.args.items()])
+            '\n\t'.join(['{}:\t{}'.format(i, j) for i, j in self.args.items()])
         )
 
 
@@ -206,7 +207,7 @@ def get_option(section=None, key=None, default=None):
     defaults = get_config()
     if not section:
         return defaults
-    if not section in defaults:
+    if section not in defaults:
         if key and default:
             set_option(section, key, default)
             return get_option(section, key)
@@ -286,7 +287,7 @@ def get_config():
 
 
 def create_config():
-    """Create a config file
+    """Create a config file.
 
     Will clobber any existing file
     """
