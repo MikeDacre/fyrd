@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-04-20 23:03
- Last modified: 2016-08-31 18:34
+ Last modified: 2016-09-04 10:43
 
 ===============================================================================
 """
@@ -185,10 +185,9 @@ class Job(object):
 
         # Make sure name not in queue
         self.queue.update()
-        names   = [i.name.split('.')[0] for i in self.queue]
-        namecnt = len([i for i in names if i == name])
-        name = '{}.{}'.format(name, namecnt)
-        self.name = str(name)
+        names     = [i.name.split('.')[0] for i in self.queue]
+        namecnt   = len([i for i in names if i == name])
+        self.name = '{}.{}'.format(name, namecnt)
 
         # Set modules
         self.modules = kwargs.pop('modules') if 'modules' in kwargs else None

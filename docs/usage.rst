@@ -1,5 +1,6 @@
 .. This file is based on the README.rst file for the whole project.
 
+
 Installation
 ============
 
@@ -147,7 +148,7 @@ Scripts
 While this software is designed to be used as a python library, several scripts
 are provided to make life easier.
 
-my_queue
+my-queue
 --------
 
 Uses python-cluster to check the job queue for only one user's jobs.  Produces
@@ -162,7 +163,7 @@ a very simple display, for full job information, the regular tools can be used
     -c, --count    Display count only
     -l, --list     Print space separated list of job numbers
 
-cluster_profile
+cluster-profile
 ---------------
 
 This script allows the user to save cluster keyword arguments in a config file
@@ -182,29 +183,29 @@ Global options are great for saving a default queue.
 
 Modes::
 
-    General:
-        :list:   Display all global options and profiles.
+  General:
+    :list:   Display all global options and profiles.
 
-    Profile Management:
-        :add:    Add a profile
-                 Usage: add profile_name keyword:arg [keyword:arg ...]
-        :edit:   Edit an existing profile
-                 Usage: edit profile_name keyword:arg [keyword:arg ...]
-        :remove: Delete an existing profile (The default profile will be recreated
-                 if it does not exist when a job is submitted.
-                 Usage: remove|del profile_name
+  Profile Management:
+    :add:    Add a profile
+             Usage: add profile_name keyword:arg [keyword:arg ...]
+    :edit:   Edit an existing profile
+             Usage: edit profile_name keyword:arg [keyword:arg ...]
+    :remove: Delete an existing profile (The default profile will be recreated
+             if it does not exist when a job is submitted.
+             Usage: remove|del profile_name
 
-    Global Option Management:
-        :add-global:    Add a global keyword
-                        Usage: add-global keyword:arg [keyword:arg ...]
-        :remove-global: Remove a global keyword
-                        Usage: remove-global|del-global keyword [keyword ...]
+  Global Option Management:
+    :add-global:    Add a global keyword
+                    Usage: add-global keyword:arg [keyword:arg ...]
+    :remove-global: Remove a global keyword
+                    Usage: remove-global|del-global keyword [keyword ...]
 
-    Dangerous:
-        :reset: Completely reset your entire profile to the defaults. 
+  Dangerous:
+    :reset: Completely reset your entire profile to the defaults. 
 
 
-monitor_jobs
+monitor-jobs
 ------------
  
 Blocks until provided jobs complete. Allows to monitor by user, partition, or
@@ -219,7 +220,7 @@ simple job list::
     monitor_jobs -p bob -u fred
   This command will only monitor fred's jobs in bob (the union).
 
-clean_job_files
+clean-job-files
 ---------------
 
 Uses the cluster.job.clean_dir() function to clean all job files in the current
@@ -242,12 +243,19 @@ Usage::
   Will work with no commands.
 
   optional arguments:
-      -h, --help                      show this help message and exit
-      -d DIR, --dir DIR               Directory to clean
-      -s, --suffix SUFFIX             Directory to clean
+    -h, --help                        show this help message and exit
+    -d DIR, --dir DIR                 Directory to clean
+    -s, --suffix SUFFIX               Directory to clean
     -q, --qtype {torque,slurm,local}  Limit deletions to this qtype
     -n, --no-confirm                  Do not confirm before deleting (for scripts)
     -v, --verbose                     Show debug information
+
+cluster-keywords
+----------------
+
+Prints simple help information on the available keyword arguments. It calls the
+cluster_help() function, which means that keyword information is always up to
+date.
 
 
 Queue Management
