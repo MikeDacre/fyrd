@@ -563,8 +563,14 @@ The jobs in this case can be either a Job class or a job number.
 Why the Name?
 =============
 
-Fyrd is the old Anglo-Saxon word for 'army'. I am British, and this code
-gives you an army of workers on any machine so it works :-)
+I gave this project the name 'Fyrd' in honour of my grandmother, Hélène
+Sandolphen, who was a scholar of old English. It is the old Anglo-Saxon word
+for 'army', and this code gives you an army of workers on any machine so it
+seemed appropriate.
+
+The project used to be called "Python Cluster", which is more descriptive but
+frankly boring. Also, about half a dozen other projects have almost the same
+name, so it made no sense to keep that name and put the project onto PyPI.
  
 
 Issues and Contributing
