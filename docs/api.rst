@@ -26,20 +26,20 @@ can be accessed directly, or sliced by accessing the `completed`, `queued`, and
 `running` attributes of the Queue class, these are used to simply divided up the
 jobs dictionary to make finding information easy.
 
-.. autoclass:: cluster.Queue
+.. autoclass:: fyrd.Queue
    :members:
 
-.. autofunction:: cluster.queue.get_cluster_environment
+.. autofunction:: fyrd.queue.get_cluster_environment
 
-.. autofunction:: cluster.queue.wait 
+.. autofunction:: fyrd.queue.wait 
 
-.. autofunction:: cluster.queue.check_queue 
+.. autofunction:: fyrd.queue.check_queue 
 
-.. autofunction:: cluster.queue.queue_parser 
+.. autofunction:: fyrd.queue.queue_parser 
 
-.. autofunction:: cluster.queue.torque_queue_parser
+.. autofunction:: fyrd.queue.torque_queue_parser
 
-.. autofunction:: cluster.queue.slurm_queue_parser
+.. autofunction:: fyrd.queue.slurm_queue_parser
 
 Job Management
 --------------
@@ -64,20 +64,20 @@ defined separately here) to delete all files in a directory that look like they
 could be made by this module. It has an autoconfirm feature that can be
 activated to avoid accidental clobbering.
 
-.. autoclass:: cluster.Job
+.. autoclass:: fyrd.Job
    :members:
 
-.. autofunction:: cluster.submit
+.. autofunction:: fyrd.submit
 
-.. autofunction:: cluster.job.submit_file
+.. autofunction:: fyrd.job.submit_file
 
-.. autofunction:: cluster.job.make_job
+.. autofunction:: fyrd.job.make_job
 
-.. autofunction:: cluster.job.make_job_file
+.. autofunction:: fyrd.job.make_job_file
 
-.. autofunction:: cluster.job.clean
+.. autofunction:: fyrd.job.clean
 
-.. autofunction:: cluster.job.clean_dir
+.. autofunction:: fyrd.job.clean_dir
 
 Options
 -------
@@ -110,13 +110,13 @@ an empty string is returned.
 whole dictionary of arguments, it explicitly handle arguments that cannot be
 managed using a simple string format.
 
-.. autofunction:: cluster.options.option_help
+.. autofunction:: fyrd.options.option_help
 
-.. autofunction:: cluster.options.check_arguments
+.. autofunction:: fyrd.options.check_arguments
 
-.. autofunction:: cluster.options.options_to_string
+.. autofunction:: fyrd.options.options_to_string
 
-.. autofunction:: cluster.options.option_to_string
+.. autofunction:: fyrd.options.option_to_string
 
 Config File
 -----------
@@ -137,20 +137,20 @@ profile.
 Profiles can then be called with the `profile=` keyword in any submission
 function or Job class.
 
-.. autoclass:: cluster.config_file.Profile
+.. autoclass:: fyrd.config_file.Profile
    :members:
 
-.. autofunction:: cluster.config_file.get_option
+.. autofunction:: fyrd.config_file.get_option
 
-.. autofunction:: cluster.config_file.set_option
+.. autofunction:: fyrd.config_file.set_option
 
-.. autofunction:: cluster.config_file.set_profile
+.. autofunction:: fyrd.config_file.set_profile
 
-.. autofunction:: cluster.config_file.get_profile
+.. autofunction:: fyrd.config_file.get_profile
 
-.. autofunction:: cluster.config_file.delete
+.. autofunction:: fyrd.config_file.delete
 
-.. autofunction:: cluster.config_file.get_config
+.. autofunction:: fyrd.config_file.get_config
 
 
 Local Queue Implementation
@@ -183,13 +183,13 @@ JobQueue. Only one JobQueue should run at a time (not enforced), and by default
 it is bound to `cluster.jobqueue.JQUEUE`. That is the interface used by all
 other parts of this package.
 
-.. autoclass:: cluster.jobqueue.JobQueue
+.. autoclass:: fyrd.jobqueue.JobQueue
    :members:
 
-.. autoclass:: cluster.jobqueue.Job
+.. autoclass:: fyrd.jobqueue.Job
    :members:
 
-.. autofunction:: cluster.jobqueue.job_runner
+.. autofunction:: fyrd.jobqueue.job_runner
 
 Logme
 -----
@@ -201,7 +201,7 @@ and it implements colors and timestamped messages.
 The minimum print level can be set module wide at runtime by changing
 `cluster.logme.MIN_LEVEL`.
 
-.. autofunction:: cluster.logme.log
+.. autofunction:: fyrd.logme.log
 
 Other Functions
 ---------------
@@ -209,13 +209,13 @@ Other Functions
 Some other wrapper functions are defined in `run.py`, these are just little
 useful knick-knacks that make function submission and queue management possible.
 
-.. autofunction:: cluster.run.cmd
+.. autofunction:: fyrd.run.cmd
 
-.. autofunction:: cluster.run.which
+.. autofunction:: fyrd.run.which
 
-.. autofunction:: cluster.run.open_zipped
+.. autofunction:: fyrd.run.open_zipped
 
-.. autofunction:: cluster.run.split_file
+.. autofunction:: fyrd.run.split_file
 
 Indices and tables
 ------------------

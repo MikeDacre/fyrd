@@ -7,7 +7,7 @@ SPHINXBUILD   = sphinx-build
 PAPER         =
 BUILDDIR      = ../../docs
 PDFBUILDDIR   = /tmp
-PDF           = ../PythonCluster.pdf
+PDF           = ../Fyrd.pdf
 
 # Internal variables.
 PAPEROPT_a4     = -D latex_paper_size=a4
@@ -48,7 +48,8 @@ help:
 
 .PHONY: clean
 clean:
-	rm -rf $(BUILDDIR)/*
+	rm -rf $(PDFBUILDDIR)/latex
+	rm ../Fyrd.pdf
 
 .PHONY: html
 html:

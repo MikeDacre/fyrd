@@ -1,0 +1,2 @@
+# Requirements for Fyrd
+dill>=0.2.5

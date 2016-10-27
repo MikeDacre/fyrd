@@ -1,5 +1,5 @@
 """
-Setup Script for Slurmy
+Setup Script for Fyrd
 """
 import os
 import sys
@@ -26,6 +26,7 @@ scpts = []
 scpt_dir = os.listdir(os.path.join(here, 'bin'))
 for scpt in scpt_dir:
     scpts.append(os.path.join('bin', scpt))
+
 
 class ScriptInstaller(install):
 
@@ -66,8 +67,8 @@ class TestRunner(TestCommand):
         #  check_call([sys.executable, 'tests/run_tests.py'])
 
 setup(
-    name='python-cluster',
-    version='0.6.1b',
+    name='fyrd',
+    version='0.6.1-beta.2',
     description='Submit functions and shell scripts to torque, slurm, ' +
                 'or local machines',
     long_description=long_description,
@@ -98,7 +99,7 @@ setup(
 
     keywords='slurm cluster job_management',
 
-    requires=['dill'],
+    install_requires=['dill'],
     tests_require=['pytest'],
     packages=['cluster'],
     cmdclass={'install': ScriptInstaller,

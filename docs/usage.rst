@@ -1,6 +1,5 @@
 .. This file is based on the README.rst file for the whole project.
 
-
 Installation
 ============
 
@@ -516,6 +515,13 @@ You can also wait for many jobs with the Queue class:
 
 The jobs in this case can be either a Job class or a job number.
 
+
+Why the Name?
+=============
+
+Fyrd is the old Anglo-Saxon word for 'army'. I am British, and this code
+gives you an army of workers on any machine so it works :-)
+ 
 
 Issues and Contributing
 =======================
