@@ -3,8 +3,8 @@ import os
 import sys
 import pytest
 sys.path.append(os.path.abspath('.'))
-import cluster
-env = cluster.get_cluster_environment()
+import fyrd
+env = fyrd.get_cluster_environment()
 
 
 @pytest.mark.skipif(env == 'local',
@@ -12,9 +12,9 @@ env = cluster.get_cluster_environment()
 def test_job_creation():
     """Make a job and print it."""
     env = 'local'
-    cluster.queue.MODE = 'local'
-    job = cluster.Job('echo hi', cores=2, time='00:02:00', mem='2000',
+    fyrd.queue.MODE = 'local'
+    job = fyrd.Job('echo hi', cores=2, time='00:02:00', mem='2000',
                       threads=4, qtype='local')
     assert job.qtype == 'local'
-    env = cluster.get_cluster_environment()
-    cluster.queue.MODE = env
+    env = fyrd.get_cluster_environment()
+    fyrd.queue.MODE = env

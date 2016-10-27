@@ -1,39 +1,30 @@
 """
 Monitor the queue for torque or slurm.
 
-===============================================================================
+Last modified: 2016-10-27 13:12
 
-        AUTHOR: Michael D Dacre, mike.dacre@gmail.com
-  ORGANIZATION: Stanford University
-       LICENSE: MIT License, property of Stanford, use as you wish
-       CREATED: 2015-12-11
- Last modified: 2016-08-31 17:54
+Provides a class to monitor the torque, slurm, or local jobqueue queues with
+identical syntax.
 
-   DESCRIPTION: Provides a class to monitor the torque, slurm, or local
-                jobqueue queues with identical syntax.
+At its simplest, you can use it like::
 
-                At its simplest, you can use it like::
-                    q = queue.Queue()
-                    q.jobs
-                    q.running
-                    q.queued
-                    q.complete
+    q = queue.Queue()
+    q.jobs
+    q.running
+    q.queued
+    q.complete
 
-                All of the above commands return a dictionary of:
-                    job_no: Queue.QueueJob
+All of the above commands return a dictionary of:
+    {job_no: Queue.QueueJob}
 
-                Queue.QueueJob classes include information on job state, owner,
-                queue, nodes, threads, exitcode, etc.
+Queue.QueueJob classes include information on job state, owner, queue, nodes,
+threads, exitcode, etc.
 
-                Queue also defines a wait() method that takes a list of job
-                numbers, job.Job() objects, or JobQueue.Job objects and
-                blocks until those jobs to complete
+Queue also defines a wait() method that takes a list of job numbers, job.Job()
+objects, or JobQueue.Job objects and blocks until those jobs to complete
 
-                The default cluster environment is also defined in this file
-                as MODE, it can be set directly or with the
-                get_cluster_environment() function definied here.
-
-===============================================================================
+The default cluster environment is also defined in this file as MODE, it can be
+set directly or with the get_cluster_environment() function definied here.
 """
 import re
 import sys
@@ -151,7 +142,7 @@ class Queue(object):
         """Block until all jobs in jobs are complete.
 
         Update time is dependant upon the queue_update parameter in
-        your ~/.python-cluster file.
+        your ~/.fyrd file.
 
         In addition, wait() will not return until between 1 and 3
         seconds after a job has completed, irrespective of queue_update

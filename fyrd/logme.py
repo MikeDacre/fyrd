@@ -1,43 +1,38 @@
 """
 Logging with timestamps and optional log files.
 
-===============================================================================
+Last modified: 2016-10-27 13:10
 
-          FILE: logme
-        AUTHOR: Michael D Dacre, mike.dacre@gmail.com
-  ORGANIZATION: Stanford University
-       CREATED: 2015-03-03 11:41
- Last modified: 2016-06-18 00:11
+Print a timestamped message to a logfile, STDERR, or STDOUT.
 
-   DESCRIPTION: Print a timestamped message to a logfile, STDERR, or STDOUT.
-                If STDERR or STDOUT are used, colored flags are added.
-                Colored flags are INFO, WARNINING, ERROR, or CRITICAL.
-                It is possible to write to both logfile and STDOUT/STDERR
-                using the also_write argument.
-                If level is 'error' or 'critical', error is written to
-                STDERR unless also_write == -1
-                MIN_LEVEL can also be provided, logs will only print if
-                level > MIN_LEVEL. Level order: critical>error>warn>info>debug
+If STDERR or STDOUT are used, colored flags are added.  Colored flags are INFO,
+WARNINING, ERROR, or CRITICAL.
 
-         USAGE: import logme as lm
-                lm.log("Screw up!", <outfile>,
-                       level='debug'|'info'|'warn'|'error'|'normal',
-                       also_write='stderr'|'stdout')
+It is possible to write to both logfile and STDOUT/STDERR using the also_write
+argument.
 
-                All arguments are optional except for the initial message.
-      EXAMPLES: lm.log('Hi')
-                   Prints: 20160223 11:46:24.969 | INFO --> Hi
-                lm.log('Hi', level='debug')
-                   Prints nothing
-                lm.MIN_LEVEL = 'debug'
-                lm.log('Hi', level='debug')
-                   Prints: 20160223 11:46:24.969 | DEBUG --> Hi
+If level is 'error' or 'critical', error is written to STDERR unless also_write
+== -1
 
+MIN_LEVEL can also be provided, logs will only print if vlevel > MIN_LEVEL.
+Level order: critical>error>warn>info>debug
 
-          NOTE: Uses terminal colors and STDERR, not compatible with non-unix
-                systems
+Usage::
+    import logme as lm
+    lm.log("Screw up!", <outfile>,
+        level='debug'|'info'|'warn'|'error'|'normal',
+        also_write='stderr'|'stdout')
 
-===============================================================================
+Examples:
+    lm.log('Hi')
+    Prints: 20160223 11:46:24.969 | INFO --> Hi
+    lm.log('Hi', level='debug')
+    Prints nothing
+    lm.MIN_LEVEL = 'debug'
+    lm.log('Hi', level='debug')
+    Prints: 20160223 11:46:24.969 | DEBUG --> Hi
+
+Note: Uses terminal colors and STDERR, not compatible with non-unix systems
 """
 import sys
 import gzip

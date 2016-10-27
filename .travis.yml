@@ -4,11 +4,11 @@ python:
   - "3.3"
   - "3.4"
   - "3.5"
-  - "3.5-dev"
+  - "3.6-dev"
   - "nightly"
 
 # command to install dependencies
-install: "pip install dill"
+install: "pip install -r requirements.txt"
 
 # Run py.test and also a separate local queue test
 script:

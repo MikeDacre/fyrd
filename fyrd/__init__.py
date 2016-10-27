@@ -7,7 +7,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
         LICENSE: MIT License, property of Stanford, use as you wish
         VERSION: 0.6.1-beta.2
         CREATED: 2015-12-11 22:19
-  Last modified: 2016-10-27 12:39
+  Last modified: 2016-10-27 13:06
  =============== ===================================================
 
 Allows simple job submission with *dependency tracking and queue waiting* with
@@ -70,7 +70,7 @@ Profiles, Keywords, and the Config File
 To make submission easier, this module defines a number of keyword arguments in
 the options.py file that can be used for all submission and Job() functions.
 These include things like 'cores' and 'nodes' and 'mem'. To avoid having to set
-these every time, the module sets a config file at ~/.python-cluster that
+these every time, the module sets a config file at ~/.fyrd that
 defines profiles. These can be edited directly in that file or through the
 config_file methods.
 
@@ -135,8 +135,7 @@ Help
 ----
 
 Full help is available at::
-    github.com/MikeDacre/python-cluster
-
+    github.com/MikeDacre/fyrd
 """
 import os as _os
 import signal as _signal

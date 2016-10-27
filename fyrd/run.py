@@ -1,15 +1,7 @@
 """
 File management and execution functions.
 
-============================================================================
-
-        AUTHOR: Michael D Dacre, mike.dacre@gmail.com
-  ORGANIZATION: Stanford University
-       LICENSE: MIT License, property of Stanford, use as you wish
-       CREATED: 2016-02-11 16:03
- Last modified: 2016-06-25 09:45
-
-============================================================================
+Last modified: 2016-10-27 13:12
 """
 import os
 import re

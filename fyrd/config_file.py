@@ -1,41 +1,30 @@
 """
 Get and set config file options.
 
-===============================================================================
+Last modified: 2016-10-27 13:05
 
-        AUTHOR: Michael D Dacre, mike.dacre@gmail.com
-  ORGANIZATION: Stanford University
-       LICENSE: MIT License, property of Stanford, use as you wish
-       CREATED: 2015-12-11
- Last modified: 2016-09-04 12:02
+The functions defined here provide an easy way to access the config file
+defined by CONFIG_FILE (default ~/.fyrd).
 
-   DESCRIPTION: The functions defined here provide an easy way to access the
-                config file defined by CONFIG_FILE (default ~/.python-cluster).
+Importantly, this config file uses the concept of profiles, which is not built
+into python's configparser library. To get around this, we write profiles as
+sections that begin with 'prof_' and the parse the whole config into a simple
+dictionary to make it easier to use.
 
-                Importantly, this config file uses the concept of profiles,
-                which is not built into python's configparser library. To get
-                around this, we write profiles as sections that begin with
-                'prof_' and the parse the whole config into a simple dictionary
-                to make it easier to use.
+To work with profiles, use the get_profile() and set_profile() functions. Note
+that all options must be allowed in the options.py file before they can be
+added to a profile.
 
-                To work with profiles, use the get_profile() and set_profile()
-                functions. Note that all options must be allowed in the
-                options.py file before they can be added to a profile.
+Options will also be pre-sanitized before being added to profile. e.g. 'mem':
+    '2GB' will become 'mem': 2000.
 
-                Options will also be pre-sanitized before being added to
-                profile. e.g. 'mem': '2GB' will become 'mem': 2000.
-
-                The other options of interest are in the 'queue' section,
-                specifically the max_jobs, sleep_len, and queue_update
-                variables. max_jobs sets the maximum number of queing and
-                running jobs allowed in the queue before submission will pause
-                and wait; sleep_len sets the default amount of time various
-                functions in this module wait when trying to run system calls;
-                and queue_update sets the amount of time to wait between
-                updating the queue from the system, to avoid overloading the
-                system with too many updates.
-
-===============================================================================
+The other options of interest are in the 'queue' section, specifically the
+max_jobs, sleep_len, and queue_update variables. max_jobs sets the maximum
+number of queing and running jobs allowed in the queue before submission will
+pause and wait; sleep_len sets the default amount of time various functions in
+this module wait when trying to run system calls; and queue_update sets the
+amount of time to wait between updating the queue from the system, to avoid
+overloading the system with too many updates.
 """
 
 import os
@@ -52,7 +41,7 @@ from . import options
 #                            Configurable Defaults                            #
 ###############################################################################
 
-CONFIG_FILE = os.environ['HOME'] + '/.python-cluster'
+CONFIG_FILE = os.environ['HOME'] + '/.fyrd'
 config      = _configparser.ConfigParser()
 defaults    = {}
 

@@ -1,33 +1,22 @@
 """
 Manage job dependency tracking with multiprocessing.
 
-===============================================================================
+Last modified: 2016-10-27 13:08
 
-        AUTHOR: Michael D Dacre, mike.dacre@gmail.com
-  ORGANIZATION: Stanford University
-       LICENSE: MIT License, property of Stanford, use as you wish
-       CREATED: 2016-56-14 14:04
- Last modified: 2016-06-22 17:26
+Runs jobs with a multiprocessing.Pool, but manages dependency using an
+additional Process that loops through all submitted jobs and checks
+dependencies before running.
 
-   DESCRIPTION: Runs jobs with a multiprocessing.Pool, but manages dependency
-                using an additional Process that loops through all submitted
-                jobs and checks dependencies before running.
+The JobQueue class works as the queue and functions in a similar, but much more
+basic, way as torque or slurm. It manages jobs by forking an instance of the
+job_runner function and keeping it alive. The multiprocessing.Queue class is
+then used to pass job information contained in the Job class back and forth
+between the JobQueue class running in the main process and the job_runner()
+fork running as a separate thread.
 
-                The JobQueue class works as the queue and functions in a
-                similar, but much more basic, way as torque or slurm. It
-                manages jobs by forking an instance of the job_runner
-                function and keeping it alive. The multiprocessing.Queue
-                class is then used to pass job information contained in the
-                Job class back and forth between the JobQueue class
-                running in the main process and the job_runner() fork running
-                as a separate thread.
-
-                The actual job management is done by job_runner() and uses
-                multiprocessing.Process objects and not the Pool object.
-                This allows for more careful management and it also allows
-                exit codes to be captured.
-
-===============================================================================
+The actual job management is done by job_runner() and uses
+multiprocessing.Process objects and not the Pool object.  This allows for more
+careful management and it also allows exit codes to be captured.
 """
 import os
 import sys

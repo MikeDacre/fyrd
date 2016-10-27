@@ -2,7 +2,7 @@
 import os
 import sys
 sys.path.append(os.path.abspath('.'))
-import cluster
+import fyrd
 
 
 def write_to_file(string, file):
@@ -14,8 +14,8 @@ def write_to_file(string, file):
 
 def test_job_creation():
     """Make a job and print it."""
-    cluster.queue.MODE = 'local'
-    job = cluster.Job('echo hi', cores=2, time='00:02:00', mem='2000',
+    fyrd.queue.MODE = 'local'
+    job = fyrd.Job('echo hi', cores=2, time='00:02:00', mem='2000',
                       threads=4)
     assert job.qtype == 'local'
     return job
@@ -23,7 +23,7 @@ def test_job_creation():
 
 def test_job_execution():
     """Run a job"""
-    cluster.queue.MODE = 'local'
+    fyrd.queue.MODE = 'local'
     job = test_job_creation()
     job.submit()
     code, stdout, stderr = job.get()
@@ -35,7 +35,7 @@ def test_job_execution():
 
 def test_job_cleaning():
     """Delete intermediate files."""
-    cluster.queue.MODE = 'local'
+    fyrd.queue.MODE = 'local'
     job = test_job_execution()
     job.clean()
     assert 'echo.cluster' not in os.listdir('.')
@@ -45,8 +45,8 @@ def test_job_cleaning():
 def test_function_submission():
     """Submit a function."""
     failed = False
-    cluster.queue.MODE = 'local'
-    job = cluster.Job(write_to_file, ('42', 'bobfile'))
+    fyrd.queue.MODE = 'local'
+    job = fyrd.Job(write_to_file, ('42', 'bobfile'))
     job.submit()
     code, stdout, stderr = job.get()
     assert code == 0
@@ -66,7 +66,7 @@ def test_function_submission():
 
 def test_dir_clean():
     """Clean all job files in this dir."""
-    cluster.job.clean_dir()
+    fyrd.job.clean_dir()
     return 0
 
 

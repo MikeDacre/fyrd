@@ -4,8 +4,8 @@ import sys
 from collections import OrderedDict
 import pytest
 sys.path.append(os.path.abspath('.'))
-import cluster
-cluster.jobqueue.THREADS = 5
+import fyrd
+fyrd.jobqueue.THREADS = 5
 
 def test_help():
     """Check that the output of option_help() matches saved output."""
@@ -15,35 +15,35 @@ def test_help():
         ofile = 'options_help.txt'
     else:
         raise Exception('Cannot find options_help.txt file')
-    assert cluster.option_help(mode='string') == open(ofile).read()
+    assert fyrd.option_help(mode='string') == open(ofile).read()
 
 def test_dict_types():
     """Make sure all expected dictionaries exist and have the right type."""
-    assert hasattr(cluster.options, 'COMMON')
-    assert hasattr(cluster.options, 'NORMAL')
-    assert hasattr(cluster.options, 'CLUSTER_OPTS')
-    assert hasattr(cluster.options, 'TORQUE')
-    assert hasattr(cluster.options, 'SLURM')
-    assert hasattr(cluster.options, 'SLURM_KWDS')
-    assert hasattr(cluster.options, 'TORQUE_KWDS')
-    assert hasattr(cluster.options, 'CLUSTER_KWDS')
-    assert hasattr(cluster.options, 'NORMAL_KWDS')
-    assert hasattr(cluster.options, 'ALLOWED_KWDS')
-    assert isinstance(cluster.options.COMMON, OrderedDict)
-    assert isinstance(cluster.options.NORMAL, OrderedDict)
-    assert isinstance(cluster.options.CLUSTER_OPTS, OrderedDict)
-    assert isinstance(cluster.options.TORQUE, OrderedDict)
-    assert isinstance(cluster.options.SLURM, OrderedDict)
-    assert isinstance(cluster.options.SLURM_KWDS, OrderedDict)
-    assert isinstance(cluster.options.TORQUE_KWDS, OrderedDict)
-    assert isinstance(cluster.options.CLUSTER_KWDS, OrderedDict)
-    assert isinstance(cluster.options.NORMAL_KWDS, OrderedDict)
-    assert isinstance(cluster.options.ALLOWED_KWDS, OrderedDict)
+    assert hasattr(fyrd.options, 'COMMON')
+    assert hasattr(fyrd.options, 'NORMAL')
+    assert hasattr(fyrd.options, 'CLUSTER_OPTS')
+    assert hasattr(fyrd.options, 'TORQUE')
+    assert hasattr(fyrd.options, 'SLURM')
+    assert hasattr(fyrd.options, 'SLURM_KWDS')
+    assert hasattr(fyrd.options, 'TORQUE_KWDS')
+    assert hasattr(fyrd.options, 'CLUSTER_KWDS')
+    assert hasattr(fyrd.options, 'NORMAL_KWDS')
+    assert hasattr(fyrd.options, 'ALLOWED_KWDS')
+    assert isinstance(fyrd.options.COMMON, OrderedDict)
+    assert isinstance(fyrd.options.NORMAL, OrderedDict)
+    assert isinstance(fyrd.options.CLUSTER_OPTS, OrderedDict)
+    assert isinstance(fyrd.options.TORQUE, OrderedDict)
+    assert isinstance(fyrd.options.SLURM, OrderedDict)
+    assert isinstance(fyrd.options.SLURM_KWDS, OrderedDict)
+    assert isinstance(fyrd.options.TORQUE_KWDS, OrderedDict)
+    assert isinstance(fyrd.options.CLUSTER_KWDS, OrderedDict)
+    assert isinstance(fyrd.options.NORMAL_KWDS, OrderedDict)
+    assert isinstance(fyrd.options.ALLOWED_KWDS, OrderedDict)
 
 def test_sane_keywords():
     """Run check_arguments() on some made up keywords."""
     # Should succeed
-    cluster.options.check_arguments(
+    fyrd.options.check_arguments(
         {
             'cores': 49,
             'mem': '60GB',
@@ -65,26 +65,26 @@ def test_sane_keywords():
     )
     # Should fail
     with pytest.raises(TypeError):
-        cluster.options.check_arguments({'nodes': 'bob'})
+        fyrd.options.check_arguments({'nodes': 'bob'})
     with pytest.raises(ValueError):
-        cluster.options.check_arguments({'mem': 'bob'})
+        fyrd.options.check_arguments({'mem': 'bob'})
     # Should succeed
-    cluster.options.check_arguments({'nodes': '14'})
+    fyrd.options.check_arguments({'nodes': '14'})
 
 def test_string_formatting():
     """Test options_to_string."""
-    cluster.queue.MODE = 'torque'
-    outstr = cluster.options.options_to_string({'nodes': '2', 'cores': 5})
+    fyrd.queue.MODE = 'torque'
+    outstr = fyrd.options.options_to_string({'nodes': '2', 'cores': 5})
     assert outstr == '#PBS -l nodes=2:ppn=5'
-    cluster.queue.MODE = 'slurm'
-    outstr = cluster.options.options_to_string({'nodes': '2', 'cores': 5})
+    fyrd.queue.MODE = 'slurm'
+    outstr = fyrd.options.options_to_string({'nodes': '2', 'cores': 5})
     assert outstr == '#SBATCH --ntasks 2\n#SBATCH --cpus-per-task 5'
-    cluster.queue.MODE = 'local'
-    outstr = cluster.options.options_to_string({'nodes': '2', 'cores': 5})
+    fyrd.queue.MODE = 'local'
+    outstr = fyrd.options.options_to_string({'nodes': '2', 'cores': 5})
     assert outstr == ''
-    with pytest.raises(cluster.options.OptionsError):
-        cluster.options.option_to_string('nodes', 2)
+    with pytest.raises(fyrd.options.OptionsError):
+        fyrd.options.option_to_string('nodes', 2)
 
 def test_back_to_normal():
     """Return the queue to the normal setting."""
-    cluster.queue.get_cluster_environment()
+    fyrd.queue.get_cluster_environment()

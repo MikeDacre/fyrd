@@ -3,15 +3,15 @@ import os
 import sys
 import pytest
 sys.path.append(os.path.abspath('.'))
-import cluster
-env = cluster.get_cluster_environment()
+import fyrd
+env = fyrd.get_cluster_environment()
 
 # Set this is keyword arguments are required for tests to run
 #  kwds = {'partition': 'normal'}
 kwds = {}
 #  kwds = {'partition': 'hbfraser'}
 
-cluster.logme.MIN_LEVEL = 'debug'
+fyrd.logme.MIN_LEVEL = 'debug'
 
 def write_to_file(string, file):
     """Write a string to a file."""
@@ -21,7 +21,7 @@ def write_to_file(string, file):
 
 def test_job_creation():
     """Make a job and print it."""
-    job = cluster.Job('echo hi', cores=2, time='00:02:00', mem='2000',
+    job = fyrd.Job('echo hi', cores=2, time='00:02:00', mem='2000',
                       threads=4, profile='default', **kwds)
     assert job.qtype == env
     return job
@@ -55,7 +55,7 @@ def test_job_cleaning():
                     reason="Fails in local mode")
 def test_function_submission():
     """Submit a function."""
-    job = cluster.Job(write_to_file, ('42', 'bobfile'), **kwds)
+    job = fyrd.Job(write_to_file, ('42', 'bobfile'), **kwds)
     job.submit()
     code, stdout, stderr = job.get()
     sys.stdout.write('{};\nSTDOUT: {}\nSTDERR: {}\n'
@@ -71,4 +71,4 @@ def test_function_submission():
 
 def test_dir_clean():
     """Clean all job files in this dir."""
-    cluster.job.clean_dir()
+    fyrd.job.clean_dir()

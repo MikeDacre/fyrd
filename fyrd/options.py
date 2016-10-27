@@ -1,32 +1,22 @@
 """
 Available options for job submission.
 
-===============================================================================
+Last modified: 2016-10-27 13:11
 
-        AUTHOR: Michael D Dacre, mike.dacre@gmail.com
-  ORGANIZATION: Stanford University
-       LICENSE: MIT License, property of Stanford, use as you wish
-       CREATED: 2016-31-17 08:04
- Last modified: 2016-09-04 11:59
+All keyword arguments that can be used with Job() objects are defined in this
+file. These can be editted by the end user to increase functionality.
 
-   DESCRIPTION: All keyword arguments that can be used with Job() objects are
-                defined in this file. These can be editted by the end user to
-                increase functionality.
+Options are defined in dictionaries with the syntax:
+    'name': {'slurm': The command to be used for slurm
+             'torque': The command to be used for torque
+             'default': The default to use if not set
+             'type': The python object type for the option
+             'help': A string with help information}
 
-                Options are defined in dictionaries with the syntax:
-                    'name': {'slurm': The command to be used for slurm
-                             'torque': The command to be used for torque
-                             'default': The default to use if not set
-                             'type': The python object type for the option
-                             'help': A string with help information}
-
-                All of these fields are required except in the case that:
-                    1. The option is managed in options_to_string explicitly
-                    2. The option is in NORMAL, TORQUE, or SLURM dictionaries,
-                       in which case flags used by other queue systems can be
-                       skipped.
-
-===============================================================================
+All of these fields are required except in the case that:
+    1. The option is managed in options_to_string explicitly
+    2. The option is in NORMAL, TORQUE, or SLURM dictionaries, in which case
+       flags used by other queue systems can be skipped.
 """
 import os
 import sys

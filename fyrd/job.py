@@ -1,15 +1,7 @@
 """
-Submit jobs to slurm or torque, or with multiprocessing.
+Class and methods to handle Job submission.
 
-===============================================================================
-
-        AUTHOR: Michael D Dacre, mike.dacre@gmail.com
-  ORGANIZATION: Stanford University
-       LICENSE: MIT License, property of Stanford, use as you wish
-       CREATED: 2016-04-20 23:03
- Last modified: 2016-09-04 10:43
-
-===============================================================================
+Last modified: 2016-10-27 13:07
 """
 import os
 import sys
@@ -125,7 +117,7 @@ class Job(object):
 
         There are many keyword arguments available for cluster job submission.
         These vary somewhat by queue type. For info run:
-            cluster.options.option_help()
+            fyrd.options.option_help()
         """
 
         ########################
@@ -836,7 +828,7 @@ def submit(command, args=None, name=None, path=None, qtype=None,
     There are many keyword arguments available for cluster job submission.
     These vary somewhat by queue type. For info run::
 
-        cluster.options.option_help()
+        fyrd.options.option_help()
 
     :returns: Job object
     """
@@ -875,7 +867,7 @@ def make_job(command, args=None, name=None, path=None, qtype=None,
     There are many keyword arguments available for cluster job submission.
     These vary somewhat by queue type. For info run::
 
-        cluster.options.option_help()
+        fyrd.options.option_help()
 
     :returns: A Job object
     """
@@ -907,7 +899,7 @@ def make_job_file(command, args=None, name=None, path=None, qtype=None,
     There are many keyword arguments available for cluster job submission.
     These vary somewhat by queue type. For info run::
 
-        cluster.options.option_help()
+        fyrd.options.option_help()
 
     :returns:   Path to job script
     """
