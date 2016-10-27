@@ -5,10 +5,6 @@ import os
 import sys
 import codecs
 
-# Make setuptools work everywhere
-import ez_setup
-ez_setup.use_setuptools()
-
 import setuptools
 from setuptools import setup
 from setuptools.command.install import install
@@ -39,7 +35,7 @@ class ScriptInstaller(install):
     def run(self):
         """Wrapper for parent run, display message first."""
 
-        sys.stderr.write('\nWelcome to Python Cluster!\n')
+        sys.stderr.write('\nWelcome to Fyrd!\n')
         sys.stderr.write('Make sure you install this program to a place \n'
                          'that is accessible cluster wide if you want\n'
                          'cluster jobs to be able to submit child jobs.\n')
@@ -72,7 +68,7 @@ setup(
     description='Submit functions and shell scripts to torque, slurm, ' +
                 'or local machines',
     long_description=long_description,
-    url='https://github.com/MikeDacre/python-cluster',
+    url='https://github.com/MikeDacre/fyrd',
     author='Michael Dacre',
     author_email='mike.dacre@gmail.com',
     license='MIT',
@@ -97,11 +93,11 @@ setup(
         'Programming Language :: Python :: 3.5',
     ],
 
-    keywords='slurm cluster job_management',
+    keywords='slurm torque multiprocessing cluster job_management',
 
     install_requires=['dill'],
     tests_require=['pytest'],
-    packages=['cluster'],
+    packages=['fyrd'],
     cmdclass={'install': ScriptInstaller,
               'test': TestRunner},
     scripts=scpts,
