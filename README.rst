@@ -20,7 +20,8 @@ Submit jobs to compute clusters with slurm, torque, or simple multiprocessing.
    :target: https://fyrd.readthedocs.io/
 .. image:: https://img.shields.io/badge/python%20versions-2.7%203.4%203.5%203.6-brightgreen.svg
 
-Formerly known as 'Python Cluster'
+Pronounced 'furd', Anglo-Saxon for 'army' (an army of nodes). Formerly known as
+'Python Cluster'.
 
 Allows simple job submission with *dependency tracking and queue waiting* with
 either torque, slurm, or locally with the multiprocessing module. It uses simple
