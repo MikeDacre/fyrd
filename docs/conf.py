@@ -33,7 +33,7 @@ project   = 'Fyrd'
 copyright = '2016, Michael Dacre <mike.dacre@gmail.com>'
 author    = 'Michael Dacre <mike.dacre@gmail.com>'
 version   = '0.6'
-release   = '0.6.1-beta.2'
+release   = '0.6.1-beta.3'
 language  = 'en'
 
 

@@ -3,32 +3,22 @@
 """
 Edit your cluster profiles.
 
-============================================================================
-
-        AUTHOR: Michael D Dacre, mike.dacre@gmail.com
-  ORGANIZATION: Stanford University
-       LICENSE: MIT License, property of Stanford, use as you wish
-       CREATED: 2016-40-30 15:08
- Last modified: 2016-08-30 18:49
-
-   DESCRIPTION: Edit your cluster profiles.
-
-============================================================================
+Last modified: 2016-10-27 13:30
 """
 from __future__ import print_function
 import sys
 import argparse
 
 # Import ourself
-from cluster import config_file
-from cluster import options
+from fyrd import config_file
+from fyrd import options
 
 MODES = """\
 Mode Information
 ----------------
 
 This module allows the user to save cluster keyword arguments in a config file
-located at ~/.python-cluster.
+located at ~/.fyrd
 
 Rather than edit that file directly, use this script to add profiles and
 options.
@@ -124,7 +114,7 @@ def add_edit_profile(args, overwrite):
 #####################################################
 
 
-def list_profiles(args):
+def list_profiles():
     """List all profiles.
 
     :args: Command line arguments defined in main. Not used.
@@ -206,7 +196,7 @@ def del_option(args):
             print('Global option {} is not set.'.format(keyword))
 
 
-def reset(args):
+def reset():
     """Reset all options.
 
     :args: Command line arguments defined in main. Not used.

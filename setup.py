@@ -64,7 +64,7 @@ class TestRunner(TestCommand):
 
 setup(
     name='fyrd',
-    version='0.6.1-beta.2',
+    version='0.6.1-beta.3',
     description='Submit functions and shell scripts to torque, slurm, ' +
                 'or local machines',
     long_description=long_description,

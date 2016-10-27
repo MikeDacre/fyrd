@@ -1,7 +1,7 @@
 """
 Class and methods to handle Job submission.
 
-Last modified: 2016-10-27 13:07
+Last modified: 2016-10-27 13:32
 """
 import os
 import sys
@@ -257,7 +257,8 @@ class Job(object):
         if hasattr(command, '__call__'):
             self.function = Function(
                 file_name=os.path.join(filedir, '{}_func.{}.py'.format(
-                name, suffix)),
+                    name, suffix)
+                ),
                 function=command, args=args)
             # Collapse the command into a python call to the function script
             command = 'python{} {}'.format(sys.version[0],

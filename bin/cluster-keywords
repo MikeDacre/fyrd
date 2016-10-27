@@ -3,28 +3,20 @@
 """
 Print simple help information on cluster keywords.
 
-============================================================================
-
-        AUTHOR: Michael D Dacre, mike.dacre@gmail.com
-  ORGANIZATION: Stanford University
-       LICENSE: MIT License, property of Stanford, use as you wish
-       CREATED: 2016-00-04 11:09
- Last modified: 2016-09-04 11:04
-
-============================================================================
+Last modified: 2016-10-27 13:26
 """
 from __future__ import print_function
-from cluster import option_help
+from fyrd import option_help
 
 info = """\
-python-cluster keyword help
-===========================
+fyrd keyword help
+=================
 
 All job submission functions in this module make use of the same simple
 keyword arguments. These keywords can be speified directly (e.g.
-`cluster.submit('ls', cores=10, mem=8000)`) or bundled together into profiles
+`fyrd.submit('ls', cores=10, mem=8000)`) or bundled together into profiles
 with the cluster-profile script, and then specified as a profile (e.g.
-`cluster.submit('ls', profile='large')`).
+`fyrd.submit('ls', profile='large')`).
 
 Available keywords
 ------------------

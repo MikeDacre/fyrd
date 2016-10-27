@@ -9,7 +9,7 @@ Submit jobs to compute clusters with slurm, torque, or simple multiprocessing.
 +---------+----------------------------------------------------+
 | License | MIT License, property of Stanford, use as you wish |
 +---------+----------------------------------------------------+
-| Version | 0.6.1-beta.2                                       |
+| Version | 0.6.1-beta.3                                       |
 +---------+----------------------------------------------------+
 
 .. image:: https://travis-ci.org/MikeDacre/fyrd.svg?branch=master

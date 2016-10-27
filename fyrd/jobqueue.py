@@ -1,7 +1,7 @@
 """
 Manage job dependency tracking with multiprocessing.
 
-Last modified: 2016-10-27 13:08
+Last modified: 2016-10-27 13:34
 
 Runs jobs with a multiprocessing.Pool, but manages dependency using an
 additional Process that loops through all submitted jobs and checks
@@ -238,7 +238,7 @@ class Job(object):
     """An object to pass arguments to the runner."""
 
     def __init__(self, function, args=None, kwargs=None, depends=None,
-                    cores=1):
+                 cores=1):
         """Parse and save arguments."""
         if args and not isinstance(args, tuple):
             args = (args,)

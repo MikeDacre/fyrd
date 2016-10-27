@@ -3,34 +3,27 @@
 """
 Monitor the torque or slurm queues, block until jobs complete and return stats.
 
-===============================================================================
+Last modified: 2016-10-27 13:28
 
-        AUTHOR: Michael D Dacre, mike.dacre@gmail.com
-  ORGANIZATION: Stanford University
-       LICENSE: MIT License, property of Stanford, use as you wish
-       CREATED: 2016-07-23 10:02
- Last modified: 2016-08-31 18:19
+Provide a list of jobs and/or a partition, plus an optional user, and this
+script will block until all jobs are complete.
 
-   DESCRIPTION: Provide a list of jobs and/or a partition, plus an optional
-                user, and this script will block until all jobs are complete.
-
-         USAGE: monitor_jobs -p <partition> -u <user> -j <job1,job2,...>
-                Arguments are cumulative except user. For example::
-                    auto_resubmit -p bob -j 172436 172437
-                user can be 'self'
-                This command will monitor all jobs in the bob partition as
-                well as the two jobs specified directly.
-                However::
-                    monitor_jobs -p bob -u fred
-                This command will only monitor fred's jobs in bob (the union).
-
-===============================================================================
+Usage:
+    monitor_jobs -p <partition> -u <user> -j <job1,job2,...>
+    Arguments are cumulative except user. For example::
+        auto_resubmit -p bob -j 172436 172437
+    user can be 'self'
+    This command will monitor all jobs in the bob partition as well as the two
+    jobs specified directly.
+    However::
+        monitor_jobs -p bob -u fred
+    This command will only monitor fred's jobs in bob (the union).
 """
 from __future__ import print_function
 import sys
 import argparse
 
-import cluster
+import fyrd
 
 
 def make_job_list(user=None, partition=None, jobs=None):
@@ -57,27 +50,27 @@ def make_job_list(user=None, partition=None, jobs=None):
     else:
         job_list = []
 
-    queue = cluster.Queue()
+    queue = fyrd.Queue()
 
     partition_list = []
     if partition:
         if isinstance(partition, str):
             partition = [partition]
-            cluster.logme.log('Partition list: {}'.format(partition), 'debug')
+            fyrd.logme.log('Partition list: {}'.format(partition), 'debug')
         for i in partition:
             partition_list += [k for k, v in queue.jobs.items()
                                if v.queue == i]
-    cluster.logme.log("Partitions' jobs: {}".format(partition_list), 'debug')
+    fyrd.logme.log("Partitions' jobs: {}".format(partition_list), 'debug')
 
     user_list = []
     if user:
         if isinstance(user, str):
             user = [user]
-        cluster.logme.log('User list: {}'.format(user), 'debug')
+        fyrd.logme.log('User list: {}'.format(user), 'debug')
         for i in user:
             user_list += [k for k, v in queue.jobs.items()
                           if v.owner == i]
-    cluster.logme.log("Users' jobs: {}".format(user_list), 'debug')
+    fyrd.logme.log("Users' jobs: {}".format(user_list), 'debug')
 
     # Take the union of the user and partion lists
     if user_list and partition_list:
@@ -90,8 +83,8 @@ def make_job_list(user=None, partition=None, jobs=None):
     # Make sure all job numbers are ints and the final list is sorted
     job_list = sorted([int(i) for i in job_list])
 
-    cluster.logme.log('Monitoring {} jobs'.format(len(job_list)))
-    cluster.logme.log('List:\n{}'.format(job_list), 'debug')
+    fyrd.logme.log('Monitoring {} jobs'.format(len(job_list)))
+    fyrd.logme.log('List:\n{}'.format(job_list), 'debug')
     return job_list
 
 
@@ -121,9 +114,9 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
     if args.verbose:
-        cluster.logme.MIN_LEVEL = 'debug'
+        fyrd.logme.MIN_LEVEL = 'debug'
     elif args.quiet:
-        cluster.logme.MIN_LEVEL = 'warn'
+        fyrd.logme.MIN_LEVEL = 'warn'
 
     # Check that at least one option specified
     if not args.partition and not args.user and not args.jobs:
@@ -133,7 +126,7 @@ def main(argv=None):
     job_list = make_job_list(jobs=args.jobs, user=args.user,
                              partition=args.partition)
 
-    queue = cluster.Queue()
+    queue = fyrd.Queue()
     if queue.wait(job_list):
         return 0
     else:

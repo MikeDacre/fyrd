@@ -3,32 +3,25 @@
 """
 Clean all intermediate files created by the cluster module from this dir.
 
-============================================================================
+Last modified: 2016-10-27 13:30
 
-        AUTHOR: Michael D Dacre, mike.dacre@gmail.com
-  ORGANIZATION: Stanford University
-       LICENSE: MIT License, property of Stanford, use as you wish
-       CREATED: 2016-34-15 15:06
- Last modified: 2016-08-31 18:24
+Uses the fyrd.job.clean_dir() function
 
-   DESCRIPTION: Uses the cluster.job.clean_dir() function
-
-       CAUTION: The clean() function will delete **EVERY** file with
-                extensions matching those these::
-                    .<suffix>.err
-                    .<suffix>.out
-                    .<suffix>.sbatch & .cluster.script for slurm mode
-                    .<suffix>.qsub for torque mode
-                    .<suffix> for local mode
-                    _func.<suffix>.py
-                    _func.<suffix>.py.pickle.in
-                    _func.<suffix>.py.pickle.out
-
-============================================================================
+Caution:
+    The clean() function will delete **EVERY** file with
+    extensions matching those these::
+        .<suffix>.err
+        .<suffix>.out
+        .<suffix>.sbatch & .fyrd.script for slurm mode
+        .<suffix>.qsub for torque mode
+        .<suffix> for local mode
+        _func.<suffix>.py
+        _func.<suffix>.py.pickle.in
+        _func.<suffix>.py.pickle.out
 """
 import sys
 import argparse
-import cluster
+import fyrd
 
 def main(argv=None):
     """Command line parsing."""
@@ -55,10 +48,10 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     if args.verbose:
-        cluster.logme.MIN_LEVEL = 'debug'
+        fyrd.logme.MIN_LEVEL = 'debug'
 
-    files = cluster.job.clean_dir(directory=args.dir, suffix=args.suffix,
-                                  qtype=args.qtype, confirm=args.no_confirm)
+    files = fyrd.job.clean_dir(directory=args.dir, suffix=args.suffix,
+                               qtype=args.qtype, confirm=args.no_confirm)
 
     # Print list of files if it wasn't done by the function
     if not args.no_confirm:

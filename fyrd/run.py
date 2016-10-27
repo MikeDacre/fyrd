@@ -1,7 +1,7 @@
 """
 File management and execution functions.
 
-Last modified: 2016-10-27 13:12
+Last modified: 2016-10-27 13:35
 """
 import os
 import re
@@ -10,6 +10,7 @@ import gzip
 import argparse
 from subprocess import Popen
 from subprocess import PIPE
+from time import sleep
 
 from . import logme
 
