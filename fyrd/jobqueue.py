@@ -1,7 +1,7 @@
 """
 Manage job dependency tracking with multiprocessing.
 
-Last modified: 2016-10-27 13:34
+Last modified: 2016-10-30 18:05
 
 Runs jobs with a multiprocessing.Pool, but manages dependency using an
 additional Process that loops through all submitted jobs and checks
@@ -119,13 +119,16 @@ class JobQueue(object):
             cores=1):
         """Add function to local job queue.
 
-        :function:     A function object. To run a command, use the run.cmd
-                       function here.
-        :args:         A tuple of args to submit to the function.
-        :kwargs:       A dict of keyword arguments to submit to the function.
-        :dependencies: A list of job IDs that this job will depend on.
-        :cores:        The number of threads required by this job.
-        :returns:      A job ID
+        Args:
+            function:     A function object. To run a command, use the run.cmd
+                          function here.
+            args:         A tuple of args to submit to the function.
+            kwargs:       A dict of keyword arguments to submit to the function.
+            dependencies: A list of job IDs that this job will depend on.
+            cores:        The number of threads required by this job.
+
+        Returns:
+            int: A job ID
         """
         self.update()
         assert self.runner.is_alive()
@@ -291,21 +294,22 @@ def job_runner(jobqueue, outputs, cores=None, jobno=None):
 
     Must be run as a separate multiprocessing.Process to function correctly.
 
-    :jobqueue: A multiprocessing.Queue object into which Job objects
-               must be added. The function continually searches this Queue for
-               new jobs. Note, function must be a function call, it cannot be
-               anything else.
-               function is the only required argument, the rest are optional.
-               tuples are required.
-    :outputs:  A multiprocessing.Queue object that will take outputs. A
-               dictionary of job objects will be output here with the format::
-               {job_no => Job}
-               **NOTE**: function return must be picklable otherwise this will
-               raise an exception when it is put into the Queue object.
-    :cores:    Number of cores to use in the multiprocessing pool. Defaults to
-               all.
-    :jobno:    What number to start counting jobs from, default 1.
+    Args:
+        jobqueue: A multiprocessing.Queue object into which Job objects must be
+                  added. The function continually searches this Queue for new
+                  jobs. Note, function must be a function call, it cannot be
+                  anything else.  function is the only required argument, the
+                  rest are optional.  tuples are required.
+        outputs:  A multiprocessing.Queue object that will take outputs. A
+                  dictionary of job objects will be output here with the
+                  format:: {job_no => Job}
+                  **NOTE**: function return must be picklable otherwise this
+                  will raise an exception when it is put into the Queue object.
+        cores:    Number of cores to use in the multiprocessing pool. Defaults
+                  to all.
+        jobno:    What number to start counting jobs from, default 1.
     """
+
     def output(out):
         """Explicitly clear the dictionary before sending the output."""
         # Don't send output if it is the same as last time.

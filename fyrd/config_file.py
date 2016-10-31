@@ -1,7 +1,7 @@
 """
 Get and set config file options.
 
-Last modified: 2016-10-27 13:05
+Last modified: 2016-10-30 18:39
 
 The functions defined here provide an easy way to access the config file
 defined by CONFIG_FILE (default ~/.fyrd).
@@ -11,9 +11,9 @@ into python's configparser library. To get around this, we write profiles as
 sections that begin with 'prof_' and the parse the whole config into a simple
 dictionary to make it easier to use.
 
-To work with profiles, use the get_profile() and set_profile() functions. Note
-that all options must be allowed in the options.py file before they can be
-added to a profile.
+To work with profiles, use the `get_profile()` and `set_profile()` functions.
+Note that all options must be allowed in the `options.py` file before they can
+be added to a profile.
 
 Options will also be pre-sanitized before being added to profile. e.g. 'mem':
     '2GB' will become 'mem': 2000.
@@ -90,7 +90,12 @@ class Profile(object):
     args = {}
 
     def __init__(self, name, kwds):
-        """Set up bare minimum attributes."""
+        """Set up bare minimum attributes.
+
+        Args:
+            name (str):  Name of the profile
+            kwds (dict): Dictionary of keyword arguments (will be validated).
+        """
         self.__dict__['name'] = name
         # Check keywork arguments
         self.__dict__['args'] = options.check_arguments(kwds)
@@ -134,8 +139,8 @@ def get_profile(profile=None):
 
     Will return None if profile is supplied but does not exist.
 
-    :profile: The name of a profile to search for.
-
+    Args:
+        profile (str): The name of a profile to search for.
     """
     if profile:
         popt = get_option('prof', profile)
@@ -157,25 +162,25 @@ def get_profile(profile=None):
         return pfls
 
 
-def set_profile(name, args):
+def set_profile(name, kwds):
     """Write profile to config file.
 
-    :name: The name of the profile to add/edit.
-    :args: Keyword arguments to add to the profile.
-
+    Arguments:
+        name (str):  The name of the profile to add/edit.
+        kwds (dict): Keyword arguments to add to the profile.
     """
-    if not isinstance(args, dict):
+    if not isinstance(kwds, dict):
         raise Exception('Profile arguments must be a dictionary')
-    args = options.check_arguments(args)
-    for arg, opt in args.items():
+    kwds = options.check_arguments(kwds)
+    for arg, opt in kwds.items():
         set_option('prof_' + name, arg, opt)
 
 
 def del_profile(name):
     """Delete a profile.
 
-    :name: The name of the profile to delete.
-
+    Args:
+        name (str): The name of the profile to delete.
     """
     delete('prof_{}'.format(name))
 
@@ -188,10 +193,14 @@ def del_profile(name):
 def get_option(section=None, key=None, default=None):
     """Get a single key or section.
 
-    :section: The config section to use (e.g. queue, prof)
-    :key:     The config key to get (e.g. 'max_jobs')
-    :default: If the key does not exist, create it with this default value.
-    :returns: None if key does not exist.
+    Args:
+        section (str): The config section to use (e.g. queue, prof)
+        key (str) :    The config key to get (e.g. 'max_jobs')
+        default:       If the key does not exist, create it with this default
+                       value.
+
+    Returns:
+        Option value if key exists, None if no key exists.
     """
     defaults = get_config()
     if not section:
@@ -218,7 +227,13 @@ def get_option(section=None, key=None, default=None):
 
 
 def set_option(section, key, value):
-    """Write a config key to the config file."""
+    """Write a config key to the config file.
+
+    Args:
+        section (str): Section of the config file to use.
+        key (str):     Key to add.
+        value:         Value to add for key.
+    """
     # Sanitize arguments
     section = str(section)
     key     = str(key)
@@ -241,6 +256,13 @@ def delete(section, key=None):
     """Delete a config item.
 
     If key is not provided deletes whole section.
+
+    Args:
+        section (str): Section of config file.
+        key (str):     Key to delete
+
+    Returns:
+        dict: Config
     """
     config.read(CONFIG_FILE)
     if key:
@@ -258,13 +280,21 @@ def delete(section, key=None):
 
 
 def get_initial_defaults():
-    """Return a sane set of starting defaults for config file creation."""
+    """Return a sane set of starting defaults for config file creation.
+
+    Returns:
+        dict
+    """
     # Defined file wide
     return INITIAL_DEFAULTS
 
 
 def get_config():
-    """Load defaults from file."""
+    """Load defaults from file.
+
+    Returns:
+        dict: Config options.
+    """
     global defaults
     defaults = {}
     if os.path.isfile(CONFIG_FILE):
@@ -278,7 +308,7 @@ def get_config():
 def create_config():
     """Create a config file.
 
-    Will clobber any existing file
+    Will clobber any existing file.
     """
     global defaults, config
     # Use defaults coded into this file
@@ -316,7 +346,14 @@ def create_config():
 
 
 def _config_to_dict(conf):
-    """Convert a config object into a dictionary."""
+    """Convert a config object into a dictionary.
+
+    Args:
+        ConfigParser object.
+
+    Returns:
+        dict: Dictionary of config.
+    """
     for section in conf.sections():
         # Jobs become a sub-dictionary
         if section.startswith('prof_'):

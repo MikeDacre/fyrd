@@ -1,7 +1,7 @@
 """
 Available options for job submission.
 
-Last modified: 2016-10-27 13:11
+Last modified: 2016-10-30 18:14
 
 All keyword arguments that can be used with Job() objects are defined in this
 file. These can be editted by the end user to increase functionality.
@@ -318,9 +318,13 @@ def check_arguments(kwargs):
 def option_to_string(option, value=None, qtype=None):
     """Return a string with an appropriate flag for slurm or torque.
 
-    :option: An allowed option definied in options.all_options
-    :value:  A value for that option if required (if None, default used)
-    :qtype:  'torque', 'slurm', or 'local': override queue.MODE
+    Args:
+        option: An allowed option definied in options.all_options
+        value:  A value for that option if required (if None, default used)
+        qtype:  'torque', 'slurm', or 'local': override queue.MODE
+
+    Returns:
+        str: A string with the appropriate flags for the active queue.
     """
     # Import a couple of queue functions here
     from . import queue
@@ -382,9 +386,13 @@ def option_to_string(option, value=None, qtype=None):
 def options_to_string(option_dict, qtype=None):
     """Return a multi-line string for slurm or torque job submission.
 
-    :option_dict: Dict in format {option: value} where value can be None.
-                  If value is None, default used.
-    :qtype:       'torque', 'slurm', or 'local': override queue.MODE
+    Args:
+        option_dict: Dict in format {option: value} where value can be None.
+                     If value is None, default used.
+        qtype:       'torque', 'slurm', or 'local': override queue.MODE
+
+    Returns:
+        str: A multiline string of torque or slurm options.
     """
     # Import a couple of queue functions here
     from . import queue
@@ -436,10 +444,14 @@ def options_to_string(option_dict, qtype=None):
 def option_help(qtype=None, mode='string'):
     """Print a sting to stdout displaying information on all options.
 
-    :qtype: If provided only return info on that queue type.
-    :mode:  string: Return a formatted string
-            print:  Print the string to stdout
-            table:  Return a table of lists
+    Args:
+        qtype: If provided only return info on that queue type.
+        mode:  string: Return a formatted string
+               print:  Print the string to stdout
+               table:  Return a table of lists
+
+    Returns:
+        str: A formatted string
     """
 
     hlp = OrderedDict()

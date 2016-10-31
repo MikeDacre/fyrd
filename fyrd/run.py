@@ -1,7 +1,7 @@
 """
 File management and execution functions.
 
-Last modified: 2016-10-27 13:35
+Last modified: 2016-10-30 18:30
 """
 import os
 import re
@@ -214,10 +214,11 @@ class CommandError(Exception):
 def open_zipped(infile, mode='r'):
     """Open a regular, gzipped, or bz2 file.
 
-    Returns text mode file handle.
-
     If infile is a file handle or text device, it is returned without
     changes.
+
+    Returns:
+        text mode file handle.
     """
     mode   = mode[0] + 't'
     if hasattr(infile, 'write'):
@@ -248,13 +249,15 @@ def opt_split(opt, split_on):
 def cmd(command, args=None, stdout=None, stderr=None, tries=1):
     """Run command and return status, output, stderr.
 
-    :command: Path to executable.
-    :args:    Tuple of arguments.
-    :stdout:  File or open file like object to write STDOUT to.
-    :stderr:  File or open file like object to write STDERR to.
-    :tries:   Int: Number of times to try to execute 1+
+    Args:
+        command: Path to executable.
+        args:    Tuple of arguments.
+        stdout:  File or open file like object to write STDOUT to.
+        stderr:  File or open file like object to write STDERR to.
+        tries:   Int: Number of times to try to execute 1+
 
-    :returns: exit_code, STDOUT, STDERR
+    Returns:
+        tuple: exit_code, STDOUT, STDERR
     """
     tries = int(tries)
     assert tries > 0
@@ -308,8 +311,11 @@ def which(program):
     Taken verbatim from:
         stackoverflow.com/questions/377017/test-if-executable-exists-in-python
 
-    :program: Name of executable to test.
-    :returns: Path to the program or None on failure.
+    Args:
+        program: Name of executable to test.
+
+    Returns:
+        Path to the program or None on failure.
     """
     fpath, program = os.path.split(program)
     if fpath:
@@ -336,10 +342,12 @@ def file_type(infile):
 def is_file_type(infile, types):
     """Return True if infile is one of types.
 
-    :infile:  Any file name
-    :types:   String or list/tuple of strings (e.g ['bed', 'gtf'])
-    :returns: True or False
+    Args:
+        infile:  Any file name
+        types:   String or list/tuple of strings (e.g ['bed', 'gtf'])
 
+    Returns:
+        True or False
     """
     if hasattr(infile, 'write'):
         return False
@@ -360,13 +368,16 @@ def write_iterable(iterable, outfile):
 
 
 def split_file(infile, parts, outpath='', keep_header=True):
-    """Split a file in parts parts and return a list of paths.
+    """Split a file in parts and return a list of paths.
 
     NOTE: Linux specific (uses wc).
 
-    :outpath:     The directory to save the split files.
-    :keep_header: Add the header line to the top of every file.
+    Args:
+        outpath:     The directory to save the split files.
+        keep_header: Add the header line to the top of every file.
 
+    Returns:
+        list: Paths to split files.
     """
     # Determine how many reads will be in each split sam file.
     logme.log('Getting line count', 'debug')

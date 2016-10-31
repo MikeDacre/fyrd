@@ -1,7 +1,7 @@
 """
 Monitor the queue for torque or slurm.
 
-Last modified: 2016-10-27 13:12
+Last modified: 2016-10-30 18:25
 
 Provides a class to monitor the torque, slurm, or local jobqueue queues with
 identical syntax.
@@ -90,10 +90,12 @@ class Queue(object):
     def __init__(self, user=None, qtype=None, partition=None):
         """Create a queue object specific to a single queue and user.
 
-        :qtype:     'torque', 'slurm', or 'local', defaults to auto-detect.
-        :user:      Optional usernameto filter the queue with.
-                    If user='self' or 'current', the current user will be used.
-        :partition: Optional partition to filter the queue with.
+        Args:
+            qtype:     'torque', 'slurm', or 'local', defaults to auto-detect.
+            user:      Optional usernameto filter the queue with.
+                       If user='self' or 'current', the current user will be
+                       used.
+            partition: Optional partition to filter the queue with.
         """
         # Get user ID as an int UID
         if user:
@@ -149,11 +151,13 @@ class Queue(object):
         time. This allows time for any copy operations to complete after
         the job exits.
 
-        :jobs:    A job or list of jobs to check. Can be one of:
-                  Job or multiprocessing.pool.ApplyResult objects, job ID
-                  (int/str), or a object or a list/tuple of multiple Jobs or
-                  job IDs.
-        :returns: True on success False or None on failure.
+        Args:
+            jobs:  A job or list of jobs to check. Can be one of: Job or
+                   multiprocessing.pool.ApplyResult objects, job ID (int/str),
+                   or a object or a list/tuple of multiple Jobs or job IDs.
+
+        Returns:
+            True on success False or None on failure.
         """
         self.update()
 
@@ -472,11 +476,13 @@ class Queue(object):
 def queue_parser(qtype=None, user=None, partition=None):
     """Call either torque or slurm qtype parsers depending on qtype.
 
-    :qtype:   Either 'torque' or 'slurm', defaults to current MODE
-    :user:    optional user name to pass to queue to filter queue with
+    Args:
+        qtype: Either 'torque' or 'slurm', defaults to current MODE
+        user:  optional user name to pass to queue to filter queue with
 
-    :yields:  job_id, name, userid, partition, state, nodelist,
-              numnodes, ntpernode, exit_code
+    Yields:
+        tuple: job_id, name, userid, partition, state, nodelist, numnodes,
+               ntpernode, exit_code
     """
     if not qtype:
         qtype = get_cluster_environment()
@@ -494,11 +500,13 @@ def torque_queue_parser(user=None, partition=None):
 
     Use the `qstat -x` command to get an XML queue for compatibility.
 
-    :user:     optional user name to pass to qstat to filter queue with
-    :partiton: optional partition to filter the queue with
+    Args:
+        user:     optional user name to pass to qstat to filter queue with
+        partiton: optional partition to filter the queue with
 
-    :yields:   job_id, name, userid, partition, state, nodelist,
-               numnodes, ntpernode, exit_code
+    Yields:
+        tuple: job_id, name, userid, partition, state, nodelist, numnodes,
+               ntpernode, exit_code
 
     numcpus is currently always 1 as most torque queues treat every core as a
     node.
@@ -580,11 +588,13 @@ def slurm_queue_parser(user=None, partition=None):
     returned by squeue are added with sacct, and they are added to *the end* of
     the returned queue, i.e. *out of order with respect to the actual queue*.
 
-    :user:      optional user name to filter queue with
-    :partition: optional partition to filter queue with
+    Args:
+        user:      optional user name to filter queue with
+        partition: optional partition to filter queue with
 
-    :yields:    job_id, name, userid, partition, state, nodelist,
-                numnodes, ntpernode, exit_code
+    Yields:
+        tuple: job_id, name, userid, partition, state, nodelist, numnodes,
+               ntpernode, exit_code
     """
     nodequery = re.compile(r'([^\[,]+)(\[[^\[]+\])?')
     qargs = ['squeue', '-h', '-O',
@@ -698,7 +708,8 @@ def get_cluster_environment():
     Uses which to search for sbatch first, then qsub. If neither is found,
     MODE is set to local.
 
-    :returns: MODE variable ('torque', 'slurm', or 'local')
+    Returns:
+        tuple: MODE variable ('torque', 'slurm', or 'local')
     """
     global MODE
     if run.which('sbatch'):
@@ -750,7 +761,8 @@ def check_queue(qtype=None):
 def wait(jobs):
     """Wait for jobs to finish.
 
-    :jobs:    A single job or list of jobs to wait for. With torque or slurm,
+    Args:
+        jobs: A single job or list of jobs to wait for. With torque or slurm,
               these should be job IDs, with local mode, these are
               multiprocessing job objects (returned by submit())
     """

@@ -1,7 +1,7 @@
 """
 Logging with timestamps and optional log files.
 
-Last modified: 2016-10-27 13:10
+Last modified: 2016-10-30 18:07
 
 Print a timestamped message to a logfile, STDERR, or STDOUT.
 
@@ -23,7 +23,7 @@ Usage::
         level='debug'|'info'|'warn'|'error'|'normal',
         also_write='stderr'|'stdout')
 
-Examples:
+Example::
     lm.log('Hi')
     Prints: 20160223 11:46:24.969 | INFO --> Hi
     lm.log('Hi', level='debug')
@@ -60,29 +60,30 @@ def log(message, level='info', logfile=None, also_write=None,
         min_level=None, kind=None):
     """Print a string to logfile.
 
-    :message:     The message to print.
-    :logfile:     Optional file to log to, defaults to STDERR. Can provide a
-                  logging object
-    :level:       'debug'|'info'|'warn'|'error'|'normal'
-                  Will only print if level > MIN_LEVEL
+    Args:
+        message:     The message to print.
+        logfile:     Optional file to log to, defaults to STDERR. Can provide a
+                     logging object
+        level:       'debug'|'info'|'warn'|'error'|'normal'
+                     Will only print if level > MIN_LEVEL
 
-                  =========== ============================
-                  'debug':    '<timestamp> DEBUG --> '
-                  'info':     '<timestamp> INFO --> '
-                  'warn':     '<timestamp> WARNING --> '
-                  'error':    '<timestamp> ERROR --> '
-                  'critical': '<timestamp> CRITICAL --> '
-                  =========== ============================
+                     =========== ============================
+                     'debug':    '<timestamp> DEBUG --> '
+                     'info':     '<timestamp> INFO --> '
+                     'warn':     '<timestamp> WARNING --> '
+                     'error':    '<timestamp> ERROR --> '
+                     'critical': '<timestamp> CRITICAL --> '
+                     =========== ============================
 
-    :also_write:  'stdout': print to STDOUT also.
-                  'stderr': print to STDERR also.
-                  These only have an effect if the output is not already set
-                  to the same device.
+        also_write:  'stdout': print to STDOUT also.
+                     'stderr': print to STDERR also.
+                     These only have an effect if the output is not already set
+                     to the same device.
 
-    :min_level:   Retained for backwards compatibility, min_level should be set
-                  using the logme.MIN_LEVEL constant.
+        min_level:   Retained for backwards compatibility, min_level should be
+                     set using the logme.MIN_LEVEL constant.
 
-    :kind: synonym for level, kept to retain backwards compatibility
+        kind:        synonym for level, kept to retain backwards compatibility
     """
     stdout = False
     stderr = False

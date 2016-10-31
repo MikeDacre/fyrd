@@ -1,7 +1,7 @@
 """
 Class and methods to handle Job submission.
 
-Last modified: 2016-10-27 13:32
+Last modified: 2016-10-30 18:02
 """
 import os
 import sys
@@ -51,15 +51,16 @@ class Job(object):
     Holds information about submit time, number of cores, the job script,
     and more.
 
-    submit() will submit the job if it is ready
-    wait()   will block until the job is done
-    get()    will block until the job is done and then unpickle a stored
-    output (if defined) and return the contents
-    clean()  will delete any files created by this object
+    Methods:
+        submit(): submit the job if it is ready
+        wait():   block until the job is done
+        get():    block until the job is done and then unpickle a stored
+                  output (if defined) and return the contents
+        clean():  delete any files created by this object
 
     Printing the class will display detailed job information.
 
-    Both wait() and get() will update the queue every two seconds and add
+    Both `wait()` and `get()` will update the queue every two seconds and add
     queue information to the job as they go.
 
     If the job disappears from the queue with no information, it will be listed
@@ -98,22 +99,29 @@ class Job(object):
     # Holds queue information in torque and slurm
     queue_info   = None
 
-    stdout = stderr = exitcode = None
+    # Outputs
+    _stdout   = None
+    _stderr   = None
+    _exitcode = None
+
+    # Track update status
+    _updating = False
 
     def __init__(self, command, args=None, name=None, path=None,
                  qtype=None, profile=None, **kwds):
         """Create a job object will submission information.
 
-        :command: The command or function to execute.
-        :args:    Optional arguments to add to command, particularly
-                  useful for functions.
-        :name:    Optional name of the job. If not defined, guessed. If a job
-                  of the same name is already queued, an integer job number
-                  (not the queue number) will be added, ie. <name>.1
-        :path:    Where to create the script, if None, current dir used.
-        :qtype:   Override the default queue type
-        :profile: The name of a profile saved in the config_file
-        :kwargs:  Keyword arguments to control job options
+        Args:
+            command: The command or function to execute.
+            args:    Optional arguments to add to command, particularly
+                     useful for functions.
+            name:    Optional name of the job. If not defined, guessed. If a
+                     job of the same name is already queued, an integer job
+                     number (not the queue number) will be added, ie. <name>.1
+            path:    Where to create the script, if None, current dir used.
+            qtype:   Override the default queue type
+            profile: The name of a profile saved in the config_file
+            kwargs:  Keyword arguments to control job options
 
         There are many keyword arguments available for cluster job submission.
         These vary somewhat by queue type. For info run:
@@ -256,10 +264,9 @@ class Job(object):
         # Make functions run remotely
         if hasattr(command, '__call__'):
             self.function = Function(
-                file_name=os.path.join(filedir, '{}_func.{}.py'.format(
-                    name, suffix)
-                ),
-                function=command, args=args)
+                file_name=os.path.join(
+                    filedir, '{}_func.{}.py'.format(name, suffix)
+                ), function=command, args=args)
             # Collapse the command into a python call to the function script
             command = 'python{} {}'.format(sys.version[0],
                                            self.function.file_name)
@@ -335,7 +342,11 @@ class Job(object):
     ####################
 
     def write(self, overwrite=True):
-        """Write all scripts."""
+        """Write all scripts.
+
+        Args:
+            overwrite (bool): Overwrite existing files, defaults to True.
+        """
         self.submission.write(overwrite)
         if self.exec_script:
             self.exec_script.write(overwrite)
@@ -346,15 +357,16 @@ class Job(object):
     def clean(self, delete_outputs=False):
         """Delete all scripts created by this module, if they were written.
 
-        If delete_outputs is True, also delete the stdout and stderr files,
-        but get their contents first.
+        Args:
+            delete_outputs (bool): also delete the stdout and stderr files,
+                                   but get their contents first.
         """
         for jobfile in [self.submission, self.exec_script, self.function]:
             if jobfile:
                 jobfile.clean()
         if delete_outputs:
-            self.get_stdout()
-            self.get_stderr()
+            self.stdout
+            self.stderr
             for f in [self.outfile, self.errfile]:
                 if os.path.isfile(f):
                     os.remove(f)
@@ -362,15 +374,17 @@ class Job(object):
     def submit(self, max_queue_len=None):
         """Submit this job.
 
-        :max_queue_len: if specified (or in defaults), then this method will
-                        block until the queue is open enough to allow
-                        submission.
+        Args:
+            max_queue_len: if specified (or in defaults), then this method will
+                           block until the queue is open enough to allow
+                           submission.
 
         To disable max_queue_len, set it to 0. None will allow override by
         the default settings in the config file, and any positive integer will
         be interpretted to be the maximum queue length.
 
-        :returns: self
+        Returns:
+            self
         """
         if self.submitted:
             sys.stderr.write('Already submitted.')
@@ -482,6 +496,7 @@ class Job(object):
         """Update status from the queue."""
         if object.__getattribute__(self, 'done') or not self.submitted:
             return
+        self._updating = True
         self.queue.update()
         if self.id:
             queue_info = self.queue[self.id]
@@ -491,9 +506,10 @@ class Job(object):
                 self.state = self.queue_info.state
                 if self.state == 'completed':
                     self.done = True
-                    self.get_stdout(False)
-                    self.get_stderr(False)
-                    self.get_exitcode(False)
+                    self.stdout
+                    self.stderr
+                    self.exitcode
+        self._updating = False
         return self
 
     def wait(self):
@@ -513,13 +529,14 @@ class Job(object):
             return
         sleep(0.2)
         self.wait()
-        return self.get_exitcode(), self.get_stdout(), self.get_stderr()
+        return self.exitcode, self.stdout, self.stderr
 
-    def get_stdout(self, update=True):
-        """Read stdout file if exists and set self.stdout, return it."""
-        if update and not object.__getattribute__(self, 'done'):
+    @property
+    def stdout(self):
+        """Read stdout file if exists and set self._stdout, return it."""
+        if not self._updating and not object.__getattribute__(self, 'done'):
             self.update()
-        if object.__getattribute__(self, 'done') and hasattr(self, '_stdout'):
+        if object.__getattribute__(self, 'done') and self._stdout is not None:
             return self._stdout
         if os.path.isfile(self.kwargs['outfile']):
             stdout = open(self.kwargs['outfile']).read()
@@ -527,37 +544,37 @@ class Job(object):
                 stdout = '\n'.join(stdout.split('\n')[2:-3]) + '\n'
             if object.__getattribute__(self, 'done'):
                 self._stdout = stdout
-                self.stdout  = self._stdout
             return stdout
         else:
             logme.log('No file at {}, cannot get stdout'
                       .format(self.kwargs['outfile']), 'debug')
             return -1
 
-    def get_stderr(self, update=True):
-        """Read stdout file if exists and set self.stdout, return it."""
-        if update and not object.__getattribute__(self, 'done'):
+    @property
+    def stderr(self):
+        """Read stdout file if exists and set self._stderr, return it."""
+        if not self._updating and not object.__getattribute__(self, 'done'):
             self.update()
-        if object.__getattribute__(self, 'done') and hasattr(self, '_stderr'):
+        if object.__getattribute__(self, 'done') and self._stderr is not None:
             return self._stderr
         if os.path.isfile(self.kwargs['errfile']):
             stderr = open(self.kwargs['errfile']).read()
             if object.__getattribute__(self, 'done'):
                 self._stderr = stderr
-                self.stderr  = self._stderr
             return stderr
         else:
             logme.log('No file at {}, cannot get stderr'
                       .format(self.kwargs['errfile']), 'debug')
 
-    def get_exitcode(self, update=True):
+    @property
+    def exitcode(self):
         """Try to get the exitcode."""
-        if update and not object.__getattribute__(self, 'done'):
+        if not self._updating and not object.__getattribute__(self, 'done'):
             self.update()
         if not object.__getattribute__(self, 'done'):
             logme.log('Job is not complete, no exit code yet', 'info')
             return None
-        if self.done and hasattr(self, '_exitcode'):
+        if self.done and self._exitcode is not None:
             return self._exitcode
         if not self.queue_info:
             self.queue_info = self.queue[self.id]
@@ -568,7 +585,6 @@ class Job(object):
             logme.log('No exitcode even though the job is done, this ' +
                       "shouldn't happen.", 'warn')
         self._exitcode = code
-        self.exitcode  = self._exitcode
         return code
 
     def update_queue_info(self):
@@ -601,12 +617,6 @@ class Job(object):
             if self.function:
                 files.append(self.function)
             return files
-        elif key == 'stdout':
-            return self.get_stdout()
-        elif key == 'stderr':
-            return self.get_stderr()
-        elif key == 'exitcode':
-            return self.get_exitcode()
         return object.__getattribute__(self, key)
 
     def __repr__(self):
@@ -694,15 +704,17 @@ class Function(Script):
         NOTE: Function submission will fail if the parent file's code is not
         wrapped in an if __main__ wrapper.
 
-        :function:    Function handle.
-        :args:        Arguments to the function as a tuple.
-        :imports:     A list of imports, if not provided, defaults to all current
-                      imports, which may not work if you use complex imports.
-                      The list can include the import call, or just be a name, e.g
-                      ['from os import path', 'sys']
-        :pickle_file: The file to hold the function.
-        :outfile:     The file to hold the output.
-        :path:        The path to the calling script, used for importing self.
+        Args:
+            function:    Function handle.
+            args:        Arguments to the function as a tuple.
+            imports:     A list of imports, if not provided, defaults to all
+                         current imports, which may not work if you use complex
+                         imports.  The list can include the import call, or
+                         just be a name, e.g ['from os import path', 'sys']
+            pickle_file: The file to hold the function.
+            outfile:     The file to hold the output.
+            path:        The path to the calling script, used for importing
+                         self.
         """
         self.function = function
         rootmod       = inspect.getmodule(self.function)
@@ -817,21 +829,23 @@ def submit(command, args=None, name=None, path=None, qtype=None,
            profile=None, **kwargs):
     """Submit a script to the cluster.
 
-    :command:   The command or function to execute.
-    :args:      Optional arguments to add to command, particularly
-                useful for functions.
-    :name:      The name of the job.
-    :path:      Where to create the script, if None, current dir used.
-    :qtype:     'torque', 'slurm', or 'normal'
-    :profile:   The name of a profile saved in the config_file
-    :kwargs:    Keyword arguments to control job options
+    Args:
+        command:   The command or function to execute.
+        args:      Optional arguments to add to command, particularly
+                   useful for functions.
+        name:      The name of the job.
+        path:      Where to create the script, if None, current dir used.
+        qtype:     'torque', 'slurm', or 'normal'
+        profile:   The name of a profile saved in the config_file
+        kwargs:    Keyword arguments to control job options
 
     There are many keyword arguments available for cluster job submission.
     These vary somewhat by queue type. For info run::
 
         fyrd.options.option_help()
 
-    :returns: Job object
+    Returns:
+        Job object
     """
 
     queue.check_queue()  # Make sure the queue.MODE is usable
@@ -857,20 +871,22 @@ def make_job(command, args=None, name=None, path=None, qtype=None,
 
     If mode is local, this is just a simple shell script.
 
-    :command:   The command or function to execute.
-    :args:      Optional arguments to add to command, particularly
-                useful for functions.
-    :name:      The name of the job.
-    :path:      Where to create the script, if None, current dir used.
-    :qtype:     'torque', 'slurm', or 'normal'
-    :profile:   The name of a profile saved in the config_file
+    Args:
+        command:   The command or function to execute.
+        args:      Optional arguments to add to command, particularly
+                   useful for functions.
+        name:      The name of the job.
+        path:      Where to create the script, if None, current dir used.
+        qtype:     'torque', 'slurm', or 'normal'
+        profile:   The name of a profile saved in the config_file
 
     There are many keyword arguments available for cluster job submission.
     These vary somewhat by queue type. For info run::
 
         fyrd.options.option_help()
 
-    :returns: A Job object
+    Returns:
+        A Job object
     """
 
     queue.check_queue()  # Make sure the queue.MODE is usable
@@ -888,21 +904,23 @@ def make_job_file(command, args=None, name=None, path=None, qtype=None,
 
     If mode is local, this is just a simple shell script.
 
-    :command:   The command or function to execute.
-    :args:      Optional arguments to add to command, particularly
-                useful for functions.
-    :name:      The name of the job.
-    :path:      Where to create the script, if None, current dir used.
-    :qtype:     'torque', 'slurm', or 'normal'
-    :profile:   The name of a profile saved in the config_file
-    :kwargs:    Keyword arguments to control job options
+    Args:
+        command:   The command or function to execute.
+        args:      Optional arguments to add to command, particularly
+                   useful for functions.
+        name:      The name of the job.
+        path:      Where to create the script, if None, current dir used.
+        qtype:     'torque', 'slurm', or 'normal'
+        profile:   The name of a profile saved in the config_file
+        kwargs:    Keyword arguments to control job options
 
     There are many keyword arguments available for cluster job submission.
     These vary somewhat by queue type. For info run::
 
         fyrd.options.option_help()
 
-    :returns:   Path to job script
+    Returns:
+        Path to job script
     """
 
     queue.check_queue()  # Make sure the queue.MODE is usable
@@ -944,15 +962,17 @@ def submit_file(script_file, dependencies=None, threads=None, qtype=None):
 
     This function is independent of the Job object and just submits a file.
 
-    :dependencies: A job number or list of job numbers.
-                   In slurm: `--dependency=afterok:` is used
-                   For torque: `-W depend=afterok:` is used
+    Args:
+        dependencies: A job number or list of job numbers.
+                      In slurm: `--dependency=afterok:` is used
+                      For torque: `-W depend=afterok:` is used
 
-    :threads:      Total number of threads to use at a time, defaults to all.
-                   ONLY USED IN LOCAL MODE
+        threads:      Total number of threads to use at a time, defaults to all.
+                      ONLY USED IN LOCAL MODE
 
-    :returns:      job number for torque or slurm
-                   multiprocessing job object for local mode
+    Returns:
+        job number for torque or slurm multiprocessing job object for local
+        mode
     """
     queue.check_queue()  # Make sure the queue.MODE is usable
 
@@ -1053,10 +1073,13 @@ def clean_dir(directory='.', suffix='cluster', qtype=None, confirm=False):
                  _func.<suffix>.py.pickle.in
                  _func.<suffix>.py.pickle.out
 
-    :directory: The directory to run in, defaults to the current directory.
-    :qtype:     Only run on files of this qtype
-    :confirm:   Ask the user before deleting the files
-    :returns:   A set of deleted files
+    Args:
+        directory: The directory to run in, defaults to the current directory.
+        qtype:     Only run on files of this qtype
+        confirm:   Ask the user before deleting the files
+
+    Returns:
+        A set of deleted files
     """
     queue.check_queue(qtype)  # Make sure the queue.MODE is usable
 
