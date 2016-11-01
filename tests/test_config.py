@@ -41,3 +41,6 @@ def test_profile():
 def test_delete():
     """Delete the temp config file."""
     os.remove(os.path.abspath('conftest'))
+    fyrd.config_file.CONFIG_FILE = os.path.abspath(
+        os.path.expanduser('~/.fyrd')
+    )

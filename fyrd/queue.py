@@ -1,7 +1,7 @@
 """
 Monitor the queue for torque or slurm.
 
-Last modified: 2016-10-30 18:25
+Last modified: 2016-10-31 23:15
 
 Provides a class to monitor the torque, slurm, or local jobqueue queues with
 identical syntax.
@@ -612,20 +612,29 @@ def slurm_queue_parser(user=None, partition=None):
              '--format=jobid,jobname,user,partition,state,' +
              'nodelist,reqnodes,ncpus,exitcode']
     try:
-        sacct = [tuple(re.split(r'|', i.rstrip())) for i in
+        sacct = [tuple(i.strip(' |').split('|')) for i in
                  run.cmd(qargs)[1].split('\n')]
-        sacct = sacct[2:]
+        sacct = sacct[1:]
     # This command isn't super stable and we don't care that much, so I will
     # just let it die no matter what
-    except Exception:
-        logme.log('Sacct failed', 'debug')
-        sacct = []
+    except Exception as e:
+        if logme.MIN_LEVEL == 'debug':
+            raise e
+        else:
+            sacct = []
 
-    if sacct and len(sacct[0]) == 9:
+    if sacct:
+        if len(sacct[0]) != 9:
+            logme.log('sacct parsing failed unexpectedly, aborting.',
+                      'critical')
+            raise ValueError('sacct output does not have 9 columns. Has:' +
+                             '{}: {}'.format(len(sacct[0]), sacct[0]))
         jobids = [i[0] for i in squeue]
         for sinfo in sacct:
             # Skip job steps, only index whole jobs
             if '.' in sinfo[0]:
+                logme.log('Skipping {} '.format(sinfo[0]) +
+                          "in sacct processing as it is a job part.", 'debug')
                 continue
             # These are the values I expect
             try:
@@ -642,13 +651,15 @@ def slurm_queue_parser(user=None, partition=None):
                 raise
             # Skip jobs that were already in squeue
             if sid in jobids:
+                logme.log('{} still in squeue output'.format(sid), 'debug')
                 continue
             scode = int(scode.split(':')[-1])
             squeue.append((sid, sname, suser, spartition, sstate,
                            snodelist, snodes, scpus, scode))
+    else:
+        logme.log('No job info in sacct', 'debug')
 
     # Sanitize data
-    outqueue = []
     for sinfo in squeue:
         if len(sinfo) == 9:
             [sid, sname, suser, spartition, sstate, sndlst,
@@ -660,10 +671,14 @@ def slurm_queue_parser(user=None, partition=None):
                                .format(len(sinfo)))
         if partition and spartition != partition:
             continue
-        sid    = int(sid) if sid else None
-        snodes = int(snodes) if snodes else None
-        scpus  = int(scpus) if snodes else None
-        scode  = int(scode) if scode else None
+        if not isinstance(sid, int):
+            sid = int(sid) if sid else None
+        if not isinstance(snodes, int):
+            snodes = int(snodes) if snodes else None
+        if not isinstance(scpus, int):
+            scpus = int(scpus) if snodes else None
+        if not isinstance(scode, int):
+            scode = int(scode) if scode else None
         # Convert user from ID to name
         if suser.isdigit():
             suser = pwd.getpwuid(int(suser)).pw_name
@@ -690,11 +705,8 @@ def slurm_queue_parser(user=None, partition=None):
             else:
                 snodelist = sndlst.split(',')
 
-        outqueue.append((sid, sname, suser, spartition, sstate, snodelist,
-                         snodes, scpus, scode))
-    if outqueue:
-        for sinfo in outqueue:
-            yield sinfo
+        yield (sid, sname, suser, spartition, sstate, snodelist,
+               snodes, scpus, scode)
 
 
 ###########################################################

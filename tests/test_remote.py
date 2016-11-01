@@ -22,7 +22,7 @@ def write_to_file(string, file):
 def test_job_creation():
     """Make a job and print it."""
     job = fyrd.Job('echo hi', cores=2, time='00:02:00', mem='2000',
-                      threads=4, profile='default', **kwds)
+                   threads=4, profile='default', **kwds)
     assert job.qtype == env
     return job
 
@@ -57,6 +57,7 @@ def test_function_submission():
     """Submit a function."""
     job = fyrd.Job(write_to_file, ('42', 'bobfile'), **kwds)
     job.submit()
+    assert job.kwargs['partition'] == 'hbfraser'
     code, stdout, stderr = job.get()
     sys.stdout.write('{};\nSTDOUT: {}\nSTDERR: {}\n'
                      .format(code, stdout, stderr))
