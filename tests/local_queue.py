@@ -21,22 +21,22 @@ def test_job_creation():
     return job
 
 
-def test_job_execution():
+def test_job_execution(autoclean=True):
     """Run a job"""
     fyrd.queue.MODE = 'local'
     job = test_job_creation()
     job.submit()
-    code, stdout, stderr = job.get()
-    assert code == 0
-    assert stdout == 'hi\n'
-    assert stderr == ''
+    out = job.get(autoclean)
+    assert job.exitcode == 0
+    assert out == 'hi\n'
+    assert job.stderr == ''
     return job
 
 
 def test_job_cleaning():
     """Delete intermediate files."""
     fyrd.queue.MODE = 'local'
-    job = test_job_execution()
+    job = test_job_execution(False)
     job.clean()
     assert 'echo.cluster' not in os.listdir('.')
     return 0
@@ -48,10 +48,11 @@ def test_function_submission():
     fyrd.queue.MODE = 'local'
     job = fyrd.Job(write_to_file, ('42', 'bobfile'))
     job.submit()
-    code, stdout, stderr = job.get()
-    assert code == 0
-    assert stdout == '\n'
-    if stderr != '':
+    out = job.get()
+    assert job.exitcode == 0
+    assert job.out == 0
+    assert job.stdout == '\n'
+    if job.stderr != '':
         sys.stderr.write('STDERR should be empty, but contains:\n')
         sys.stderr.write(stderr)
         failed = True

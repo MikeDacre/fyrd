@@ -1,0 +1,4 @@
+dill>=0.2.5
+fyrd>=0.6.1b3
+pytest>=3.0.3
+pandas>=0.18.0

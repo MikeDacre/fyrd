@@ -17,6 +17,7 @@ def write_to_file(string, file):
     """Write a string to a file."""
     with open(file, 'w') as fout:
         fout.write(string + '\n')
+    return 0
 
 
 def test_job_creation():
@@ -29,16 +30,17 @@ def test_job_creation():
 
 @pytest.mark.skipif(env == 'local',
                     reason="Fails in local mode")
-def test_job_execution():
+def test_job_execution(autoclean=True):
     """Run a job"""
     job = test_job_creation()
     job.submit()
-    code, stdout, stderr = job.get()
+    out = job.get(autoclean)
     sys.stdout.write('{};\nSTDOUT: {}\nSTDERR: {}\n'
-                     .format(code, stdout, stderr))
-    assert code == 0
-    assert stdout == 'hi\n'
-    assert stderr == ''
+                     .format(job.exitcode, job.stdout, job.stderr))
+    assert job.exitcode == 0
+    assert out == 'hi\n'
+    assert job.stdout == 'hi\n'
+    assert job.stderr == ''
     return job
 
 
@@ -46,7 +48,7 @@ def test_job_execution():
                     reason="Fails in local mode")
 def test_job_cleaning():
     """Delete intermediate files."""
-    job = test_job_execution()
+    job = test_job_execution(False)
     job.clean()
     assert 'echo.cluster' not in os.listdir('.')
 
@@ -57,12 +59,13 @@ def test_function_submission():
     """Submit a function."""
     job = fyrd.Job(write_to_file, ('42', 'bobfile'), **kwds)
     job.submit()
-    code, stdout, stderr = job.get()
-    sys.stdout.write('{};\nSTDOUT: {}\nSTDERR: {}\n'
-                     .format(code, stdout, stderr))
-    assert code == 0
-    assert stdout == '\n'
-    #  assert stderr == ''
+    out = job.get()
+    sys.stdout.write('{};\nOut: {}\nSTDOUT: {}\nSTDERR: {}\n'
+                     .format(job.exitcode, out, job.stdout, job.stderr))
+    assert job.exitcode == 0
+    assert out == 0
+    assert job.stdout == '\n'
+    assert job.stderr == ''
     with open('bobfile') as fin:
         assert fin.read().rstrip() == '42'
     os.remove('bobfile')
