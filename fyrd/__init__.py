@@ -5,9 +5,9 @@ Submit jobs to slurm or torque, or with multiprocessing.
          AUTHOR: Michael D Dacre, mike.dacre@gmail.com
    ORGANIZATION: Stanford University
         LICENSE: MIT License, property of Stanford, use as you wish
-        VERSION: 0.6.1-beta.4
+        VERSION: 0.6.1-beta.5
         CREATED: 2015-12-11 22:19
-  Last modified: 2016-11-01 00:43
+  Last modified: 2016-11-01 16:06
  =============== ===================================================
 
 Allows simple job submission with *dependency tracking and queue waiting* with
@@ -142,7 +142,7 @@ import signal as _signal
 import atexit as _atexit
 
 # Version Number
-__version__ = '0.6.1-beta.4'
+__version__ = '0.6.1-beta.5'
 
 #################################################
 #  Currently configured job submission systems  #
