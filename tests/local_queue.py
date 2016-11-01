@@ -50,6 +50,7 @@ def test_function_submission():
     job.submit()
     out = job.get()
     assert job.exitcode == 0
+    assert out == 0
     assert job.out == 0
     assert job.stdout == '\n'
     if job.stderr != '':
