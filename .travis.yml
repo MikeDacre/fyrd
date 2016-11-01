@@ -4,7 +4,9 @@ python:
   - "3.3"
   - "3.4"
   - "3.5"
+  - "3.6.0b2"
   - "3.6-dev"
+  - "3.7-dev"
   - "nightly"
 
 # command to install dependencies
