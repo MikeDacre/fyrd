@@ -57,7 +57,6 @@ def test_function_submission():
     """Submit a function."""
     job = fyrd.Job(write_to_file, ('42', 'bobfile'), **kwds)
     job.submit()
-    assert job.kwargs['partition'] == 'hbfraser'
     code, stdout, stderr = job.get()
     sys.stdout.write('{};\nSTDOUT: {}\nSTDERR: {}\n'
                      .format(code, stdout, stderr))
