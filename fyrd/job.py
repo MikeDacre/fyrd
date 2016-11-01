@@ -1,7 +1,7 @@
 """
 Class and methods to handle Job submission.
 
-Last modified: 2016-10-30 18:02
+Last modified: 2016-10-31 23:31
 """
 import os
 import sys
@@ -184,7 +184,6 @@ class Job(object):
                 name = command.split(' ')[0].split('/')[-1]
 
         # Make sure name not in queue
-        self.queue.update()
         names     = [i.name.split('.')[0] for i in self.queue]
         namecnt   = len([i for i in names if i == name])
         self.name = '{}.{}'.format(name, namecnt)
