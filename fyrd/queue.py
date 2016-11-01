@@ -1,7 +1,7 @@
 """
 Monitor the queue for torque or slurm.
 
-Last modified: 2016-10-31 23:15
+Last modified: 2016-11-01 00:11
 
 Provides a class to monitor the torque, slurm, or local jobqueue queues with
 identical syntax.
@@ -340,18 +340,10 @@ class Queue(object):
 
     def _get_jobs(self, key):
         """Return a dict of jobs where state matches key."""
-        if self._updating:
-            in_progress = True
-        else:
-            self.update()
-            self._updating = True
-            in_progress = False
         retjobs = {}
         for jobid, job in self.jobs.items():
             if job.state == key.lower():
                 retjobs[jobid] = job
-        if not in_progress:
-            self._updating = False
         return retjobs
 
     def __getattr__(self, key):
@@ -369,7 +361,6 @@ class Queue(object):
 
     def __getitem__(self, key):
         """Allow direct accessing of jobs by job id."""
-        self.update()
         if isinstance(key, self._Job):
             key = key.jobid
         key = int(key)
@@ -380,20 +371,15 @@ class Queue(object):
 
     def __iter__(self):
         """Allow us to be iterable."""
-        self.update()
         for jb in self.jobs.values():
             yield jb
 
     def __len__(self):
         """Length is the total job count."""
-        self.update()
         return len(self.jobs)
 
     def __repr__(self):
         """For debugging."""
-        # For this particular function, enforce 3s minimum update time
-        if int(time()) - self.last_update > 3:
-            self.update()
         self._updating = True
         if self.user:
             outstr = 'Queue<jobs:{};completed:{};queued:{};user={}>'.format(
@@ -406,9 +392,6 @@ class Queue(object):
 
     def __str__(self):
         """A list of keys."""
-        # For this particular function, enforce 3s minimum update time
-        if int(time()) - self.last_update > 3:
-            self.update()
         return str(self.jobs.keys())
 
     ##############################################
