@@ -1,7 +1,7 @@
 """
 Class and methods to handle Job submission.
 
-Last modified: 2016-10-31 23:31
+Last modified: 2016-11-01 15:52
 """
 import os
 import sys
@@ -54,14 +54,22 @@ class Job(object):
     Methods:
         submit(): submit the job if it is ready
         wait():   block until the job is done
-        get():    block until the job is done and then unpickle a stored
-                  output (if defined) and return the contents
+        get():    block until the job is done and then return the output
+                  (stdout if job is a script).
         clean():  delete any files created by this object
+
+    Output attributes:
+        out:      The output of the function or a copy of stdout for a script
+        stdout:   Any output to STDOUT
+        stderr:   Any output to STDERR
+        exitcode: The exitcode of the running processes (the script runner if
+                  the Job is a function.
 
     Printing the class will display detailed job information.
 
-    Both `wait()` and `get()` will update the queue every two seconds and add
-    queue information to the job as they go.
+    Both `wait()` and `get()` will update the queue every few seconds
+    (defined by the queue_update item in the config) and add queue information
+    to the job as they go.
 
     If the job disappears from the queue with no information, it will be listed
     as 'completed'.
@@ -83,7 +91,6 @@ class Job(object):
     id           = None
     submitted    = False
     written      = False
-    done         = False
 
     # Holds a pool object if we are in local mode
     pool_job     = None
@@ -99,10 +106,15 @@ class Job(object):
     # Holds queue information in torque and slurm
     queue_info   = None
 
-    # Outputs
-    _stdout   = None
-    _stderr   = None
-    _exitcode = None
+    # Output tracking
+    _got_out      = False
+    _got_stdout   = False
+    _got_stderr   = False
+    _got_exitcode = False
+    _out          = None
+    _stdout       = None
+    _stderr       = None
+    _exitcode     = None
 
     # Track update status
     _updating = False
@@ -262,14 +274,22 @@ class Job(object):
 
         # Make functions run remotely
         if hasattr(command, '__call__'):
+            self.kind = 'function'
+            script_file = os.path.join(
+                filedir, '{}_func.{}.py'.format(name, suffix)
+                )
+            self.poutfile = script_file + '.pickle.out'
             self.function = Function(
-                file_name=os.path.join(
-                    filedir, '{}_func.{}.py'.format(name, suffix)
-                ), function=command, args=args)
+                file_name=script_file, function=command, args=args,
+                outfile=self.poutfile
+            )
             # Collapse the command into a python call to the function script
             command = 'python{} {}'.format(sys.version[0],
                                            self.function.file_name)
             args = None
+        else:
+            self.kind = 'script'
+            self.poutfile = None
 
         # Collapse args into command
         command = command + ' '.join(args) if args else command
@@ -364,9 +384,11 @@ class Job(object):
             if jobfile:
                 jobfile.clean()
         if delete_outputs:
-            self.stdout
-            self.stderr
-            for f in [self.outfile, self.errfile]:
+            self.save_outputs(delete_files=True)
+            files = [self.outfile, self.errfile]
+            if self.poutfile:
+                files.append(self.poutfile)
+            for f in files:
                 if os.path.isfile(f):
                     os.remove(f)
 
@@ -493,9 +515,10 @@ class Job(object):
 
     def update(self):
         """Update status from the queue."""
-        if object.__getattribute__(self, 'done') or not self.submitted:
-            return
         self._updating = True
+        if self.done or not self.submitted:
+            self._updating = False
+            return
         self.queue.update()
         if self.id:
             queue_info = self.queue[self.id]
@@ -504,87 +527,8 @@ class Job(object):
                 self.queue_info = queue_info
                 self.state = self.queue_info.state
                 if self.state == 'completed':
-                    self.done = True
-                    self.stdout
-                    self.stderr
-                    self.exitcode
+                    self.get_exitcode()
         self._updating = False
-        return self
-
-    def wait(self):
-        """Block until job completes."""
-        self.update()
-        if self.done:
-            return
-        sleep(1)
-        self.queue.wait(self)
-        self.done = True
-
-    def get(self):
-        """Block until job completed and return exit_code, stdout, stderr."""
-        if not self.submitted:
-            logme.log('Cannot wait for result as job has not been submitted',
-                      'warn')
-            return
-        sleep(0.2)
-        self.wait()
-        return self.exitcode, self.stdout, self.stderr
-
-    @property
-    def stdout(self):
-        """Read stdout file if exists and set self._stdout, return it."""
-        if not self._updating and not object.__getattribute__(self, 'done'):
-            self.update()
-        if object.__getattribute__(self, 'done') and self._stdout is not None:
-            return self._stdout
-        if os.path.isfile(self.kwargs['outfile']):
-            stdout = open(self.kwargs['outfile']).read()
-            if stdout:
-                stdout = '\n'.join(stdout.split('\n')[2:-3]) + '\n'
-            if object.__getattribute__(self, 'done'):
-                self._stdout = stdout
-            return stdout
-        else:
-            logme.log('No file at {}, cannot get stdout'
-                      .format(self.kwargs['outfile']), 'debug')
-            return -1
-
-    @property
-    def stderr(self):
-        """Read stdout file if exists and set self._stderr, return it."""
-        if not self._updating and not object.__getattribute__(self, 'done'):
-            self.update()
-        if object.__getattribute__(self, 'done') and self._stderr is not None:
-            return self._stderr
-        if os.path.isfile(self.kwargs['errfile']):
-            stderr = open(self.kwargs['errfile']).read()
-            if object.__getattribute__(self, 'done'):
-                self._stderr = stderr
-            return stderr
-        else:
-            logme.log('No file at {}, cannot get stderr'
-                      .format(self.kwargs['errfile']), 'debug')
-
-    @property
-    def exitcode(self):
-        """Try to get the exitcode."""
-        if not self._updating and not object.__getattribute__(self, 'done'):
-            self.update()
-        if not object.__getattribute__(self, 'done'):
-            logme.log('Job is not complete, no exit code yet', 'info')
-            return None
-        if self.done and self._exitcode is not None:
-            return self._exitcode
-        if not self.queue_info:
-            self.queue_info = self.queue[self.id]
-        if hasattr(self.queue_info, 'exitcode'):
-            code = self.queue_info.exitcode
-        else:
-            code = None
-            logme.log('No exitcode even though the job is done, this ' +
-                      "shouldn't happen.", 'warn')
-        self._exitcode = code
-        return code
 
     def update_queue_info(self):
         """Set queue_info from the queue even if done."""
@@ -600,23 +544,227 @@ class Job(object):
                       'warn')
         return self.queue_info
 
+    def wait(self):
+        """Block until job completes."""
+        sleep(0.1)
+        self.update()
+        if self.done:
+            return
+        sleep(1)
+        self.queue.wait(self)
+        self.update()
+
+    def get(self, cleanup=True):
+        """Block until job completed and return output of script/function.
+
+        By default saves all outputs to this class without deleting files.
+
+        Args:
+            cleanup (bool):  Clean all intermediate files after job completes.
+        """
+        if not self.submitted:
+            logme.log('Cannot wait for result as job has not been submitted',
+                      'warn')
+            return
+        self.wait()
+        if cleanup:
+            self.save_outputs(delete_files=True)
+            self.clean(delete_outputs=True)
+        else:
+            self.save_outputs()
+        return self.out
+
+    def get_output(self, delete_file=True, save=True, update=True):
+        """Get output of function or script.
+
+        This is the same as stdout for a script, or the function output for
+        a function.
+
+        Args:
+            delete_file (bool): Delete the output file when getting, default
+                                True.
+            save (bool):        Save the output to self.out, default True.
+                                Would be a good idea to set to False if the
+                                output is huge.
+            update (bool):      Update job info from queue first.
+
+        Returns:
+            The output of the script or function. Always a string if script.
+        """
+        if update and not self._updating and not self.done:
+            self.update()
+        if self.kind == 'script':
+            return self.get_stdout(delete_file, save)
+        if self.done and self._got_out:
+            return self._out
+        if os.path.isfile(self.poutfile):
+            with open(self.poutfile, 'rb') as fin:
+                out = pickle.load(fin)
+            if delete_file:
+                os.remove(self.poutfile)
+            if save:
+                self._out = out
+            self._got_out = True
+            return out
+        else:
+            logme.log('No file at {}, cannot get output'
+                      .format(self.poutfile), 'warn')
+            return None
+
+    def get_stdout(self, delete_file=True, save=True, update=True):
+        """Get stdout of function or script, same for both.
+
+        Args:
+            delete_file (bool): Delete the stdout file when getting, default
+                                True.
+            save (bool):        Save the output to self.stdout, default True.
+                                Would be a good idea to set to False if the
+                                output is huge.
+            update (bool):      Update job info from queue first.
+
+        Returns:
+            str: The contents of STDOUT, with runtime info and trailing
+                 newline removed.
+        """
+        if update and not self._updating and not self.done:
+            self.update()
+        if self.done and self._got_stdout:
+            return self._stdout
+        if os.path.isfile(self.kwargs['outfile']):
+            stdout = open(self.kwargs['outfile']).read()
+            if stdout:
+                stdout = '\n'.join(stdout.split('\n')[2:-3]) + '\n'
+            if delete_file:
+                os.remove(self.kwargs['outfile'])
+            if save:
+                self._stdout = stdout
+            self._got_stdout = True
+            return stdout
+        else:
+            logme.log('No file at {}, cannot get stdout'
+                      .format(self.kwargs['outfile']), 'warn')
+            return None
+
+    def get_stderr(self, delete_file=True, save=True, update=True):
+        """Get stderr of function or script, same for both.
+
+        Args:
+            delete_file (bool): Delete the stdout file when getting, default
+                                True.
+            save (bool):        Save the output to self.stdout, default True.
+                                Would be a good idea to set to False if the
+                                output is huge.
+            update (bool):      Update job info from queue first.
+
+        Returns:
+            str: The contents of STDERR, with trailing newline removed.
+        """
+        if update and not self._updating and not self.done:
+            self.update()
+        if self.done and self._got_stderr:
+            return self._stderr
+        if os.path.isfile(self.kwargs['errfile']):
+            stderr = open(self.kwargs['errfile']).read()
+            if delete_file:
+                os.remove(self.kwargs['errfile'])
+            if save:
+                self._stderr = stderr
+            self._got_stderr = True
+            return stderr
+        else:
+            logme.log('No file at {}, cannot get stderr'
+                      .format(self.kwargs['errfile']), 'warn')
+            return None
+
+    def get_exitcode(self, update=True):
+        """Try to get the exitcode.
+
+        Args:
+            update (bool): Update job info from queue first.
+
+        Returns:
+            int: The exitcode of the running process.
+        """
+        if update and not self._updating and not self.done:
+            self.update()
+        if self.done:
+            if self._got_exitcode:
+                return self._exitcode
+        else:
+            logme.log('Job is not complete, no exit code yet', 'info')
+            return None
+        if not self.queue_info:
+            self.queue_info = self.queue[self.id]
+        if hasattr(self.queue_info, 'exitcode'):
+            code = self.queue_info.exitcode
+        else:
+            code = None
+            logme.log('No exitcode even though the job is done, this ' +
+                      "shouldn't happen.", 'warn')
+        self._exitcode = code
+        self._got_exitcode = True
+        return code
+
+    def save_outputs(self, delete_files=False):
+        """Save all outputs in their current state. No return value.
+
+        This method does not wait for job completion, but merely gets the
+        outputs. To wait for job completion, use `get()` instead.
+
+        Args:
+            delete_files (bool): Delete the stdout file when getting, default
+                                 False.
+        """
+        self.update()
+        self.get_output(delete_file=delete_files, save=True, update=False)
+        self.get_stdout(delete_file=delete_files, save=True, update=False)
+        self.get_stderr(delete_file=delete_files, save=True, update=False)
+        self.get_exitcode(update=False)
+
+    @property
+    def files(self):
+        """Build a list of files associated with this class."""
+        files = [self.submission]
+        if self.kind == 'script':
+            files.append(self.exec_script)
+        if self.kind == 'function':
+            files.append(self.function)
+        return files
+
+    @property
+    def done(self):
+        """Check if completed or not.
+
+        Updates the Job and Queue.
+
+        Returns:
+            Bool: True if complete, False otherwise.
+        """
+        # We have the same statement twice to try and avoid updating.
+        if self.state == 'completed':
+            return True
+        if not self._updating:
+            self.update()
+            if self.state == 'completed':
+                return True
+        return False
+
     ###############
     #  Internals  #
     ###############
 
-    def __getattribute__(self, key):
-        """Make some attributes fully dynamic."""
-        if key == 'done':
-            if not object.__getattribute__(self, 'done'):
-                self.update()
-        elif key == 'files':
-            files = [self.submission]
-            if self.exec_script:
-                files.append(self.exec_script)
-            if self.function:
-                files.append(self.function)
-            return files
-        return object.__getattribute__(self, key)
+    def __getattr__(self, key):
+        """Dynamically get out, stdout, stderr, and exitcode."""
+        if key == 'out':
+            return self.get_output()
+        elif key == 'stdout':
+            return self.get_stdout()
+        elif key == 'stderr':
+            return self.get_stderr()
+        elif key == 'exitcode':
+            return self.get_exitcode()
+        elif key == 'err':
+            return self.get_stderr()
 
     def __repr__(self):
         """Return simple job information."""
@@ -640,10 +788,10 @@ class Job(object):
         self.update()
         if self.done:
             state = 'completed'
-            id1 = self.id
+            id1 = str(self.id)
         elif self.written:
             state = 'written'
-            id1 = self.id
+            id1 = str(self.id)
         else:
             state = 'not written'
             id1 = 'NA'
@@ -704,6 +852,7 @@ class Function(Script):
         wrapped in an if __main__ wrapper.
 
         Args:
+            file_name:   A root name to the outfiles
             function:    Function handle.
             args:        Arguments to the function as a tuple.
             imports:     A list of imports, if not provided, defaults to all
@@ -764,7 +913,7 @@ class Function(Script):
         ver = sys.version_info.major
         run.cmd("pip{} freeze --local | ".format(ver) +
                 "grep -v '^\-e' | cut -d = -f 1 > " +
-                "~/python_module_list")
+                "~/.{}.module_list")
         # Create a sane set of imports
         filtered_imports = []
         for imp in imports:
@@ -795,7 +944,8 @@ class Function(Script):
 
         # Create script text
         script = '#!/usr/bin/env python{}\n'.format(ver)
-        script += run.FUNC_RUNNER.format(path=imppath,
+        script += run.FUNC_RUNNER.format(name=file_name,
+                                         path=imppath,
                                          modimpstr=modstr,
                                          imports=impts,
                                          pickle_file=self.pickle_file,

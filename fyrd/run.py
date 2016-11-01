@@ -1,7 +1,7 @@
 """
 File management and execution functions.
 
-Last modified: 2016-10-30 18:30
+Last modified: 2016-11-01 15:49
 """
 import os
 import re
@@ -149,7 +149,7 @@ with open('{pickle_file}', 'rb') as fin:
                          'all required modules locally, this may take some '
                          'time\\n')
         try:
-            cmd("cat ~/.python_module_list.txt | xargs pip{{}} install --user"
+            cmd("cat ~/.{name}.module_list | xargs pip{{}} install --user"
                 .format(ver))
         except:
             pass
@@ -279,7 +279,7 @@ def cmd(command, args=None, stdout=None, stderr=None, tries=1):
         try:
             pp = Popen(args, shell=True, universal_newlines=True,
                        stdout=PIPE, stderr=PIPE)
-        except FileNotFountError:
+        except FileNotFoundError:
             logme.log('{} does not exist'.format(command), 'critical')
             raise
         out, err = pp.communicate()
