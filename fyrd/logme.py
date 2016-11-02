@@ -1,7 +1,7 @@
 """
 Logging with timestamps and optional log files.
 
-Last modified: 2016-10-30 18:07
+Last modified: 2016-11-02 01:07
 
 Print a timestamped message to a logfile, STDERR, or STDOUT.
 
@@ -15,7 +15,7 @@ If level is 'error' or 'critical', error is written to STDERR unless also_write
 == -1
 
 MIN_LEVEL can also be provided, logs will only print if vlevel > MIN_LEVEL.
-Level order: critical>error>warn>info>debug
+Level order: critical>error>warn>info>debug>verbose
 
 Usage::
     import logme as lm
@@ -68,6 +68,7 @@ def log(message, level='info', logfile=None, also_write=None,
                      Will only print if level > MIN_LEVEL
 
                      =========== ============================
+                     'verbose':  '<timestamp> VERBOSE --> '
                      'debug':    '<timestamp> DEBUG --> '
                      'info':     '<timestamp> INFO --> '
                      'warn':     '<timestamp> WARNING --> '
@@ -98,9 +99,10 @@ def log(message, level='info', logfile=None, also_write=None,
     min_level = min_level if min_level else MIN_LEVEL
 
     # Level checking, not used with logging objects
-    level_map = {'debug': 1, 'info': 2, 'warn': 3, 'error': 4, 'critical': 5,
-                 'd': 1, 'i': 2, 'w': 3, 'e': 4, 'c': 5,
-                 1: 1, 2: 2, 3: 3, 4: 4, 5: 5}
+    level_map = {'verbose': 0, 'debug': 1, 'info': 2, 'warn': 3, 'error': 4,
+                 'critical': 5,
+                 'v': 0, 'd': 1, 'i': 2, 'w': 3, 'e': 4, 'c': 5,
+                 0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5}
 
     try:
         level = level_map[level]
@@ -181,7 +183,7 @@ def _logit(message, output, level, color=False, min_level=None):
     timestamp = "{0}.{1:<3}".format(now.strftime("%Y%m%d %H:%M:%S"),
                                     str(int(now.microsecond/1000)))
 
-    flag_map  = {1: 'DEBUG', 2: 'INFO', 3: 'WARNING', 4: 'ERROR',
+    flag_map  = {0: 'VERBOSE', 1: 'DEBUG', 2: 'INFO', 3: 'WARNING', 4: 'ERROR',
                  5: 'CRITICAL'}
 
     flag = flag_map[level]
@@ -195,12 +197,14 @@ def _logit(message, output, level, color=False, min_level=None):
         if level == 0:
             output.debug(message)
         if level == 1:
-            output.info(message)
+            output.debug(message)
         if level == 2:
-            output.warning(message)
+            output.info(message)
         if level == 3:
-            output.error(message)
+            output.warning(message)
         if level == 4:
+            output.error(message)
+        if level == 5:
             output.critical(message)
     else:
         # Check min_level before proceeding
@@ -221,7 +225,9 @@ def _logit(message, output, level, color=False, min_level=None):
 
 def _color(flag):
     """Return the flag with correct color codes."""
-    if flag == 'DEBUG':
+    if flag == 'VERBOSE':
+        return flag
+    elif flag == 'DEBUG':
         return flag
     elif flag == 'INFO':
         return BOLD + WHITE + flag + ENDC

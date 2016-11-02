@@ -2,6 +2,8 @@
 import os
 import sys
 import pytest
+from datetime import datetime as dt
+from datetime import timedelta as td
 sys.path.append(os.path.abspath('.'))
 import fyrd
 env = fyrd.get_cluster_environment()
@@ -41,6 +43,9 @@ def test_job_execution(autoclean=True):
     assert out == 'hi\n'
     assert job.stdout == 'hi\n'
     assert job.stderr == ''
+    assert isinstance(job.start, dt)
+    assert isinstance(job.end, dt)
+    assert isinstance(job.runtime, td)
     return job
 
 

@@ -1,7 +1,7 @@
 """
 File management and execution functions.
 
-Last modified: 2016-11-01 15:49
+Last modified: 2016-11-02 12:01
 """
 import os
 import re
@@ -41,12 +41,12 @@ SCRP_RUNNER_TRACK = """\
 mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
 if [ -f {script} ]; then
     cd {usedir}
-    date +'%d-%H:%M:%S'
+    date +'%y-%m-%d-%H:%M:%S'
     echo "Running {name}"
     {command}
     exitcode=$?
     echo Done
-    date +'%d-%H:%M:%S'
+    date +'%y-%m-%d-%H:%M:%S'
     if [[ $exitcode != 0 ]]; then
         echo Exited with code: $exitcode >&2
     fi
@@ -74,18 +74,27 @@ CMND_RUNNER_TRACK = """\
 {precmd}
 mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
 cd {usedir}
-date +'%d-%H:%M:%S'
+date +'%y-%m-%d-%H:%M:%S'
 echo "Running {name}"
 {command}
 exitcode=$?
 echo Done
-date +'%d-%H:%M:%S'
+date +'%y-%m-%d-%H:%M:%S'
 if [[ $exitcode != 0 ]]; then
     echo Exited with code: $exitcode >&2
 fi
 """
 
-FUNC_RUNNER = """\
+FUNC_RUNNER = r"""\
+'''
+Run a function remotely and pickle the result.
+
+To try and make this as resistent to failure as possible, we import everything
+we can, this sometimes results in duplicate imports and always results in
+unnecessary imports, but given the context we don't care, as we just want the
+thing to run successfully on the first try, no matter what.
+'''
+import os
 import sys
 import socket
 from subprocess import Popen, PIPE
@@ -102,87 +111,77 @@ except ImportError:
 sys.path.append('{path}')
 {modimpstr}
 
-def run_function(function_call, args=None):
-    '''Run a function with args and return output.'''
-    if not hasattr(function_call, '__call__'):
+
+def run_function(func_c, arglist=None):
+    '''Run a function with arglist and return output.'''
+    if not hasattr(func_c, '__call__'):
         raise Exception('{{}} is not a callable function.'.format(
-            function_call))
-    if args:
-        if isinstance(args, (tuple, list)):
-            out = function_call(*args)
-        elif isinstance(args, dict):
-            out = function_call(**args)
+            func_c))
+    if arglist:
+        if isinstance(arglist, (tuple, list)):
+            ot = func_c(*arglist)
+        elif isinstance(arglist, dict):
+            ot = func_c(**arglist)
         else:
-            out = function_call(args)
+            ot = func_c(arglist)
     else:
-        out = function_call()
-    return out
+        ot = func_c()
+    return ot
 
 
-def cmd(command, args=None):
+def cmd(command, arglist=None):
+    '''Run a command and return exitcode, stdout, stderr.'''
     if isinstance(command, (list, tuple)):
-        if args:
+        if arglist:
             raise Exception('Cannot submit list/tuple command as i' +
-                            'well as args argument')
+                            'well as arglist argument')
         command = ' '.join(command)
     assert isinstance(command, str)
-    if args:
-        if isinstance(args, (list, tuple)):
-            args = ' '.join(args)
-        args = command + args
+    if arglist:
+        if isinstance(arglist, (list, tuple)):
+            arglist = ' '.join(arglist)
+        arglist = command + arglist
     else:
-        args = command
-    pp = Popen(args, shell=True, universal_newlines=True,
+        arglist = command
+    pp = Popen(arglist, shell=True, universal_newlines=True,
                stdout=PIPE, stderr=PIPE)
-    out, err = pp.communicate()
+    ot, err = pp.communicate()
     code = pp.returncode
-    return code, out.rstrip(), err.rstrip()
+    return code, ot.rstrip(), err.rstrip()
 
 
-with open('{pickle_file}', 'rb') as fin:
-    # Try to install packages first
-    try:
-        function_call, args = pickle.load(fin)
-    except ImportError as e:
-        ver = sys.version_info.major
-        sys.stderr.write('Failed to import function, attempting to install ' +
-                         'all required modules locally, this may take some '
-                         'time\\n')
-        try:
-            cmd("cat ~/.{name}.module_list | xargs pip{{}} install --user"
-                .format(ver))
-        except:
-            pass
-        # If that doesn't work, fail with a useful error
-        fin.seek(0)
+if __name__ == "__main__":
+    with open('{pickle_file}', 'rb') as fin:
+        # Try to install packages first
         try:
             function_call, args = pickle.load(fin)
         except ImportError as e:
             module = str(e).split(' ')[-1]
             node   = socket.gethostname()
             sys.stderr.write('Failed to import your function. This usually '
-                            'happens when you have a module installed locally '
-                            'that is not available on the compute nodes.\\n'
-                            'In this case the module is {{}}.\\n'.format(module) +
-                            'However, I can only catch the first uninstalled '
-                            'module. To make sure all of your modules are '
-                            'installed on the compute nodes, do this::\\n'
-                            "freeze --local | grep -v '^\-e' | cut -d = -f 1 "
-                            '> module_list.txt\\n'
-                            'Then, submit a job to the compute nodes with this '
-                            'command::\\n'
-                            'cat module_list.txt | xargs pip install --user\\n')
-            raise ImportError('Module {{}} is not installed on compute node {{}}'
-                            .format(module, node))
+                             'happens when you have a module installed locally'
+                             ' that is not available on the compute nodes.\n'
+                             'In this case the module is '
+                             '{{}}.\n'.format(module) +
+                             'However, I can only catch the first uninstalled '
+                             'module. To make sure all of your modules are '
+                             'installed on the compute nodes, do this::\n'
+                             "freeze --local | grep -v '^\-e' | cut -d = -f 1 "
+                             '> module_list.txt\n'
+                             'Then, submit a job to the compute nodes with '
+                             'this command::\n'
+                             'cat module_list.txt | xargs pip install '
+                             '--user\n')
+            raise ImportError(('Module {{}} is not installed on compute '
+                               'node {{}}').format(module, node))
 
-try:
-    out = run_function(function_call, args)
-except Exception as e:
-    out = e
+    try:
+        out = run_function(function_call, args)
+    except Exception as e:
+        out = e
 
-with open('{out_file}', 'wb') as fout:
-    pickle.dump(out, fout)
-
+    with open('{out_file}', 'wb') as fout:
+        pickle.dump(out, fout)\
 """
 
 
@@ -250,11 +249,11 @@ def cmd(command, args=None, stdout=None, stderr=None, tries=1):
     """Run command and return status, output, stderr.
 
     Args:
-        command: Path to executable.
-        args:    Tuple of arguments.
-        stdout:  File or open file like object to write STDOUT to.
-        stderr:  File or open file like object to write STDERR to.
-        tries:   Int: Number of times to try to execute 1+
+        command (str): Path to executable.
+        args (tuple):  Tuple of arguments.
+        stdout (str):  File or open file like object to write STDOUT to.
+        stderr (str):  File or open file like object to write STDERR to.
+        tries (int):   Number of times to try to execute. 1+
 
     Returns:
         tuple: exit_code, STDOUT, STDERR
@@ -274,7 +273,7 @@ def cmd(command, args=None, stdout=None, stderr=None, tries=1):
         args = command + args
     else:
         args = command
-    logme.log('Running {} as {}'.format(command, args), 'debug')
+    logme.log('Running {} as {}'.format(command, args), 'verbose')
     while True:
         try:
             pp = Popen(args, shell=True, universal_newlines=True,
