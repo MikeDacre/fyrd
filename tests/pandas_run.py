@@ -6,9 +6,7 @@ Pandas is hard to install, so this isn't part of the travis py.test.
 import sys
 import argparse
 import fyrd
-import pandas
 import pandas as pd
-from types import ModuleType
 
 
 def get_mean(d):
