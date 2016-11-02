@@ -2,12 +2,10 @@
 Setup Script for Fyrd
 """
 import os
-import sys
 import codecs
 
 import setuptools
 from setuptools import setup
-from setuptools.command.install import install
 from setuptools.command.test import test as TestCommand
 log = setuptools.distutils.log
 
@@ -24,31 +22,6 @@ for scpt in scpt_dir:
     scpts.append(os.path.join('bin', scpt))
 
 
-class ScriptInstaller(install):
-
-    """Make scripts copy directly instead of being wrapped.
-
-    This also changes the way the module is installed, see::
-        http://stackoverflow.com/questions/37874445
-    """
-
-    def run(self):
-        """Wrapper for parent run, display message first."""
-
-        sys.stderr.write('\nWelcome to Fyrd!\n')
-        sys.stderr.write('Make sure you install this program to a place \n'
-                         'that is accessible cluster wide if you want\n'
-                         'cluster jobs to be able to submit child jobs.\n')
-        sys.stderr.write('\nSome helper scripts not required by the library \n'
-                         'will also be installed to the default PATH chosen \n'
-                         'by the python install software, this is usually \n'
-                         '~/.local/bin or /usr/local/bin, you need to make \n'
-                         'sure this location is in your PATH\n\n')
-
-        # Call the main installer
-        install.run(self)
-
-
 class TestRunner(TestCommand):
 
     """Run script in tests directory."""
@@ -60,13 +33,12 @@ class TestRunner(TestCommand):
         # The remote queue testing can fail for a variety of config reasons
         # so we won't run it here
         check_call([sys.executable, 'tests/run_tests.py', '-l'])
-        #  check_call([sys.executable, 'tests/run_tests.py'])
 
 setup(
     name='fyrd',
     version='0.6.1-beta.5',
-    description='Submit functions and shell scripts to torque, slurm, ' +
-                'or local machines',
+    description=('Submit functions and shell scripts to torque, slurm, ' +
+                 'or local machines'),
     long_description=long_description,
     url='https://github.com/MikeDacre/fyrd',
     author='Michael Dacre',
@@ -98,7 +70,6 @@ setup(
     install_requires=['dill'],
     tests_require=['pytest'],
     packages=['fyrd'],
-    cmdclass={'install': ScriptInstaller,
-              'test': TestRunner},
+    cmdclass={'test': TestRunner},
     scripts=scpts,
 )

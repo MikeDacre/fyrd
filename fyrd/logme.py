@@ -1,7 +1,7 @@
 """
 Logging with timestamps and optional log files.
 
-Last modified: 2016-11-01 22:33
+Last modified: 2016-11-02 01:07
 
 Print a timestamped message to a logfile, STDERR, or STDOUT.
 
@@ -225,7 +225,9 @@ def _logit(message, output, level, color=False, min_level=None):
 
 def _color(flag):
     """Return the flag with correct color codes."""
-    if flag == 'DEBUG':
+    if flag == 'VERBOSE':
+        return flag
+    elif flag == 'DEBUG':
         return flag
     elif flag == 'INFO':
         return BOLD + WHITE + flag + ENDC
