@@ -7,7 +7,7 @@ Run all applicable tests.
 
         AUTHOR: Michael D Dacre, mike.dacre@gmail.com
        CREATED: 2016-54-22 15:06
- Last modified: 2016-06-22 17:30
+ Last modified: 2016-11-02 13:41
 
    DESCRIPTION: Run multiple kinds of tests, provide options to skip some.
 
@@ -37,6 +37,8 @@ def main(argv=None):
 
     parser.add_argument('-l', '--local', action="store_true",
                         help="Skip remote tests")
+    parser.add_argument('-v', '--verbose', action="store_true",
+                        help="Verbose")
 
     args = parser.parse_args(argv)
 
@@ -54,7 +56,10 @@ def main(argv=None):
         pytest.main()
 
     print('py.test tests complete, running local queue test.')
-    check_call([sys.executable, 'tests/local_queue.py'])
+    local_args = [sys.executable, 'tests/local_queue.py']
+    if args.verbose:
+        local_args.append('-v')
+    check_call(local_args)
 
 if __name__ == '__main__' and '__file__' in globals():
     sys.exit(main())

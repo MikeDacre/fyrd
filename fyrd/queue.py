@@ -1,7 +1,7 @@
 """
 Monitor the queue for torque or slurm.
 
-Last modified: 2016-11-01 22:23
+Last modified: 2016-11-02 12:05
 
 Provides a class to monitor the torque, slurm, or local jobqueue queues with
 identical syntax.
@@ -160,6 +160,7 @@ class Queue(object):
             True on success False or None on failure.
         """
         self.update()
+        logme.log('Queue waiting.', 'debug')
 
         # Sanitize arguments
         if not isinstance(jobs, (list, tuple)):
@@ -173,7 +174,7 @@ class Queue(object):
         # queued sometimes
         sleep(1)
         for job in jobs:
-            logme.log('Checking {}'.format(job))
+            logme.log('Checking {}'.format(job), 'debug')
             qtype = job.qtype if isinstance(job, self._Job) else self.qtype
             if isinstance(job, (self._Job, self._JobQueue)):
                 job = job.id
@@ -191,17 +192,27 @@ class Queue(object):
                 if isinstance(job, self._Job):
                     job = job.id
                 not_found = 0
+                lgd = False
                 while True:
                     self.update()
-                    # Allow two seconds to elapse before job is found in queue,
+                    # Allow 12 seconds to elapse before job is found in queue,
                     # if it is not in the queue by then, raise exception.
                     if job not in self.jobs:
+                        if lgd:
+                            logme.log('Attempt #{}/12'.format(not_found),
+                                      'debug')
+                        else:
+                            logme.log('{} not in queue, waiting up to 12s ' +
+                                      'for it to appear', 'info')
+                            lgd = True
                         sleep(1)
                         self.update()
                         not_found += 1
-                        if not_found == 6:
+                        if not_found == 12:
                             raise self.QueueError(
-                                '{} not in queue'.format(job))
+                                '{} not in queue, tried 12 times over 12s'
+                                .format(job)
+                            )
                         continue
                     # Actually look for job in running/queued queues
                     if job in self.running.keys() or job in self.queued.keys():
@@ -268,6 +279,7 @@ class Queue(object):
         """
         if self._updating:
             return
+        logme.log('Queue updating', 'debug')
         # Set the update time I don't care about microseconds
         self.last_update = int(time())
 
@@ -608,8 +620,8 @@ def slurm_queue_parser(user=None, partition=None):
 
     if sacct:
         if len(sacct[0]) != 9:
-            logme.log('sacct parsing failed unexpectedly, aborting.',
-                      'critical')
+            logme.log('sacct parsing failed unexpectedly as there are not ' +
+                      '9 columns, aborting.', 'critical')
             raise ValueError('sacct output does not have 9 columns. Has:' +
                              '{}: {}'.format(len(sacct[0]), sacct[0]))
         jobids = [i[0] for i in squeue]

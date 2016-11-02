@@ -1,7 +1,7 @@
 """
 Class and methods to handle Job submission.
 
-Last modified: 2016-11-01 23:06
+Last modified: 2016-11-02 13:55
 """
 import os
 import sys
@@ -56,7 +56,10 @@ class Job(object):
         submit(): submit the job if it is ready
         wait():   block until the job is done
         get():    block until the job is done and then return the output
-                  (stdout if job is a script).
+                  (stdout if job is a script), by default saves all outputs to
+                  self (i.e. .out, .stdout, .stderr) and deletes all
+                  intermediate files before returning. If `save` argument is
+                  `False`, does not delete the output files by default.
         clean():  delete any files created by this object
 
     Output attributes:
@@ -93,23 +96,26 @@ class Job(object):
 
     """
 
-    id           = None
-    submitted    = False
-    written      = False
+    id            = None
+    submitted     = False
+    written       = False
 
     # Holds a pool object if we are in local mode
-    pool_job     = None
+    pool_job      = None
 
     # Scripts
-    submission   = None
-    exec_script  = None
-    function     = None
+    submission    = None
+    exec_script   = None
+    function      = None
 
     # Dependencies
-    dependencies = None
+    dependencies  = None
+
+    # Pickled output file for functions
+    poutfile      = None
 
     # Holds queue information in torque and slurm
-    queue_info   = None
+    queue_info    = None
 
     # Output tracking
     _got_out      = False
@@ -122,37 +128,47 @@ class Job(object):
     _exitcode     = None
 
     # Time tracking
-    _got_times = False
-    start      = None
-    end        = None
+    _got_times    = False
+    start         = None
+    end           = None
 
     # Track update status
-    _updating = False
+    _updating     = False
 
     def __init__(self, command, args=None, name=None, path=None,
-                 qtype=None, profile=None, **kwds):
+                 qtype=None, profile=None, auto_delete=False, **kwds):
         """Create a job object will submission information.
 
         Args:
-            command: The command or function to execute.
-            args:    Optional arguments to add to command, particularly
-                     useful for functions.
-            name:    Optional name of the job. If not defined, guessed. If a
-                     job of the same name is already queued, an integer job
-                     number (not the queue number) will be added, ie. <name>.1
-            path:    Where to create the script, if None, current dir used.
-            qtype:   Override the default queue type
-            profile: The name of a profile saved in the config_file
-            kwargs:  Keyword arguments to control job options
+            command (function/str): The command or function to execute.
+            args (tuple/dict):      Optional arguments to add to command,
+                                    particularly useful for functions.
+            name (str):             Optional name of the job. If not defined,
+                                    guessed. If a job of the same name is
+                                    already queued, an integer job number (not
+                                    the queue number) will be added, ie.
+                                    <name>.1
+            path (str):             Where to create the script, if None,
+                                    current dir used.
+            qtype (str):            Override the default queue type
+            profile (str):          The name of a profile saved in the
+                                    config_file
+            auto_delete (bool):     Delete all output files on `get()`.
+                                    Default: False (scripts cleaned, outputs
+                                    kept)
+            kwargs (dict):          Keyword arguments to control job options
 
         There are many keyword arguments available for cluster job submission.
-        These vary somewhat by queue type. For info run:
+        These vary somewhat by queue type. For info run::
             fyrd.options.option_help()
         """
 
         ########################
         #  Sanitize arguments  #
         ########################
+
+        # Register auto_delete
+        self.auto_delete = auto_delete
 
         # Make a copy of the keyword arguments, as we will delete arguments
         # as we go
@@ -288,14 +304,14 @@ class Job(object):
             script_file = os.path.join(
                 filedir, '{}_func.{}.py'.format(name, suffix)
                 )
-            self.poutfile = script_file + '.pickle.out'
+            self.poutfile = self.outfile + '.func.pickle'
             self.function = Function(
                 file_name=script_file, function=command, args=args,
                 outfile=self.poutfile
             )
             # Collapse the command into a python call to the function script
-            command = 'python{} {}'.format(sys.version[0],
-                                           self.function.file_name)
+            command = '{} {}'.format(sys.executable,
+                                     self.function.file_name)
             args = None
         else:
             self.kind = 'script'
@@ -376,6 +392,7 @@ class Job(object):
         Args:
             overwrite (bool): Overwrite existing files, defaults to True.
         """
+        logme.log('Writing files, overwrite={}'.format(overwrite), 'debug')
         self.submission.write(overwrite)
         if self.exec_script:
             self.exec_script.write(overwrite)
@@ -383,23 +400,30 @@ class Job(object):
             self.function.write(overwrite)
         self.written = True
 
-    def clean(self, delete_outputs=False):
+    def clean(self, delete_outputs=False, get_outputs=True):
         """Delete all scripts created by this module, if they were written.
 
         Args:
-            delete_outputs (bool): also delete the stdout and stderr files,
+            delete_outputs (bool): also delete all output and err files,
                                    but get their contents first.
+            get_outputs (bool):    if delete_outputs, save outputs before
+                                   deleting.
         """
+        logme.log('Cleaning outputs, delete_outputs={}'.format(delete_outputs),
+                  'debug')
         for jobfile in [self.submission, self.exec_script, self.function]:
             if jobfile:
                 jobfile.clean()
         if delete_outputs:
-            self.save_outputs(delete_files=True)
+            logme.log('Deleting output files.', 'debug')
+            if get_outputs:
+                self.fetch_outputs(delete_files=True)
             files = [self.outfile, self.errfile]
             if self.poutfile:
                 files.append(self.poutfile)
             for f in files:
                 if os.path.isfile(f):
+                    logme.log('Deleteing {}'.format(f), 'debug')
                     os.remove(f)
 
     def submit(self, max_queue_len=None):
@@ -418,12 +442,12 @@ class Job(object):
             self
         """
         if self.submitted:
-            sys.stderr.write('Already submitted.')
+            logme.log('Not submitting, already submitted.', 'warn')
             return
 
         if not isinstance(max_queue_len, (type(None), int)):
-            raise Exception('max_queue_len must be int or None, is {}'
-                            .format(type(max_queue_len)))
+            raise ValueError('max_queue_len must be int or None, is {}'
+                             .format(type(max_queue_len)))
 
         if not self.written:
             self.write()
@@ -435,6 +459,7 @@ class Job(object):
 
         if self.qtype == 'local':
             # Normal mode dependency tracking uses only integer job numbers
+            logme.log('Submitting to local', 'debug')
             dependencies = []
             if self.dependencies:
                 for depend in self.dependencies:
@@ -456,8 +481,10 @@ class Job(object):
                                           cores=self.cores)
             self.submitted = True
             self.state = 'submitted'
+            self.update()
 
         elif self.qtype == 'slurm':
+            logme.log('Submitting to slurm', 'debug')
             if self.dependencies:
                 dependencies = []
                 for depend in self.dependencies:
@@ -482,8 +509,10 @@ class Job(object):
                 raise CalledProcessError(code, args, stdout, stderr)
             self.submitted = True
             self.state = 'submitted'
+            self.update()
 
         elif self.qtype == 'torque':
+            logme.log('Submitting to torque', 'debug')
             if self.dependencies:
                 dependencies = []
                 for depend in self.dependencies:
@@ -513,6 +542,7 @@ class Job(object):
                     raise CalledProcessError(code, args, stdout, stderr)
             self.submitted = True
             self.state = 'submitted'
+            self.update()
         else:
             raise ClusterError("Invalid queue type {}".format(self.qtype))
 
@@ -525,24 +555,14 @@ class Job(object):
 
     def update(self):
         """Update status from the queue."""
-        self._updating = True
-        if self.done or not self.submitted:
-            self._updating = False
-            return
-        self.queue.update()
-        if self.id:
-            queue_info = self.queue[self.id]
-            if queue_info:
-                assert self.id == queue_info.id
-                self.queue_info = queue_info
-                self.state = self.queue_info.state
-                if self.state == 'completed':
-                    self.get_exitcode()
-                    self.get_times()
-        self._updating = False
+        if not self._updating:
+            self._update()
+        else:
+            logme.log('Already updating, aborting.', 'debug')
 
     def update_queue_info(self):
         """Set queue_info from the queue even if done."""
+        logme.log('Updating queue_info', 'debug')
         queue_info1 = self.queue[self.id]
         self.queue.update()
         queue_info2 = self.queue[self.id]
@@ -557,6 +577,7 @@ class Job(object):
 
     def wait(self):
         """Block until job completes."""
+        logme.log('Waiting', 'debug')
         sleep(0.1)
         self.update()
         if self.done:
@@ -565,72 +586,107 @@ class Job(object):
         self.queue.wait(self)
         self.update()
 
-    def get(self, cleanup=True):
+    def get(self, save=True, cleanup=True, delete_outfiles=None,
+            del_no_save=None):
         """Block until job completed and return output of script/function.
 
-        By default saves all outputs to this class without deleting files.
+        By default saves all outputs to this class and deletes all intermediate
+        files.
 
         Args:
-            cleanup (bool):  Clean all intermediate files after job completes.
+            save (bool):            Save all outputs to the class also (advised)
+            cleanup (bool):         Clean all intermediate files after job
+                                    completes.
+            delete_outfiles (bool): Clean output files after job completes.
+            del_no_save (bool):     Delete output files even if `save` is
+                                    `False`
+
+        Returns:
+            str: Function output if Function, else STDOUT
         """
         if not self.submitted:
             logme.log('Cannot wait for result as job has not been submitted',
                       'warn')
             return
+        logme.log(('Getting outputs, cleanup={}, autoclean={}, '
+                   'delete_outfiles={}').format(
+                       cleanup, self.auto_delete, delete_outfiles
+                   ), 'debug')
+        # Wait for queue
         self.wait()
+        # Get output
+        self.fetch_outputs(save=save, delete_files=False)
+        out = self.out if save else self.get_output()
+        # Cleanup
+        delfiles = delete_outfiles if save else del_no_save
         if cleanup:
-            self.save_outputs(delete_files=True)
-            self.clean(delete_outputs=True)
-        else:
-            self.save_outputs()
-        return self.out
+            self.clean(delete_outputs=delfiles)
+        return out
 
-    def get_output(self, delete_file=True, save=True, update=True):
+    def get_output(self, save=True, delete_file=False, update=True):
         """Get output of function or script.
 
         This is the same as stdout for a script, or the function output for
         a function.
 
+        By default, output file is kept unless delete_file is True or
+        self.auto_delete is True.
+
         Args:
-            delete_file (bool): Delete the output file when getting, default
-                                True.
             save (bool):        Save the output to self.out, default True.
                                 Would be a good idea to set to False if the
                                 output is huge.
+            delete_file (bool): Delete the output file when getting, default
+                                True.
             update (bool):      Update job info from queue first.
 
         Returns:
             The output of the script or function. Always a string if script.
         """
+        logme.log(('Getting output, save={}, auto_delete={}, '
+                   'delete_file={}').format(
+                       save, self.auto_delete, delete_file
+                   ), 'debug')
+        if self.kind == 'script':
+            return self.get_stdout(save=save, delete_file=delete_file)
+        if self.done and self._got_out:
+            logme.log('Getting output from _out', 'debug')
+            return self._out
         if update and not self._updating and not self.done:
             self.update()
-        if self.kind == 'script':
-            return self.get_stdout(delete_file, save)
-        if self.done and self._got_out:
-            return self._out
+        if not self.done:
+            logme.log('Cannot get pickled output before job completes',
+                      'warn')
+            return None
+        logme.log('Getting output from {}'.format(self.poutfile), 'debug')
         if os.path.isfile(self.poutfile):
             with open(self.poutfile, 'rb') as fin:
                 out = pickle.load(fin)
-            if delete_file:
+            if delete_file is True or self.auto_delete is True:
+                logme.log('Deleting {}'.format(self.poutfile),
+                          'debug')
                 os.remove(self.poutfile)
             if save:
                 self._out = out
-            self._got_out = True
+                self._got_out = True
             return out
         else:
             logme.log('No file at {}, cannot get output'
                       .format(self.poutfile), 'warn')
             return None
 
-    def get_stdout(self, delete_file=True, save=True, update=True):
+    def get_stdout(self, save=True, delete_file=False, update=True):
         """Get stdout of function or script, same for both.
 
+        By default, output file is kept unless delete_file is True or
+        self.auto_delete is True.
+
         Args:
-            delete_file (bool): Delete the stdout file when getting, default
-                                True.
             save (bool):        Save the output to self.stdout, default True.
                                 Would be a good idea to set to False if the
                                 output is huge.
+            delete_file (bool): Delete the stdout file when getting, default
+                                True.
             update (bool):      Update job info from queue first.
 
         Returns:
@@ -640,52 +696,81 @@ class Job(object):
         Also sets self.start and self.end from the contents of STDOUT if
         possible.
         """
+        logme.log(('Getting stdout, save={}, auto_delete={}, '
+                   'delete_file={}').format(
+                       save, self.auto_delete, delete_file
+                   ), 'debug')
+        if self.done and self._got_stdout:
+            logme.log('Getting stdout from _stdout', 'debug')
+            return self._stdout
         if update and not self._updating and not self.done:
             self.update()
-        if self.done and self._got_stdout:
-            return self._stdout
+        if not self.done:
+            logme.log('Job not done, attempting to get current STDOUT ' +
+                      'anyway', 'info')
+        logme.log('Getting stdout from {}'.format(self.kwargs['outfile']),
+                  'debug')
         if os.path.isfile(self.kwargs['outfile']):
             self.get_times(update=False)
             stdout = open(self.kwargs['outfile']).read()
             if stdout:
                 stdouts = stdout.split('\n')
                 stdout     = '\n'.join(stdouts[2:-3]) + '\n'
-            if delete_file:
+            if delete_file is True or self.auto_delete is True:
+                logme.log('Deleting {}'.format(self.kwargs['outfile']),
+                          'debug')
                 os.remove(self.kwargs['outfile'])
             if save:
                 self._stdout = stdout
-            self._got_stdout = True
+                if self.done:
+                    self._got_stdout = True
             return stdout
         else:
             logme.log('No file at {}, cannot get stdout'
                       .format(self.kwargs['outfile']), 'warn')
             return None
 
-    def get_stderr(self, delete_file=True, save=True, update=True):
+    def get_stderr(self, save=True, delete_file=False, update=True):
         """Get stderr of function or script, same for both.
 
+        By default, output file is kept unless delete_file is True or
+        self.auto_delete is True.
+
         Args:
-            delete_file (bool): Delete the stdout file when getting, default
-                                True.
             save (bool):        Save the output to self.stdout, default True.
                                 Would be a good idea to set to False if the
                                 output is huge.
+            delete_file (bool): Delete the stdout file when getting, default
+                                True.
             update (bool):      Update job info from queue first.
 
         Returns:
             str: The contents of STDERR, with trailing newline removed.
         """
+        logme.log(('Getting stderr, save={}, auto_delete={}, '
+                   'delete_file={}').format(
+                       save, self.auto_delete, delete_file
+                   ), 'debug')
+        if self.done and self._got_stderr:
+            logme.log('Getting stderr from _stderr', 'debug')
+            return self._stderr
         if update and not self._updating and not self.done:
             self.update()
-        if self.done and self._got_stderr:
-            return self._stderr
+        if not self.done:
+            logme.log('Job not done, attempting to get current STDERR ' +
+                      'anyway', 'info')
+        logme.log('Getting stderr from {}'.format(self.kwargs['errfile']),
+                  'debug')
         if os.path.isfile(self.kwargs['errfile']):
             stderr = open(self.kwargs['errfile']).read()
-            if delete_file:
+            if delete_file is True or self.auto_delete is True:
+                logme.log('Deleting {}'.format(self.kwargs['errfile']),
+                          'debug')
                 os.remove(self.kwargs['errfile'])
             if save:
                 self._stderr = stderr
-            self._got_stderr = True
+                if self.done:
+                    self._got_stderr = True
             return stderr
         else:
             logme.log('No file at {}, cannot get stderr'
@@ -704,13 +789,17 @@ class Job(object):
         Also sets self.start and self.end from the contents of STDOUT if
         possible.
         """
+        logme.log('Getting times', 'debug')
+        if self.done and self._got_times:
+            logme.log('Getting times from self.start, self.end', 'debug')
+            return self.start, self.end
         if update and not self._updating and not self.done:
             self.update()
         if not self.done:
             logme.log('Cannot get times until job is complete.', 'warn')
             return None, None
-        if self._got_times:
-            return self.start, self.end
+        logme.log('Getting times from {}'.format(self.kwargs['outfile']),
+                  'debug')
         if os.path.isfile(self.kwargs['outfile']):
             stdout = open(self.kwargs['outfile']).read()
             if stdout:
@@ -741,14 +830,16 @@ class Job(object):
         Returns:
             int: The exitcode of the running process.
         """
+        logme.log('Getting exitcode', 'debug')
+        if self.done and self._got_exitcode:
+            logme.log('Getting exitcode from _exitcode', 'debug')
+            return self._exitcode
         if update and not self._updating and not self.done:
             self.update()
-        if self.done:
-            if self._got_exitcode:
-                return self._exitcode
-        else:
+        if not self.done:
             logme.log('Job is not complete, no exit code yet', 'info')
             return None
+        logme.log('Getting exitcode from queue', 'debug')
         if not self.queue_info:
             self.queue_info = self.queue[self.id]
         if hasattr(self.queue_info, 'exitcode'):
@@ -761,21 +852,34 @@ class Job(object):
         self._got_exitcode = True
         return code
 
-    def save_outputs(self, delete_files=False):
+    def fetch_outputs(self, save=True, delete_files=None):
         """Save all outputs in their current state. No return value.
 
         This method does not wait for job completion, but merely gets the
         outputs. To wait for job completion, use `get()` instead.
 
         Args:
+            save (bool):         Save all outputs to the class also (advised)
             delete_files (bool): Delete the stdout file when getting, default
                                  False.
         """
+        logme.log('Saving outputs to self, delete_files={}'
+                  .format(delete_files), 'debug')
         self.update()
-        self.get_output(delete_file=delete_files, save=True, update=False)
-        self.get_stdout(delete_file=delete_files, save=True, update=False)
-        self.get_stderr(delete_file=delete_files, save=True, update=False)
-        self.get_exitcode(update=False)
+        if not self._got_exitcode:
+            self.get_exitcode(update=False)
+        if not self._got_times:
+            self.get_times(update=False)
+        if delete_files is not None:
+            delfiles = delete_files
+        elif self.auto_delete is not None:
+            delfiles = self.auto_delete
+        else:
+            delfiles = False
+        if save:
+            self.get_output(save=True, delete_file=delfiles, update=False)
+            self.get_stdout(save=True, delete_file=delfiles, update=False)
+            self.get_stderr(save=True, delete_file=delfiles, update=False)
 
     @property
     def files(self):
@@ -809,6 +913,27 @@ class Job(object):
     #  Internals  #
     ###############
 
+    def _update(self):
+        """Update status from the queue."""
+        logme.log('Updating job.', 'debug')
+        self._updating = True
+        if self.done or not self.submitted:
+            self._updating = False
+            return
+        self.queue.update()
+        if self.id:
+            queue_info = self.queue[self.id]
+            if queue_info:
+                assert self.id == queue_info.id
+                self.queue_info = queue_info
+                self.state = self.queue_info.state
+                if self.state == 'completed':
+                    if not self._got_exitcode:
+                        self.get_exitcode()
+                    if not self._got_times:
+                        self.get_times()
+        self._updating = False
+
     def __getattr__(self, key):
         """Dynamically get out, stdout, stderr, and exitcode."""
         if key == 'out':
@@ -831,7 +956,6 @@ class Job(object):
 
     def __repr__(self):
         """Return simple job information."""
-        self.update()
         outstr = "Job:{name}<{mode}".format(name=self.name, mode=self.qtype)
         if self.submitted:
             outstr += ':{}'.format(self.id)
@@ -848,7 +972,6 @@ class Job(object):
 
     def __str__(self):
         """Print job name and ID + status."""
-        self.update()
         if self.done:
             state = 'completed'
             id1 = str(self.id)
@@ -875,6 +998,7 @@ class Script(object):
 
     def write(self, overwrite=True):
         """Write the script file."""
+        logme.log('Script: Writing {}'.format(self.file_name), 'debug')
         if overwrite or not os.path.exists(self.file_name):
             with open(self.file_name, 'w') as fout:
                 fout.write(self.script + '\n')
@@ -886,6 +1010,7 @@ class Script(object):
     def clean(self):
         """Delete any files made by us."""
         if self.written and self.exists:
+            logme.log('Script: Deleting {}'.format(self.file_name), 'debug')
             os.remove(self.file_name)
 
     def __getattr__(self, attr):
@@ -924,8 +1049,6 @@ class Function(Script):
                          just be a name, e.g ['from os import path', 'sys']
             pickle_file: The file to hold the function.
             outfile:     The file to hold the output.
-            path:        The path to the calling script, used for importing
-                         self.
         """
         self.function = function
         rootmod       = inspect.getmodule(self.function)
@@ -941,23 +1064,28 @@ class Function(Script):
             imppath = '.'
             impt = None
 
+        # Clobber ourselves to prevent pickling errors
         if impt and self.function.__module__ == '__main__':
             self.function.__module__ = impt
 
         # Try to set a sane import string to make the function work
         if impt:
-            #  modstr  = 'try:\n    import {}\n'.format(impt)
-            #  modstr += 'except ImportError:\n    pass\n'
-            modstr  = 'try:\n    from {} import {}\n'.format(
-                impt, self.function.__name__)
-            modstr += 'except ImportError:\n    pass\n'
+            modstr  = ('try:\n    from {} import {}\n'
+                       .format(impt, self.function.__name__) +
+                       'except ImportError:\n    pass\n')
+            modstr += ('try:\n    from {} import *\n'
+                       .format(impt) +
+                       'except ImportError:\n    pass')
         elif rootname != self.function.__name__ and rootname != '__main__':
-            modstr  = 'try:\n    from {} import {}\n'.format(
-                rootname, self.function.__name__)
-            modstr += 'except ImportError:\n    pass\n'
+            modstr  = ('try:\n    from {} import {}\n'
+                       .format(rootname, self.function.__name__) +
+                       'except ImportError:\n    pass\n')
+            modstr += ('try:\n    from {} import *\n'
+                       .format(rootname) +
+                       'except ImportError:\n    pass')
         else:
-            modstr  = 'try:\n    import {}\n'.format(self.function.__name__)
-            modstr += 'except ImportError:\n    pass\n'
+            modstr = ('try:\n    import {}\n'.format(self.function.__name__) +
+                      'except ImportError:\n    pass')
 
         # Take care of imports, either use manual or all current imports
         if imports:
@@ -965,48 +1093,73 @@ class Function(Script):
                 imports = [imports]
         else:
             imports = []
-            for module in globals().values():
-                if isinstance(module, ModuleType):
-                    imports.append(module.__name__)
-            imports = list(set(imports))
 
-        # Write a list of modules to ~/.python_module_list.txt
-        # This will work on standard linux systems only, and will silently fail
-        # on other systems.
-        ver = sys.version_info.major
-        run.cmd("pip{} freeze --local | ".format(ver) +
-                "grep -v '^\-e' | cut -d = -f 1 > " +
-                "~/.{}.module_list")
+        for name, module in {k:i for k,i in globals().items()
+                             if isinstance(i, ModuleType)}.items():
+            if name.startswith('_'):
+                continue
+            imports.append((name, module.__name__))
+
+        imports = list(set(imports))
+
         # Create a sane set of imports
+        ignore_list = ['os', 'sys', 'dill', 'pickle']
         filtered_imports = []
-        for imp in imports:
-            if imp.startswith('import') or imp.startswith('from'):
-                filtered_imports.append('try:\n    ' + imp.rstrip() +
-                                        'except ImportError:\n    pass')
-            else:
-                if '.' in imp:
-                    rootimp = imp.split('.')[0]
-                    if not rootimp == 'pickle' and not rootimp == 'sys' \
-                            and not rootimp == 'dill':
-                        filtered_imports.append('try:\n    import {}\n'
-                                                .format(rootimp) +
-                                                'except ImportError:\n    ' +
-                                                'pass\n')
-
-                if imp == 'pickle' or imp == 'sys' or imp == 'dill':
+        for imp in sorted(imports):
+            if imp in ignore_list:
+                continue
+            if isinstance(imp, tuple):
+                iname, name = imp
+                names = name.split('.')
+                if iname in ignore_list:
                     continue
-                filtered_imports.append(('try:\n    import {}\n'
-                                         'except ImportError:\n    pass\n')
-                                        .format(imp))
+                if iname != name:
+                    if len(names) > 1:
+                        if '.'.join(names[1:]) != iname:
+                            filtered_imports.append(
+                                ('try:\n    from {} import {} as {}\n'
+                                 'except ImportError:\n    pass\n')
+                                .format(names[0], '.'.join(names[1:]), iname)
+                            )
+                        else:
+                            filtered_imports.append(
+                                ('try:\n    from {} import {}\n'
+                                 'except ImportError:\n    pass\n')
+                                .format(names[0], '.'.join(names[1:]))
+                            )
+                    else:
+                        filtered_imports.append(
+                            ('try:\n    import {} as {}\n'
+                             'except ImportError:\n    pass\n')
+                            .format(name, iname)
+                        )
+                else:
+                    filtered_imports.append(('try:\n    import {}\n'
+                                             'except ImportError:\n    pass\n')
+                                            .format(name))
+                if names[0] not in ignore_list:
+                    filtered_imports.append(('try:\n    from {} import *\n'
+                                             'except ImportError:\n    pass\n')
+                                            .format(names[0]))
+
+            else:
+                if imp.startswith('import') or imp.startswith('from'):
+                    filtered_imports.append('try:\n    ' + imp.rstrip() +
+                                            'except ImportError:\n    pass')
+                else:
+                    filtered_imports.append(('try:\n    import {}\n'
+                                             'except ImportError:\n    pass\n')
+                                            .format(imp))
+
         # Get rid of duplicates and sort imports
-        impts = '\n'.join(sorted(set(filtered_imports)))
+        impts = '\n'.join(set(filtered_imports))
 
         # Set file names
         self.pickle_file = pickle_file if pickle_file else file_name + '.pickle.in'
         self.outfile     = outfile if outfile else file_name + '.pickle.out'
 
         # Create script text
-        script = '#!/usr/bin/env python{}\n'.format(ver)
+        script = '#!{}\n'.format(sys.executable)
         script += run.FUNC_RUNNER.format(name=file_name,
                                          path=imppath,
                                          modimpstr=modstr,
@@ -1018,16 +1171,25 @@ class Function(Script):
 
     def write(self, overwrite=True):
         """Write the pickle file and call the parent Script write function."""
+        logme.log('Writing pickle file {}'.format(self.pickle_file), 'debug')
         with open(self.pickle_file, 'wb') as fout:
             pickle.dump((self.function, self.args), fout)
         super(Function, self).write(overwrite)
 
-    def clean(self):
-        """Delete any files made by us."""
+    def clean(self, delete_output=False):
+        """Delete the input pickle file and any scripts.
+
+        Args:
+            delete_output (bool): Delete the output pickle file too.
+        """
         if self.written:
             if os.path.isfile(self.pickle_file):
+                logme.log('Function: Deleting {}'.format(self.pickle_file),
+                          'debug')
                 os.remove(self.pickle_file)
-            if os.path.isfile(self.outfile):
+            if delete_output and os.path.isfile(self.outfile):
+                logme.log('Function: Deleting {}'.format(self.outfile),
+                          'debug')
                 os.remove(self.outfile)
         super(Function, self).clean()
 
@@ -1278,6 +1440,7 @@ def clean_dir(directory='.', suffix='cluster', qtype=None, confirm=False):
              extensions matching those these::
                  .<suffix>.err
                  .<suffix>.out
+                 .<suffix>.out.func.pickle
                  .<suffix>.sbatch & .<suffix>.script for slurm mode
                  .<suffix>.qsub for torque mode
                  .<suffix> for local mode
@@ -1305,7 +1468,8 @@ def clean_dir(directory='.', suffix='cluster', qtype=None, confirm=False):
     extensions = ['.' + suffix + '.err', '.' + suffix + '.out',
                   '_func.' + suffix + '.py',
                   '_func.' + suffix + '.py.pickle.in',
-                  '_func.' + suffix + '.py.pickle.out']
+                  '_func.' + suffix + '.py.pickle.out',
+                  '.' + suffix + '.out.func.pickle']
 
     if qtype:
         if qtype == 'local':

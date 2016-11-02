@@ -1,6 +1,7 @@
 """Test remote queues, we can't test local queues in py.test."""
 import os
 import sys
+import argparse
 from datetime import datetime as dt
 from datetime import timedelta as td
 sys.path.append(os.path.abspath('.'))
@@ -77,7 +78,23 @@ def test_dir_clean():
     return 0
 
 
-if __name__ == "__main__":
+def main(argv=None):
+    """Get arguments and run tests."""
+    if not argv:
+        argv = sys.argv[1:]
+
+    parser  = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+
+    parser.add_argument('-v', '--verbose', action="store_true",
+                        help="Verbose")
+
+    args = parser.parse_args(argv)
+
+    if args.verbose:
+        fyrd.logme.MIN_LEVEL = 'debug'
+
     count = 0
     test_job_creation()
     test_job_execution()
@@ -88,3 +105,6 @@ if __name__ == "__main__":
         sys.stderr.write('Some tests failed')
         sys.exit(1)
     sys.stdout.write('Tests complete\n')
+
+if __name__ == '__main__' and '__file__' in globals():
+    sys.exit(main())
