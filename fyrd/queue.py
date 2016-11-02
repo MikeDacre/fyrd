@@ -1,7 +1,7 @@
 """
 Monitor the queue for torque or slurm.
 
-Last modified: 2016-11-01 00:11
+Last modified: 2016-11-01 22:23
 
 Provides a class to monitor the torque, slurm, or local jobqueue queues with
 identical syntax.
@@ -617,7 +617,8 @@ def slurm_queue_parser(user=None, partition=None):
             # Skip job steps, only index whole jobs
             if '.' in sinfo[0]:
                 logme.log('Skipping {} '.format(sinfo[0]) +
-                          "in sacct processing as it is a job part.", 'debug')
+                          "in sacct processing as it is a job part.",
+                          'verbose')
                 continue
             # These are the values I expect
             try:

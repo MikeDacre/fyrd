@@ -1,7 +1,7 @@
 """
 Logging with timestamps and optional log files.
 
-Last modified: 2016-11-01 22:03
+Last modified: 2016-11-01 22:33
 
 Print a timestamped message to a logfile, STDERR, or STDOUT.
 
@@ -183,7 +183,7 @@ def _logit(message, output, level, color=False, min_level=None):
     timestamp = "{0}.{1:<3}".format(now.strftime("%Y%m%d %H:%M:%S"),
                                     str(int(now.microsecond/1000)))
 
-    flag_map  = {1: 'DEBUG', 2: 'INFO', 3: 'WARNING', 4: 'ERROR',
+    flag_map  = {0: 'VERBOSE', 1: 'DEBUG', 2: 'INFO', 3: 'WARNING', 4: 'ERROR',
                  5: 'CRITICAL'}
 
     flag = flag_map[level]
@@ -197,12 +197,14 @@ def _logit(message, output, level, color=False, min_level=None):
         if level == 0:
             output.debug(message)
         if level == 1:
-            output.info(message)
+            output.debug(message)
         if level == 2:
-            output.warning(message)
+            output.info(message)
         if level == 3:
-            output.error(message)
+            output.warning(message)
         if level == 4:
+            output.error(message)
+        if level == 5:
             output.critical(message)
     else:
         # Check min_level before proceeding

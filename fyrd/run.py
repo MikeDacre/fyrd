@@ -1,7 +1,7 @@
 """
 File management and execution functions.
 
-Last modified: 2016-11-01 15:49
+Last modified: 2016-11-01 19:50
 """
 import os
 import re
@@ -41,12 +41,12 @@ SCRP_RUNNER_TRACK = """\
 mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
 if [ -f {script} ]; then
     cd {usedir}
-    date +'%d-%H:%M:%S'
+    date +'%y-%m-%d-%H:%M:%S'
     echo "Running {name}"
     {command}
     exitcode=$?
     echo Done
-    date +'%d-%H:%M:%S'
+    date +'%y-%m-%d-%H:%M:%S'
     if [[ $exitcode != 0 ]]; then
         echo Exited with code: $exitcode >&2
     fi
@@ -74,12 +74,12 @@ CMND_RUNNER_TRACK = """\
 {precmd}
 mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
 cd {usedir}
-date +'%d-%H:%M:%S'
+date +'%y-%m-%d-%H:%M:%S'
 echo "Running {name}"
 {command}
 exitcode=$?
 echo Done
-date +'%d-%H:%M:%S'
+date +'%y-%m-%d-%H:%M:%S'
 if [[ $exitcode != 0 ]]; then
     echo Exited with code: $exitcode >&2
 fi

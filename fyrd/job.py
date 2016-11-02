@@ -1,13 +1,14 @@
 """
 Class and methods to handle Job submission.
 
-Last modified: 2016-11-01 15:52
+Last modified: 2016-11-01 23:06
 """
 import os
 import sys
 import inspect
 from time import sleep
 from types import ModuleType
+from datetime import datetime as dt
 from subprocess import CalledProcessError
 
 # Try to use dill, revert to pickle if not found
@@ -64,6 +65,10 @@ class Job(object):
         stderr:   Any output to STDERR
         exitcode: The exitcode of the running processes (the script runner if
                   the Job is a function.
+        start:    A datetime object containing time execution started on the
+                  remote node.
+        end:      Like start but when execution ended.
+        runtime:  A timedelta object containing runtime.
 
     Printing the class will display detailed job information.
 
@@ -115,6 +120,11 @@ class Job(object):
     _stdout       = None
     _stderr       = None
     _exitcode     = None
+
+    # Time tracking
+    _got_times = False
+    start      = None
+    end        = None
 
     # Track update status
     _updating = False
@@ -528,6 +538,7 @@ class Job(object):
                 self.state = self.queue_info.state
                 if self.state == 'completed':
                     self.get_exitcode()
+                    self.get_times()
         self._updating = False
 
     def update_queue_info(self):
@@ -625,15 +636,20 @@ class Job(object):
         Returns:
             str: The contents of STDOUT, with runtime info and trailing
                  newline removed.
+
+        Also sets self.start and self.end from the contents of STDOUT if
+        possible.
         """
         if update and not self._updating and not self.done:
             self.update()
         if self.done and self._got_stdout:
             return self._stdout
         if os.path.isfile(self.kwargs['outfile']):
+            self.get_times(update=False)
             stdout = open(self.kwargs['outfile']).read()
             if stdout:
-                stdout = '\n'.join(stdout.split('\n')[2:-3]) + '\n'
+                stdouts = stdout.split('\n')
+                stdout     = '\n'.join(stdouts[2:-3]) + '\n'
             if delete_file:
                 os.remove(self.kwargs['outfile'])
             if save:
@@ -674,6 +690,46 @@ class Job(object):
         else:
             logme.log('No file at {}, cannot get stderr'
                       .format(self.kwargs['errfile']), 'warn')
+            return None
+
+    def get_times(self, update=True):
+        """Get stdout of function or script, same for both.
+
+        Args:
+            update (bool): Update job info from queue first.
+
+        Returns:
+            tuple: start, end as two datetime objects.
+
+        Also sets self.start and self.end from the contents of STDOUT if
+        possible.
+        """
+        if update and not self._updating and not self.done:
+            self.update()
+        if not self.done:
+            logme.log('Cannot get times until job is complete.', 'warn')
+            return None, None
+        if self._got_times:
+            return self.start, self.end
+        if os.path.isfile(self.kwargs['outfile']):
+            stdout = open(self.kwargs['outfile']).read()
+            if stdout:
+                stdouts = stdout.split('\n')
+                # Get times
+                timefmt    = '%y-%m-%d-%H:%M:%S'
+                try:
+                    self.start = dt.strptime(stdouts[0], timefmt)
+                    self.end   = dt.strptime(stdouts[-2], timefmt)
+                except ValueError as err:
+                    logme.log('Time parsing failed with value error; ' +
+                              '{}. '.format(err) + 'This may be because you ' +
+                              'are using the script running that does not ' +
+                              'include time tracking', 'debug')
+            self._got_times = True
+            return self.start, self.end
+        else:
+            logme.log('No file at {}, cannot get times'
+                      .format(self.kwargs['outfile']), 'warn')
             return None
 
     def get_exitcode(self, update=True):
@@ -765,6 +821,13 @@ class Job(object):
             return self.get_exitcode()
         elif key == 'err':
             return self.get_stderr()
+        elif key == 'runtime':
+            if not self.done:
+                logme.log('Cannot get runtime as not yet complete.' 'warn')
+                return None
+            if not self.start:
+                self.get_times()
+            return self.end-self.start
 
     def __repr__(self):
         """Return simple job information."""

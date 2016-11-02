@@ -1,6 +1,8 @@
 """Test remote queues, we can't test local queues in py.test."""
 import os
 import sys
+from datetime import datetime as dt
+from datetime import timedelta as td
 sys.path.append(os.path.abspath('.'))
 import fyrd
 
@@ -16,7 +18,7 @@ def test_job_creation():
     """Make a job and print it."""
     fyrd.queue.MODE = 'local'
     job = fyrd.Job('echo hi', cores=2, time='00:02:00', mem='2000',
-                      threads=4)
+                   threads=4)
     assert job.qtype == 'local'
     return job
 
@@ -30,6 +32,9 @@ def test_job_execution(autoclean=True):
     assert job.exitcode == 0
     assert out == 'hi\n'
     assert job.stderr == ''
+    assert isinstance(job.start, dt)
+    assert isinstance(job.end, dt)
+    assert isinstance(job.runtime, td)
     return job
 
 
@@ -55,7 +60,7 @@ def test_function_submission():
     assert job.stdout == '\n'
     if job.stderr != '':
         sys.stderr.write('STDERR should be empty, but contains:\n')
-        sys.stderr.write(stderr)
+        sys.stderr.write(job.stderr)
         failed = True
     with open('bobfile') as fin:
         assert fin.read().rstrip() == '42'
