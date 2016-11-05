@@ -2,7 +2,7 @@
 """
 Available options for job submission.
 
-Last modified: 2016-11-04 18:43
+Last modified: 2016-11-05 10:26
 
 All keyword arguments that can be used with Job() objects are defined in this
 file. These can be editted by the end user to increase functionality.
@@ -241,7 +241,7 @@ def split_keywords(kwargs):
             good.update(check_arguments({key: val}))
         except OptionsError:
             bad.update({key: val})
-    return good, bad
+    return check_arguments(good), bad
 
 
 def check_arguments(kwargs):
@@ -340,6 +340,7 @@ def check_arguments(kwargs):
                 # Don't allow 0, minimum memory req is 5MB
                 if opt < 5:
                     opt = 5
+            new_kwds[arg] = opt
 
     return new_kwds
 
