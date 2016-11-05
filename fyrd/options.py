@@ -2,7 +2,7 @@
 """
 Available options for job submission.
 
-Last modified: 2016-11-04 14:33
+Last modified: 2016-11-04 18:43
 
 All keyword arguments that can be used with Job() objects are defined in this
 file. These can be editted by the end user to increase functionality.
@@ -220,6 +220,28 @@ class OptionsError(ClusterError):
 ###############################################################################
 #                          Option Handling Functions                          #
 ###############################################################################
+
+
+def split_keywords(kwargs):
+    """Split a dictionary of keyword arguments into two dictionaries.
+
+    The first dictionary will contain valid arguments for fyrd, the second will
+    contain all others.
+
+    Returns:
+        tuple: (dict, dict) —  valid args for fyrd, other args
+    """
+    if not isinstance(kwargs, dict):
+        raise ValueError('Invalid argument. Should be a dictionary, is {}'
+                         .format(type(kwargs)))
+    good = {}
+    bad  = {}
+    for key, val in kwargs.items():
+        try:
+            good.update(check_arguments({key: val}))
+        except OptionsError:
+            bad.update({key: val})
+    return good, bad
 
 
 def check_arguments(kwargs):

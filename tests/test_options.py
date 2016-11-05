@@ -71,6 +71,15 @@ def test_sane_keywords():
     # Should succeed
     fyrd.options.check_arguments({'nodes': '14'})
 
+
+def test_split():
+    """Run with good and bad arguments, expect split."""
+    good, bad = fyrd.options.split_keywords(
+        {'cores': 2, 'memory': '4GB', 'bob': 'dylan'}
+    )
+    assert good == {'cores': 2, 'mem': 4000}
+    assert bad == {'bob': 'dylan'}
+
 def test_string_formatting():
     """Test options_to_string."""
     fyrd.queue.MODE = 'torque'
