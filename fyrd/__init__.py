@@ -8,7 +8,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
         LICENSE: MIT License, property of Stanford, use as you wish
         VERSION: 0.6.1-beta.5
         CREATED: 2015-12-11 22:19
-  Last modified: 2016-11-04 14:38
+  Last modified: 2016-11-04 18:13
  =============== ===================================================
 
 Allows simple job submission with *dependency tracking and queue waiting* with
@@ -120,7 +120,7 @@ Dependecy Tracking
 
 Dependency tracking is supported in all modes. Local mode uses a unique
 queueing system that works similarly to torque and slurm and which is defined
-in jobqueue.py.
+in local.py.
 
 To use dependency tracking in any mode pass a list of job ids to submit or
 submit_file with the `dependencies` keyword argument.
@@ -167,7 +167,7 @@ class ClusterError(Exception):
 #  Make our functions easily available  #
 #########################################
 
-from . import jobqueue
+from . import local
 from . import queue
 from . import job
 from .run import check_pid as _check_pid
@@ -178,11 +178,11 @@ from .queue import check_queue
 from .queue import get_cluster_environment
 
 from .job import Job
-from .job import submit
-from .job import submit_file
-from .job import make_job_file
-from .job import clean
-from .job import clean_dir
+from .basic import submit
+from .basic import submit_file
+from .basic import make_job_file
+from .basic import clean
+from .basic import clean_dir
 
 from .conf import set_profile
 from .conf import get_profile
@@ -204,9 +204,9 @@ check_queue()
 ###############################
 #  Kill the JobQueue on exit  #
 ###############################
-#  def _kill_jobqueue():
-    #  if jobqueue.JQUEUE and _check_pid(jobqueue.JQUEUE.pid):
-        #  jobqueue.JQUEUE.terminate()
-    #  #  del(jobqueue.JQUEUE)
+#  def _kill_local():
+    #  if local.JQUEUE and _check_pid(local.JQUEUE.pid):
+        #  local.JQUEUE.terminate()
+    #  #  del(local.JQUEUE)
 
-#  _atexit.register(_kill_jobqueue)
+#  _atexit.register(_kill_local)

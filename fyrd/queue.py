@@ -1,11 +1,11 @@
-# -*- coding: utf-8 -*-
+#job -*- coding: utf-8 -*-
 """
 Monitor the queue for torque or slurm.
 
-Last modified: 2016-11-04 14:38
+Last modified: 2016-11-04 18:14
 
-Provides a class to monitor the torque, slurm, or local jobqueue queues with
-identical syntax.
+Provides a class to monitor the torque, slurm, or local queues with identical
+syntax.
 
 At its simplest, you can use it like::
 
@@ -57,7 +57,7 @@ from . import ALLOWED_MODES
 #  The multiprocessing pool, only used in 'local' mode  #
 #########################################################
 
-from . import jobqueue
+from . import local
 
 # Funtions to import if requested
 __all__ = ['Queue', 'wait', 'check_queue', 'get_cluster_environment']
@@ -117,7 +117,7 @@ class Queue(object):
 
         # Support python2, which hates reciprocal import
         from .job import Job
-        from .jobqueue import Job as QJob
+        from .local import Job as QJob
         self._Job      = Job
         self._JobQueue = QJob
 
@@ -183,11 +183,11 @@ class Queue(object):
                     job = int(job)
                 except TypeError:
                     raise TypeError('Job must be a Job object or job #.')
-                if not jobqueue.JQUEUE \
-                        or not jobqueue.JQUEUE.runner.is_alive():
+                if not local.JQUEUE \
+                        or not local.JQUEUE.runner.is_alive():
                     raise ClusterError('Cannot wait on job ' + str(job) +
                                        'JobQueue does not exist')
-                jobqueue.JQUEUE.wait(job)
+                local.JQUEUE.wait(job)
             else:
                 if isinstance(job, self._Job):
                     job = job.id
@@ -287,9 +287,9 @@ class Queue(object):
 
         # Mode specific initialization
         if self.qtype == 'local':
-            if not jobqueue.JQUEUE or not jobqueue.JQUEUE.runner.is_alive():
-                jobqueue.JQUEUE = jobqueue.JobQueue(cores=jobqueue.THREADS)
-            for job_id, job_info in jobqueue.JQUEUE:
+            if not local.JQUEUE or not local.JQUEUE.runner.is_alive():
+                local.JQUEUE = local.JobQueue(cores=local.THREADS)
+            for job_id, job_info in local.JQUEUE:
                 if job_id in self.jobs:
                     job = self.jobs[job_id]
                 else:
@@ -776,7 +776,7 @@ def wait(jobs):
     """
     # Support python2, which hates reciprocal import for 80's reasons
     from .job import Job
-    from .jobqueue import JobQueue
+    from .local import JobQueue
 
     check_queue()  # Make sure the MODE is usable
 
@@ -794,10 +794,10 @@ def wait(jobs):
                 job = int(job)
             except TypeError:
                 raise TypeError('Job must be a Job object or job #.')
-            if not jobqueue.JQUEUE or not jobqueue.JQUEUE.runner.is_alive():
+            if not local.JQUEUE or not local.JQUEUE.runner.is_alive():
                 raise ClusterError('Cannot wait on job ' + str(job) +
                                    'JobQueue does not exist')
-            jobqueue.JQUEUE.wait(job)
+            local.JQUEUE.wait(job)
 
     elif MODE == 'torque':
         # Wait for 5 seconds before checking, as jobs take a while to be queued

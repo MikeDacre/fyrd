@@ -2,10 +2,11 @@
 """
 File management and execution functions.
 
-Last modified: 2016-11-04 13:10
+Last modified: 2016-11-04 17:20
 """
 import os
 import re
+import sys
 import bz2
 import gzip
 import argparse
@@ -426,3 +427,47 @@ def check_pid(pid):
         return False
     else:
         return True
+
+
+def get_input(message, valid_answers=None):
+    """Get input from the command line and check answers.
+
+    Allows input to work with python 2/3
+
+    Args:
+        message (str):        A message to print, an additional space will be
+                              added.
+        valid_answers (list): A list of answers to accept, if None, ignored.
+                              Case insensitive.
+
+    Returns:
+        str: The response
+    """
+    if valid_answers:
+        if isinstance(valid_answers, str):
+            valid_answers = [valid_answers]
+        if not isinstance(valid_answers, (list, tuple, set, frozenset)):
+            logme.log('valid_answers must be a list, is {}'
+                      .format(type(valid_answers)), 'critical')
+            raise ValueError('Invalid argument')
+        valid_answers = [i.lower() for i in valid_answers]
+        while True:
+            ans = _get_input(message)
+            if ans.lower() in valid_answers:
+                return ans
+            else:
+                logme.log('Invalid response to input question', 'debug')
+                sys.stderr.write('Invalid response: {}\n'.format(ans) +
+                                 'Valid responses: {}\n'
+                                 .format(valid_answers) +
+                                 'Please try again.\n')
+    else:
+        return _get_input(message)
+
+
+def _get_input(message):
+    """Run either input or raw input depending on python version."""
+    if sys.version_info.major == 2:
+        return raw_input(message)
+    else:
+        return input(message)

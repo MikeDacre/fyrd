@@ -87,4 +87,4 @@ def test_function_submission():
 
 def test_dir_clean():
     """Clean all job files in this dir."""
-    fyrd.job.clean_dir(delete_outputs=True)
+    fyrd.basic.clean_dir(delete_outputs=True)

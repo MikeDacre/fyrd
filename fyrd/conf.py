@@ -2,7 +2,7 @@
 """
 Get and set config file options.
 
-Last modified: 2016-11-04 16:44
+Last modified: 2016-11-04 17:26
 
 The functions defined here provide an easy way to access the config file
 defined by CONFIG_FILE (default ~/.fyrd/config.txt) and the config.get('jobs',
@@ -25,13 +25,9 @@ try:
 except ImportError:
     import ConfigParser as _configparser
 
+from . import run
 from . import logme
 from . import options
-
-try:
-    get_input = raw_input
-except NameError:
-    get_input = input
 
 
 ###############################################################################
@@ -62,7 +58,7 @@ DEFAULTS['queue'] = {'max_jobs':     1000,
                      'queue_update': 2,
                      # Not implemented yet
                      #  'db':           os.path.join(CONFIG_PATH, 'db.sql'),
-                     }
+                    }
 """
 Define options for queue handling:
     max_jobs (int):     sets the maximum number of running jobs before
@@ -318,7 +314,7 @@ def create_config_interactive():
     print("Do you want to initialize your config at {}"
           .format(CONFIG_FILE))
     print("This will erase your current configuration (if it exists)")
-    choice = get_input("Initialize config? [y/N] ").strip().lower()
+    choice = run.get_input("Initialize config? [y/N] ").strip().lower()
     if not choice == 'y':
         return
 
@@ -332,7 +328,7 @@ def create_config_interactive():
           "be somewhere with sufficient disk space (>500MB free).")
     print("Where would you like to put the db file?\n")
     file_path = os.path.expanduser(
-        get_input('PATH: [{}] '.format(config.get('queue', 'db')))
+        run.get_input('PATH: [{}] '.format(config.get('queue', 'db')))
     ).strip(' ').lower()
 
     file_path = file_path if file_path else cnf['queue']['db']
@@ -340,8 +336,8 @@ def create_config_interactive():
 
     print("We also store job profile information in a small config file.")
     file_path = os.path.expanduser(
-        get_input('Where would you like that file to go? [{}]'
-                  .format(config.get('jobs', 'profile_file')))
+        run.get_input('Where would you like that file to go? [{}]'
+                      .format(config.get('jobs', 'profile_file')))
     ).strip(' ').lower()
 
     file_path = file_path if file_path else cnf['jobs']['profile_file']
@@ -354,14 +350,14 @@ def create_config_interactive():
           'results have been retrieved.\n'
           'This option can be overridden at run time on a per-job basis.\n'
           'Do you want to autoclean:\n')
-    clean_files = get_input('Autoclean script files? [Y/n] ')
+    clean_files = run.get_input('Autoclean script files? [Y/n] ')
     if not clean_files:
         clean_files = cnf['jobs']['clean_files']
     else:
         clean_files = True if clean_files.lower() != 'n' else False
     cnf['jobs']['clean_files'] = clean_files
 
-    clean_outs = get_input(
+    clean_outs = run.get_input(
         'Autoclean output files (e.g. .out and .err)? [y/N] '
     )
     if not clean_outs:
@@ -373,8 +369,8 @@ def create_config_interactive():
     # Wait times
     t.createListCompleter(cnf['queue'].values())
     readline.set_completer(t.list_completer)
-    max_len = get_input("\nWhat is the maximum number of jobs allowed in your " +
-                        "queue? [{}] ".format(cnf['queue']['max_jobs']))
+    max_len = run.get_input("\nWhat is the maximum number of jobs allowed in your " +
+                            "queue? [{}] ".format(cnf['queue']['max_jobs']))
     max_len = max_len if max_len else cnf['queue']['max_jobs']
     cnf['queue']['max_jobs'] = int(max_len)
 
@@ -382,7 +378,7 @@ def create_config_interactive():
     print('\nIs there a default queue you wish to submit to if no other',
           'options are given?\nIf so enter the name below, or leave blank',
           'to ignore.\n')
-    def_queue = get_input('Default queue: ')
+    def_queue = run.get_input('Default queue: ')
     if def_queue:
         cnf['opts']['partition'] = def_queue
 
