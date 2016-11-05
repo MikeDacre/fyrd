@@ -1,7 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 Available options for job submission.
 
-Last modified: 2016-10-30 18:14
+Last modified: 2016-11-04 14:33
 
 All keyword arguments that can be used with Job() objects are defined in this
 file. These can be editted by the end user to increase functionality.
@@ -46,6 +47,12 @@ COMMON  = OrderedDict([
     ('depends',
      {'help': 'A job or list of jobs to depend on',
       'default': None, 'type': list}),
+    ('clean_files',
+     {'help': 'Auto clean script files when fetching outputs',
+      'default': None, 'type': bool}),
+    ('clean_outputs',
+     {'help': 'Auto clean output files when fetching outputs',
+      'default': None, 'type': bool}),
     ('cores',
      {'help': 'Number of cores to use for the job',
       'default': 1, 'type': int}),

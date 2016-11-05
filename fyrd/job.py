@@ -1,7 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 Class and methods to handle Job submission.
 
-Last modified: 2016-11-02 13:55
+Last modified: 2016-11-04 15:38
 """
 import os
 import sys
@@ -28,7 +29,7 @@ from . import run
 from . import logme
 from . import queue
 from . import options
-from . import config_file
+from . import conf
 from . import ClusterError
 
 ##########################################################
@@ -135,8 +136,12 @@ class Job(object):
     # Track update status
     _updating     = False
 
+    # Autocleaning
+    clean_files   = conf.get_option('jobs', 'clean_files')
+    clean_outputs = conf.get_option('jobs', 'clean_outputs')
+
     def __init__(self, command, args=None, name=None, path=None,
-                 qtype=None, profile=None, auto_delete=False, **kwds):
+                 qtype=None, profile=None, **kwds):
         """Create a job object will submission information.
 
         Args:
@@ -152,10 +157,7 @@ class Job(object):
                                     current dir used.
             qtype (str):            Override the default queue type
             profile (str):          The name of a profile saved in the
-                                    config_file
-            auto_delete (bool):     Delete all output files on `get()`.
-                                    Default: False (scripts cleaned, outputs
-                                    kept)
+                                    conf
             kwargs (dict):          Keyword arguments to control job options
 
         There are many keyword arguments available for cluster job submission.
@@ -167,12 +169,15 @@ class Job(object):
         #  Sanitize arguments  #
         ########################
 
-        # Register auto_delete
-        self.auto_delete = auto_delete
-
         # Make a copy of the keyword arguments, as we will delete arguments
         # as we go
         kwargs = options.check_arguments(kwds.copy())
+
+        # Override autoclean state (set in config file)
+        if 'clean_files' in kwargs:
+            self.clean_files = kwargs.pop('clean_files')
+        if 'clean_outputs' in kwargs:
+            self.clean_outputs = kwargs.pop('clean_outputs')
 
         # Save command
         self.command = command
@@ -181,7 +186,7 @@ class Job(object):
         # Merge in profile
         if profile:
             # This is a Profile() object, the arguments are in the args dict
-            prof = config_file.get_profile(profile)
+            prof = conf.get_profile(profile)
             if prof:
                 for k,v in prof.args.items():
                     if k not in kwargs:
@@ -190,12 +195,12 @@ class Job(object):
                 logme.log('No profile found for {}'.format(profile), 'warn')
 
         # If no profile or keywords, use default profile, args is a dict
-        default_args = config_file.get_profile('default').args
+        default_args = conf.get_profile('default').args
         if not profile and not kwargs:
             kwargs = default_args
 
         # Get required options
-        req_options = config_file.get_option('opts')
+        req_options = conf.get_option('opts')
         if req_options:
             for k,v in req_options.items():
                 if k not in kwargs:
@@ -264,7 +269,8 @@ class Job(object):
         self.cores = kwargs['cores']
 
         # Set output files
-        suffix = kwargs.pop('suffix') if 'suffix' in kwargs else 'cluster'
+        suffix = kwargs.pop('suffix') if 'suffix' in kwargs \
+                 else conf.get_option('jobs', 'suffix')
         if 'outfile' not in kwargs:
             kwargs['outfile'] = os.path.join(filedir,
                                              '.'.join([name, suffix, 'out']))
@@ -400,7 +406,7 @@ class Job(object):
             self.function.write(overwrite)
         self.written = True
 
-    def clean(self, delete_outputs=False, get_outputs=True):
+    def clean(self, delete_outputs=None, get_outputs=True):
         """Delete all scripts created by this module, if they were written.
 
         Args:
@@ -411,6 +417,9 @@ class Job(object):
         """
         logme.log('Cleaning outputs, delete_outputs={}'.format(delete_outputs),
                   'debug')
+        if delete_outputs is None:
+            delete_outputs = self.clean_outputs
+        assert isinstance(delete_outputs, bool)
         for jobfile in [self.submission, self.exec_script, self.function]:
             if jobfile:
                 jobfile.clean()
@@ -616,14 +625,17 @@ class Job(object):
         self.wait()
         # Get output
         self.fetch_outputs(save=save, delete_files=False)
-        out = self.out if save else self.get_output()
+        out = self.out if save else self.get_output(save=save)
         # Cleanup
-        delfiles = delete_outfiles if save else del_no_save
+        if delete_outfiles is None:
+            delete_outfiles = self.clean_outputs
+        if save is False and del_no_save is not None:
+            delete_outfiles = del_no_save
         if cleanup:
-            self.clean(delete_outputs=delfiles)
+            self.clean(delete_outputs=delete_outfiles)
         return out
 
-    def get_output(self, save=True, delete_file=False, update=True):
+    def get_output(self, save=True, delete_file=None, update=True):
         """Get output of function or script.
 
         This is the same as stdout for a script, or the function output for
@@ -636,8 +648,7 @@ class Job(object):
             save (bool):        Save the output to self.out, default True.
                                 Would be a good idea to set to False if the
                                 output is huge.
-            delete_file (bool): Delete the output file when getting, default
-                                True.
+            delete_file (bool): Delete the output file when getting
             update (bool):      Update job info from queue first.
 
         Returns:
@@ -647,8 +658,11 @@ class Job(object):
                    'delete_file={}').format(
                        save, self.auto_delete, delete_file
                    ), 'debug')
+        if delete_file is None:
+            delete_file = self.clean_outputs
         if self.kind == 'script':
-            return self.get_stdout(save=save, delete_file=delete_file)
+            return self.get_stdout(save=save, delete_file=delete_file,
+                                   update=update)
         if self.done and self._got_out:
             logme.log('Getting output from _out', 'debug')
             return self._out
@@ -675,7 +689,7 @@ class Job(object):
                       .format(self.poutfile), 'warn')
             return None
 
-    def get_stdout(self, save=True, delete_file=False, update=True):
+    def get_stdout(self, save=True, delete_file=None, update=True):
         """Get stdout of function or script, same for both.
 
         By default, output file is kept unless delete_file is True or
@@ -685,8 +699,7 @@ class Job(object):
             save (bool):        Save the output to self.stdout, default True.
                                 Would be a good idea to set to False if the
                                 output is huge.
-            delete_file (bool): Delete the stdout file when getting, default
-                                True.
+            delete_file (bool): Delete the stdout file when getting
             update (bool):      Update job info from queue first.
 
         Returns:
@@ -700,6 +713,8 @@ class Job(object):
                    'delete_file={}').format(
                        save, self.auto_delete, delete_file
                    ), 'debug')
+        if delete_file is None:
+            delete_file = self.clean_outputs
         if self.done and self._got_stdout:
             logme.log('Getting stdout from _stdout', 'debug')
             return self._stdout
@@ -730,7 +745,7 @@ class Job(object):
                       .format(self.kwargs['outfile']), 'warn')
             return None
 
-    def get_stderr(self, save=True, delete_file=False, update=True):
+    def get_stderr(self, save=True, delete_file=None, update=True):
         """Get stderr of function or script, same for both.
 
         By default, output file is kept unless delete_file is True or
@@ -740,8 +755,7 @@ class Job(object):
             save (bool):        Save the output to self.stdout, default True.
                                 Would be a good idea to set to False if the
                                 output is huge.
-            delete_file (bool): Delete the stdout file when getting, default
-                                True.
+            delete_file (bool): Delete the stdout file when getting
             update (bool):      Update job info from queue first.
 
         Returns:
@@ -751,6 +765,8 @@ class Job(object):
                    'delete_file={}').format(
                        save, self.auto_delete, delete_file
                    ), 'debug')
+        if delete_file is None:
+            delete_file = self.clean_outputs
         if self.done and self._got_stderr:
             logme.log('Getting stderr from _stderr', 'debug')
             return self._stderr
@@ -860,26 +876,22 @@ class Job(object):
 
         Args:
             save (bool):         Save all outputs to the class also (advised)
-            delete_files (bool): Delete the stdout file when getting, default
-                                 False.
+            delete_files (bool): Delete the output files when getting, only
+                                 used if save is True
         """
         logme.log('Saving outputs to self, delete_files={}'
                   .format(delete_files), 'debug')
         self.update()
+        if delete_files is None:
+            delete_files = self.clean_outputs
         if not self._got_exitcode:
             self.get_exitcode(update=False)
         if not self._got_times:
             self.get_times(update=False)
-        if delete_files is not None:
-            delfiles = delete_files
-        elif self.auto_delete is not None:
-            delfiles = self.auto_delete
-        else:
-            delfiles = False
         if save:
-            self.get_output(save=True, delete_file=delfiles, update=False)
-            self.get_stdout(save=True, delete_file=delfiles, update=False)
-            self.get_stderr(save=True, delete_file=delfiles, update=False)
+            self.get_output(save=True, delete_file=delete_files, update=False)
+            self.get_stdout(save=True, delete_file=delete_files, update=False)
+            self.get_stderr(save=True, delete_file=delete_files, update=False)
 
     @property
     def files(self):
@@ -1210,7 +1222,7 @@ def submit(command, args=None, name=None, path=None, qtype=None,
         name:      The name of the job.
         path:      Where to create the script, if None, current dir used.
         qtype:     'torque', 'slurm', or 'normal'
-        profile:   The name of a profile saved in the config_file
+        profile:   The name of a profile saved in the conf
         kwargs:    Keyword arguments to control job options
 
     There are many keyword arguments available for cluster job submission.
@@ -1252,7 +1264,7 @@ def make_job(command, args=None, name=None, path=None, qtype=None,
         name:      The name of the job.
         path:      Where to create the script, if None, current dir used.
         qtype:     'torque', 'slurm', or 'normal'
-        profile:   The name of a profile saved in the config_file
+        profile:   The name of a profile saved in the conf
 
     There are many keyword arguments available for cluster job submission.
     These vary somewhat by queue type. For info run::
@@ -1285,7 +1297,7 @@ def make_job_file(command, args=None, name=None, path=None, qtype=None,
         name:      The name of the job.
         path:      Where to create the script, if None, current dir used.
         qtype:     'torque', 'slurm', or 'normal'
-        profile:   The name of a profile saved in the config_file
+        profile:   The name of a profile saved in the profiles file.
         kwargs:    Keyword arguments to control job options
 
     There are many keyword arguments available for cluster job submission.
@@ -1433,7 +1445,8 @@ def submit_file(script_file, dependencies=None, threads=None, qtype=None):
         return jobqueue.JQUEUE.add(run.cmd, (command,), dependencies=depends)
 
 
-def clean_dir(directory='.', suffix='cluster', qtype=None, confirm=False):
+def clean_dir(directory='.', suffix=None, qtype=None, confirm=False,
+              delete_outputs=False):
     """Delete all files made by this module in directory.
 
     CAUTION: The clean() function will delete **EVERY** file with
@@ -1449,9 +1462,12 @@ def clean_dir(directory='.', suffix='cluster', qtype=None, confirm=False):
                  _func.<suffix>.py.pickle.out
 
     Args:
-        directory: The directory to run in, defaults to the current directory.
-        qtype:     Only run on files of this qtype
-        confirm:   Ask the user before deleting the files
+        directory (str):       The directory to run in, defaults to the current
+                               directory.
+        suffix (str):          Override the default suffix.
+        qtype (str):           Only run on files of this qtype
+        confirm (bool):        Ask the user before deleting the files
+        delete_outputs (bool): Delete all output files too.
 
     Returns:
         A set of deleted files
@@ -1462,7 +1478,7 @@ def clean_dir(directory='.', suffix='cluster', qtype=None, confirm=False):
     if not directory:
         directory = '.'
     if not suffix:
-        suffix = 'cluster'
+        suffix = conf.get_option('jobs', 'suffix')
 
     # Extension patterns to delete
     extensions = ['.' + suffix + '.err', '.' + suffix + '.out',

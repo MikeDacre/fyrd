@@ -7,6 +7,7 @@ from datetime import timedelta as td
 sys.path.append(os.path.abspath('.'))
 import fyrd
 
+fyrd.logme.MIN_LEVEL = 'info'
 
 def write_to_file(string, file):
     """Write a string to a file."""
@@ -19,32 +20,47 @@ def test_job_creation():
     """Make a job and print it."""
     fyrd.queue.MODE = 'local'
     job = fyrd.Job('echo hi', cores=2, time='00:02:00', mem='2000',
-                   threads=4)
+                   threads=4, clean_files=False, clean_outputs=False)
     assert job.qtype == 'local'
-    return job
+    return 0
 
 
-def test_job_execution(autoclean=True):
-    """Run a job"""
+def test_job_execution():
+    """Run a job and autoclean."""
     fyrd.queue.MODE = 'local'
-    job = test_job_creation()
-    job.submit()
-    out = job.get(autoclean)
+    job = fyrd.Job('echo hi', profile='default', clean_files=True,
+                   clean_outputs=True).submit()
+    job.wait()
+    assert os.path.isfile(job.outfile)
+    assert os.path.isfile(job.errfile)
+    assert os.path.isfile(job.submission.file_name)
+    out = job.get()
+    assert not os.path.isfile(job.outfile)
+    assert not os.path.isfile(job.errfile)
+    assert not os.path.isfile(job.submission.file_name)
     assert job.exitcode == 0
     assert out == 'hi\n'
+    assert job.stdout == 'hi\n'
     assert job.stderr == ''
     assert isinstance(job.start, dt)
     assert isinstance(job.end, dt)
     assert isinstance(job.runtime, td)
-    return job
+    return 0
 
 
 def test_job_cleaning():
-    """Delete intermediate files."""
+    """Delete intermediate files without autoclean."""
     fyrd.queue.MODE = 'local'
-    job = test_job_execution(False)
-    job.clean()
-    assert 'echo.cluster' not in os.listdir('.')
+    job = fyrd.Job('echo hi', profile='default', clean_files=False,
+                   clean_outputs=False).submit()
+    job.wait()
+    assert os.path.isfile(job.outfile)
+    assert os.path.isfile(job.errfile)
+    assert os.path.isfile(job.submission.file_name)
+    job.clean(delete_outputs=True)
+    assert not os.path.isfile(job.outfile)
+    assert not os.path.isfile(job.errfile)
+    assert not os.path.isfile(job.submission.file_name)
     return 0
 
 
@@ -66,7 +82,7 @@ def test_function_submission():
     with open('bobfile') as fin:
         assert fin.read().rstrip() == '42'
     os.remove('bobfile')
-    job.clean()
+    job.clean(delete_outputs=True)
     if failed:
         return 1
     return 0
@@ -74,7 +90,7 @@ def test_function_submission():
 
 def test_dir_clean():
     """Clean all job files in this dir."""
-    fyrd.job.clean_dir()
+    fyrd.job.clean_dir(delete_outputs=True)
     return 0
 
 

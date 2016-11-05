@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Submit jobs to slurm or torque, or with multiprocessing.
 
@@ -7,7 +8,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
         LICENSE: MIT License, property of Stanford, use as you wish
         VERSION: 0.6.1-beta.5
         CREATED: 2015-12-11 22:19
-  Last modified: 2016-11-01 16:06
+  Last modified: 2016-11-04 14:38
  =============== ===================================================
 
 Allows simple job submission with *dependency tracking and queue waiting* with
@@ -72,28 +73,28 @@ the options.py file that can be used for all submission and Job() functions.
 These include things like 'cores' and 'nodes' and 'mem'. To avoid having to set
 these every time, the module sets a config file at ~/.fyrd that
 defines profiles. These can be edited directly in that file or through the
-config_file methods.
+conf methods.
 
 For example::
 
-    config_file.set_profile('small', {'nodes': 1, 'cores': 1,
+    conf.set_profile('small', {'nodes': 1, 'cores': 1,
                                       'mem': '2GB'})
 
 To see all profiles run::
 
-    config_file.get_profile()
+    conf.get_profile()
 
 Other options are defined in the config file, including the maximum number of
 jobs in the queue, the time to sleep between submissions, and other options. To
 see these run::
 
-    config_file.get_option()
+    conf.get_option()
 
 You can set options with::
 
-    config_file.set_option()
+    conf.set_option()
 
-Feel free to alter the defaults in config_file.py and options.py, they are
+Feel free to alter the defaults in conf.py and options.py, they are
 clearly documented.
 
 Job Files
@@ -162,13 +163,6 @@ class ClusterError(Exception):
 
     pass
 
-##########################
-#  Config File Defaults  #
-##########################
-
-from .config_file import get_config
-DEFAULTS = get_config()
-
 #########################################
 #  Make our functions easily available  #
 #########################################
@@ -190,14 +184,14 @@ from .job import make_job_file
 from .job import clean
 from .job import clean_dir
 
-from .config_file import set_profile
-from .config_file import get_profile
+from .conf import set_profile
+from .conf import get_profile
 
 from .options import option_help
 
 __all__ = ['Job', 'Queue', 'wait', 'submit', 'submit_file', 'make_job_file',
            'clean', 'clean_dir', 'check_queue', 'option_help', 'set_profile',
-           'get_profile', 'config_file']
+           'get_profile', 'conf']
 
 ##########################
 #  Set the cluster type  #

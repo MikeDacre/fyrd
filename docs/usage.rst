@@ -418,20 +418,20 @@ It defines several easy methods to manage both profiles and global options, see
 the scripts section above for information.
 
 
-Alternatively, the functions ``cluster.config_file.set_profile()`` and
-``cluster.config_file.get_profile()`` can be used:
+Alternatively, the functions ``cluster.conf.set_profile()`` and
+``cluster.conf.get_profile()`` can be used:
 
 .. code:: python
 
-  cluster.config_file.set_profile('small', {'nodes': 1, 'cores': 1,
+  cluster.conf.set_profile('small', {'nodes': 1, 'cores': 1,
                                             'mem': '2GB'})
-  cluster.config_file.get_profile('small')
+  cluster.conf.get_profile('small')
 
 To see all profiles run:
 
 .. code:: python
 
-  config_file.get_profile()
+  conf.get_profile()
 
 Other options are defined in the config file, including the maximum number of
 jobs in the queue, the time to sleep between submissions, and other options. To
@@ -439,15 +439,15 @@ see these run:
 
 .. code:: python
 
-  cluster.config_file.get_option()
+  cluster.conf.get_option()
 
 You can set options with:
 
 .. code:: python
 
-  cluster.config_file.set_option()
+  cluster.conf.set_option()
 
-The defaults can be directly edited in ``config_file.py``, they are clearly
+The defaults can be directly edited in ``conf.py``, they are clearly
 documented.
 
 Job Files

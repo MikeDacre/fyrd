@@ -1,7 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 Monitor the queue for torque or slurm.
 
-Last modified: 2016-11-02 12:05
+Last modified: 2016-11-04 14:38
 
 Provides a class to monitor the torque, slurm, or local jobqueue queues with
 identical syntax.
@@ -43,7 +44,7 @@ import xml.etree.ElementTree as ET
 
 from . import run
 from . import logme
-from . import config_file
+from . import conf
 from . import ClusterError
 
 #########################
@@ -57,13 +58,12 @@ from . import ALLOWED_MODES
 #########################################################
 
 from . import jobqueue
-from . import DEFAULTS
 
 # Funtions to import if requested
 __all__ = ['Queue', 'wait', 'check_queue', 'get_cluster_environment']
 
 # We only need the queue defaults
-_defaults = DEFAULTS['queue']
+_defaults = conf.get_option('queue')
 
 # This is set in the get_cluster_environment() function.
 MODE = ''
@@ -229,7 +229,7 @@ class Queue(object):
         If max_queue_len is None, default from config is used.
         """
         qlen = max_queue_len if max_queue_len else \
-            config_file.get_option('queue', 'max_jobs', 3000)
+            conf.get_option('queue', 'max_jobs', 3000)
         qlen = int(qlen)
         assert qlen > 0
         self.update()
@@ -240,7 +240,7 @@ class Queue(object):
 
         If max_queue_len is None, default from config is used.
         """
-        sleep_len = config_file.get_option('queue', 'sleep_len', 5)
+        sleep_len = conf.get_option('queue', 'sleep_len', 5)
         count   = 50
         written = False
         while True:

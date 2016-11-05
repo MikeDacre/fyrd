@@ -122,13 +122,13 @@ Config File
 -----------
 
 Profiles are combinations of keyword arguments that can be called in any of the
-submission functions. They are handled in the `config_file.py` file which just
+submission functions. They are handled in the `conf.py` file which just
 adds an abstraction layer on top of the builtin python ConfigParser script.
 
 The config file also contains other options that can be managed with the `get_option()`
 and `set_option()` functions. Profiles are wrapped in a `Profile()` class to make
 attribute access easy, but they are fundamentally just dictionaries of keyword
-arguments. They can be created with `cluster.config_file.Profile({kewywds})` and
+arguments. They can be created with `cluster.conf.Profile({kewywds})` and
 then written to a file with that class' `write()` method. The easiest way to
 interact with profiles is with the `get_profile()` and `set_profile()`
 functions. These make it very easy to go from a dictionary of keywords to a
@@ -137,20 +137,20 @@ profile.
 Profiles can then be called with the `profile=` keyword in any submission
 function or Job class.
 
-.. autoclass:: fyrd.config_file.Profile
+.. autoclass:: fyrd.conf.Profile
    :members:
 
-.. autofunction:: fyrd.config_file.get_option
+.. autofunction:: fyrd.conf.get_option
 
-.. autofunction:: fyrd.config_file.set_option
+.. autofunction:: fyrd.conf.set_option
 
-.. autofunction:: fyrd.config_file.set_profile
+.. autofunction:: fyrd.conf.set_profile
 
-.. autofunction:: fyrd.config_file.get_profile
+.. autofunction:: fyrd.conf.get_profile
 
-.. autofunction:: fyrd.config_file.delete
+.. autofunction:: fyrd.conf.delete
 
-.. autofunction:: fyrd.config_file.get_config
+.. autofunction:: fyrd.conf.get_config
 
 
 Local Queue Implementation
