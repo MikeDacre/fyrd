@@ -2,7 +2,7 @@
 """
 Class and methods to handle Job submission.
 
-Last modified: 2016-11-04 18:11
+Last modified: 2016-11-07 09:01
 """
 import os  as _os
 import sys as _sys
@@ -423,10 +423,7 @@ class Job(object):
             _logme.log('Deleting output files.', 'debug')
             if get_outputs:
                 self.fetch_outputs(delete_files=True)
-            files = [self.outfile, self.errfile]
-            if self.poutfile:
-                files.append(self.poutfile)
-            for f in files:
+            for f in self.outfiles:
                 if _os.path.isfile(f):
                     _logme.log('Deleteing {}'.format(f), 'debug')
                     _os.remove(f)
@@ -587,8 +584,20 @@ class Job(object):
         self.update()
         if self.done:
             return
-        _sleep(1)
+        _sleep(0.4)
         self.queue.wait(self)
+        _sleep(0.1)
+        # Block for up to file_block_time for output files to be copied back
+        btme = _conf.get_option('file_block_time')
+        start = _dt.now()
+        comp = [True for i in self.outfiles]
+        while True:
+            if [_os.path.isfile(i) for i in self.outfiles] == comp:
+                break
+            if (_dt.now() - start).seconds > btme:
+                _logme.log('Job completed but files have not appeared for ' +
+                           '>{} seconds'.format(btme))
+                break
         self.update()
 
     def get(self, save=True, cleanup=True, delete_outfiles=None,
@@ -620,6 +629,7 @@ class Job(object):
         # Wait for queue
         self.wait()
         # Get output
+        _sleep(0.1)
         self.fetch_outputs(save=save, delete_files=False)
         out = self.out if save else self.get_output(save=save)
         # Cleanup
@@ -961,6 +971,11 @@ class Job(object):
             if not self.start:
                 self.get_times()
             return self.end-self.start
+        elif key == 'outfiles':
+            outfiles = [self.outfile, self.errfile]
+            if self.poutfile:
+                outfiles.append(self.poutfile)
+            return outfiles
 
     def __repr__(self):
         """Return simple job information."""

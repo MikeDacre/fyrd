@@ -2,7 +2,7 @@
 """
 Get and set config file options.
 
-Last modified: 2016-11-04 17:26
+Last modified: 2016-11-07 08:53
 
 The functions defined here provide an easy way to access the config file
 defined by CONFIG_FILE (default ~/.fyrd/config.txt) and the config.get('jobs',
@@ -56,6 +56,7 @@ config file merely overwrites the values definied here.
 DEFAULTS['queue'] = {'max_jobs':     1000,
                      'sleep_len':    1,
                      'queue_update': 2,
+                     'queue_type':   'auto',
                      # Not implemented yet
                      #  'db':           os.path.join(CONFIG_PATH, 'db.sql'),
                     }
@@ -66,22 +67,31 @@ Define options for queue handling:
     sleep_len (int):    sets the amount of time the program will wait between
                         submission attempts
     queue_update (int): sets the amount of time between refreshes of the queue.
+    queue_type (str):   the type of queue to use, one of 'torque', 'slurm',
+                        'local', 'auto'. Default is auto to auto-detect the
+                        queue.
     db_path (str):      where to put the job database
 """
 
 DEFAULTS['jobs'] = {'clean_files':   True,
                     'clean_outputs': False,
+                    'file_block_time': 12,
                     'suffix':        'cluster',
                     'profile_file':  os.path.join(CONFIG_PATH, 'profiles.txt')}
 """
 Set the options for managing job submission and getting:
-    clean_files (bool):   means that by default files will be deleted when job
-                          completes
-    clean_outputs (bool): is the same but for output files (they are saved
-                          first)
-    suffix (str):         the suffix to use when writing scripts and output
-                          files
-    profile_file (str):   the config file where profiles are defined.
+    clean_files (bool):    means that by default files will be deleted when job
+                           completes
+    clean_outputs (bool):  is the same but for output files (they are saved
+                           first)
+    file_block_time (int): Max amount of time to block after job completes in
+                           the queue while waiting for output files to appear.
+                           Some queues can take a long time to copy files under
+                           load, so it is worth setting this high, it won't
+                           block unless the files do not appear.
+    suffix (str):          the suffix to use when writing scripts and output
+                           files
+    profile_file (str):    the config file where profiles are defined.
 """
 
 DEFAULTS['opts'] = {}
