@@ -2,7 +2,7 @@
 """
 Class and methods to handle Job submission.
 
-Last modified: 2016-11-07 10:16
+Last modified: 2016-11-07 11:25
 """
 import os  as _os
 import sys as _sys
@@ -588,7 +588,7 @@ class Job(object):
         self.queue.wait(self)
         _sleep(0.1)
         # Block for up to file_block_time for output files to be copied back
-        btme = _conf.config.getint('jobs', 'file_block_time')
+        btme = _conf.get_option('jobs', 'file_block_time')
         start = _dt.now()
         comp = [True for i in self.outfiles]
         while True:
