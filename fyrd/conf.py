@@ -2,7 +2,7 @@
 """
 Get and set config file options.
 
-Last modified: 2016-11-04 17:26
+Last modified: 2016-11-07 11:23
 
 The functions defined here provide an easy way to access the config file
 defined by CONFIG_FILE (default ~/.fyrd/config.txt) and the config.get('jobs',
@@ -18,16 +18,16 @@ Options will also be pre-sanitized before being added to profile. e.g. 'mem':
     '2GB' will become 'mem': 2000.
 """
 from __future__ import print_function
-import os
-import readline
+import os       as _os
+import readline as _rl
 try:
     import configparser as _configparser
 except ImportError:
     import ConfigParser as _configparser
 
-from . import run
-from . import logme
-from . import options
+from . import run     as _run
+from . import logme   as _logme
+from . import options as _opt
 
 
 ###############################################################################
@@ -35,11 +35,11 @@ from . import options
 ###############################################################################
 
 # Config File
-CONFIG_PATH  = os.path.join(os.environ['HOME'], '.fyrd')
+CONFIG_PATH  = _os.path.join(_os.environ['HOME'], '.fyrd')
 """
 Where configuration files will be kept
 """
-CONFIG_FILE  = os.path.join(CONFIG_PATH, 'config.txt')
+CONFIG_FILE  = _os.path.join(CONFIG_PATH, 'config.txt')
 """
 Where the main config will be kept.
 """
@@ -56,8 +56,9 @@ config file merely overwrites the values definied here.
 DEFAULTS['queue'] = {'max_jobs':     1000,
                      'sleep_len':    1,
                      'queue_update': 2,
+                     'queue_type':   'auto',
                      # Not implemented yet
-                     #  'db':           os.path.join(CONFIG_PATH, 'db.sql'),
+                     #  'db':           _os.path.join(CONFIG_PATH, 'db.sql'),
                     }
 """
 Define options for queue handling:
@@ -66,22 +67,31 @@ Define options for queue handling:
     sleep_len (int):    sets the amount of time the program will wait between
                         submission attempts
     queue_update (int): sets the amount of time between refreshes of the queue.
+    queue_type (str):   the type of queue to use, one of 'torque', 'slurm',
+                        'local', 'auto'. Default is auto to auto-detect the
+                        queue.
     db_path (str):      where to put the job database
 """
 
 DEFAULTS['jobs'] = {'clean_files':   True,
                     'clean_outputs': False,
+                    'file_block_time': 12,
                     'suffix':        'cluster',
-                    'profile_file':  os.path.join(CONFIG_PATH, 'profiles.txt')}
+                    'profile_file':  _os.path.join(CONFIG_PATH, 'profiles.txt')}
 """
 Set the options for managing job submission and getting:
-    clean_files (bool):   means that by default files will be deleted when job
-                          completes
-    clean_outputs (bool): is the same but for output files (they are saved
-                          first)
-    suffix (str):         the suffix to use when writing scripts and output
-                          files
-    profile_file (str):   the config file where profiles are defined.
+    clean_files (bool):    means that by default files will be deleted when job
+                           completes
+    clean_outputs (bool):  is the same but for output files (they are saved
+                           first)
+    file_block_time (int): Max amount of time to block after job completes in
+                           the queue while waiting for output files to appear.
+                           Some queues can take a long time to copy files under
+                           load, so it is worth setting this high, it won't
+                           block unless the files do not appear.
+    suffix (str):          the suffix to use when writing scripts and output
+                           files
+    profile_file (str):    the config file where profiles are defined.
 """
 
 DEFAULTS['opts'] = {}
@@ -181,31 +191,43 @@ def get_option(section=None, key=None, default=None):
         out = _config_to_dict(config)
 
     elif section and section not in _sections(config):
-        logme.log('{} not in the config file'.format(section), 'error')
-        out = None
+        _logme.log('{} not in the config file'.format(section), 'error')
+        if section in DEFAULTS:
+            _logme.log('CreAting {} from DEFAULTS'.format(section), 'info')
+            config.add_section(section)
+            _config_from_dict(config, DEFAULTS[section], section=section)
+            write_config()
+            out = get_option(section, key, default)
+        else:
+            raise ValueError('Section not in the config file or DEFAULTS')
 
     elif key:
         sect = _section_to_dict(config.items(section))
         if key in sect:
             out = sect[key]
         else:
+            _logme.log('{} not in the {} section of the config file'
+                       .format(key, section), 'warn')
             if default:
-                logme.log('Creating new config entry {}:{} with val {}'
-                          .format(section, key, default), 'debug')
+                _logme.log('Creating new config entry {}:{} with val {}'
+                           .format(section, key, default))
                 set_option(section, key, default)
                 out = get_option(section, key)
+            elif key in DEFAULTS[section]:
+                _logme.log('Creating new config entry {}:{} with val {}'
+                           .format(section, key, DEFAULTS[section][key]))
+                set_option(section, key, DEFAULTS[section][key])
+                out = get_option(section, key)
             else:
-                logme.log('{} not in the {} section of the config file'
-                          .format(key, section), 'warn')
-                out = None
+                raise ValueError('Option not in the config file')
 
     elif section:
-        logme.log('Getting the whole section.', 'debug')
+        _logme.log('Getting the whole section', 'debug')
         out = _section_to_dict(config.items(section))
 
     else:
-        logme.log('Insufficient arguments, cannot get config item', 'warn')
-        out = None
+        _logme.log('No option specified, returning config dictionary', 'debug')
+        out = _config_to_dict(config)
 
     return out
 
@@ -230,8 +252,8 @@ def set_option(section, key, value):
     load_config()
 
     if not config.has_section(section):
-        logme.log('The {} section is not in the config file and cannot be'
-                  .format(section) + 'and cannot be created', 'warn')
+        _logme.log('The {} section is not in the config file and cannot be'
+                   .format(section) + 'and cannot be created', 'warn')
         return None
 
     config.set(section, key, value)
@@ -269,7 +291,7 @@ def load_config():
     Returns:
         ConfigParser: Config options.
     """
-    if os.path.isfile(CONFIG_FILE):
+    if _os.path.isfile(CONFIG_FILE):
         config.read(CONFIG_FILE)
     else:
         create_config()
@@ -305,59 +327,59 @@ def create_config_interactive():
     """
     # Use tab completion
     t = _TabCompleter()
-    readline.set_completer_delims('\t')
-    readline.parse_and_bind("tab: complete")
+    _rl.set_completer_delims('\t')
+    _rl.parse_and_bind("tab: complete")
 
     # Get permission
     t.createListCompleter(['y', 'n'])
-    readline.set_completer(t.list_completer)
+    _rl.set_completer(t.list_completer)
     print("Do you want to initialize your config at {}"
           .format(CONFIG_FILE))
     print("This will erase your current configuration (if it exists)")
-    choice = run.get_input("Initialize config? [y/N] ").strip().lower()
+    choice = _run.get_input("Initialize config? [y/N] ").strip().lower()
     if not choice == 'y':
         return
 
     cnf = DEFAULTS
     # Get path
-    readline.set_completer(_path_completer)
+    _rl.set_completer(_path_completer)
     print("\nThis module uses a database to store job information.",
           "This database should remain relatively small, but can get quite",
           "large if many jobs are submitted at once.\n"
           "It only needs to be accessible from the submit host, but should",
           "be somewhere with sufficient disk space (>500MB free).")
     print("Where would you like to put the db file?\n")
-    file_path = os.path.expanduser(
-        run.get_input('PATH: [{}] '.format(config.get('queue', 'db')))
+    file_path = _os.path.expanduser(
+        _run.get_input('PATH: [{}] '.format(config.get('queue', 'db')))
     ).strip(' ').lower()
 
     file_path = file_path if file_path else cnf['queue']['db']
-    cnf['queue']['db'] = os.path.expanduser(file_path)
+    cnf['queue']['db'] = _os.path.expanduser(file_path)
 
     print("We also store job profile information in a small config file.")
-    file_path = os.path.expanduser(
-        run.get_input('Where would you like that file to go? [{}]'
-                      .format(config.get('jobs', 'profile_file')))
+    file_path = _os.path.expanduser(
+        _run.get_input('Where would you like that file to go? [{}]'
+                       .format(config.get('jobs', 'profile_file')))
     ).strip(' ').lower()
 
     file_path = file_path if file_path else cnf['jobs']['profile_file']
-    cnf['jobs']['profile_file'] = os.path.expanduser(file_path)
+    cnf['jobs']['profile_file'] = _os.path.expanduser(file_path)
 
     # Cleaning
     t.createListCompleter(['y', 'n'])
-    readline.set_completer(t.list_completer)
+    _rl.set_completer(t.list_completer)
     print('\nWe can automatically delete script and/or output files after',
           'results have been retrieved.\n'
           'This option can be overridden at run time on a per-job basis.\n'
           'Do you want to autoclean:\n')
-    clean_files = run.get_input('Autoclean script files? [Y/n] ')
+    clean_files = _run.get_input('Autoclean script files? [Y/n] ')
     if not clean_files:
         clean_files = cnf['jobs']['clean_files']
     else:
         clean_files = True if clean_files.lower() != 'n' else False
     cnf['jobs']['clean_files'] = clean_files
 
-    clean_outs = run.get_input(
+    clean_outs = _run.get_input(
         'Autoclean output files (e.g. .out and .err)? [y/N] '
     )
     if not clean_outs:
@@ -368,9 +390,10 @@ def create_config_interactive():
 
     # Wait times
     t.createListCompleter(cnf['queue'].values())
-    readline.set_completer(t.list_completer)
-    max_len = run.get_input("\nWhat is the maximum number of jobs allowed in your " +
-                            "queue? [{}] ".format(cnf['queue']['max_jobs']))
+    _rl.set_completer(t.list_completer)
+    max_len = _run.get_input("\nWhat is the maximum number of jobs allowed " +
+                             "in your queue? [{}] "
+                             .format(cnf['queue']['max_jobs']))
     max_len = max_len if max_len else cnf['queue']['max_jobs']
     cnf['queue']['max_jobs'] = int(max_len)
 
@@ -378,7 +401,7 @@ def create_config_interactive():
     print('\nIs there a default queue you wish to submit to if no other',
           'options are given?\nIf so enter the name below, or leave blank',
           'to ignore.\n')
-    def_queue = run.get_input('Default queue: ')
+    def_queue = _run.get_input('Default queue: ')
     if def_queue:
         cnf['opts']['partition'] = def_queue
 
@@ -404,8 +427,8 @@ def create_config(cnf=None):
     global config
     config = _configparser.ConfigParser(allow_no_value=True)
 
-    if os.path.exists(CONFIG_FILE):
-        os.remove(CONFIG_FILE)
+    if _os.path.exists(CONFIG_FILE):
+        _os.remove(CONFIG_FILE)
 
     init_conf = {}
 
@@ -461,10 +484,10 @@ class Profile(object):
         elif key == 'args':
             if not isinstance(value, dict):
                 raise Exception('Keyword arguments must be a dict')
-            value = options.check_arguments(value)
+            value = _opt.check_arguments(value)
             object.__setattr__(self, key, value)
         else:
-            opt, arg = list(options.check_arguments({key: value}).items())[0]
+            opt, arg = list(_opt.check_arguments({key: value}).items())[0]
             self.args[opt] = arg
 
     def __len__(self):
@@ -503,9 +526,9 @@ def get_profile(profile=None):
             return Profile(profile, _section_to_dict(profiles.items(profile)))
         else:
             if profile.lower() == 'default':
-                logme.log('default profile missing, recreating. You can '
-                          'override the defaults by editing {}'
-                          .format(CONFIG_FILE), 'warn')
+                _logme.log('default profile missing, recreating. You can '
+                           'override the defaults by editing {}'
+                           .format(CONFIG_FILE), 'warn')
                 prof = Profile('default', DEFAULT_PROFILES['default'])
                 prof.write()
                 return prof
@@ -536,12 +559,12 @@ def set_profile(name, kwds, update=True):
     if not isinstance(kwds, dict):
         raise Exception('Profile arguments must be a dictionary')
 
-    kwds = options.check_arguments(kwds)
+    kwds = _opt.check_arguments(kwds)
 
     if name in _sections(profiles):
         if not update:
-            logme.log('Profile {} already exists, overwriting'.format(name),
-                      'debug')
+            _logme.log('Profile {} already exists, overwriting'.format(name),
+                       'debug')
             profiles.remove_section(name)
             profiles.add_section(name)
     else:
@@ -561,11 +584,11 @@ def del_profile(name):
     """
     load_profiles()
     if name in _sections(profiles):
-        logme.log('Removing profile {}'.format(name))
+        _logme.log('Removing profile {}'.format(name))
         profiles.remove_section(name)
     else:
-        logme.log('Profile {} does not exist, cannot delete'.format(name),
-                  'warn')
+        _logme.log('Profile {} does not exist, cannot delete'.format(name),
+                   'warn')
     write_profiles()
 
 
@@ -589,8 +612,8 @@ def create_profiles(profs=None):
         allow_no_value=True,
     )
 
-    if os.path.exists(config.get('jobs', 'profile_file')):
-        os.remove(config.get('jobs', 'profile_file'))
+    if _os.path.exists(config.get('jobs', 'profile_file')):
+        _os.remove(config.get('jobs', 'profile_file'))
 
     init_conf = {}
     if not profs or not isinstance(profs, dict):
@@ -615,7 +638,7 @@ def load_profiles():
     Returns:
         ConfigParser: profiles
     """
-    if not os.path.isfile(config.get('jobs', 'profile_file')):
+    if not _os.path.isfile(config.get('jobs', 'profile_file')):
         create_profiles()
     profiles.read(config.get('jobs', 'profile_file'))
     return profiles
@@ -637,16 +660,18 @@ def write_profiles():
 ###############################################################################
 
 
-def _sections(cnf):
+def _sections(cnf, inc_anyway=False):
     """Include default in sections if it has items.
 
     Args:
         cnf (ConfigParser): Any ConfigParser object
+        inc_anyway (bool):  Include the DEFAULT section even if empty
 
     Returns:
         list: A list of sections in cnf, including DEFAULT if defined.
     """
-    return cnf.sections() + ['DEFAULT'] if cnf.items('DEFAULT') \
+    merged_sections = cnf.sections() + ['DEFAULT']
+    return merged_sections if cnf.items('DEFAULT') or inc_anyway \
             else cnf.sections()
 
 
@@ -764,7 +789,7 @@ class _TabCompleter(object):
 
         def list_completer(_, state):
             """Make a completer from a list."""
-            line   = readline.get_line_buffer()
+            line   = _rl.get_line_buffer()
 
             if not line:
                 return [c + " " for c in ll][state]
@@ -780,7 +805,7 @@ def _path_completer(_, state):
     This is the tab completer for systems paths.
     Only tested on *nix systems
     """
-    line = readline.get_line_buffer()
+    line = _rl.get_line_buffer()
     if not line:
         return _complete_path('.')[state]
     else:
@@ -790,10 +815,10 @@ def _path_completer(_, state):
 def _listdir(root):
     "List directory 'root' appending the path separator to subdirs."
     res = []
-    for name in os.listdir(root):
-        path = os.path.join(root, name)
-        if os.path.isdir(path):
-            name += os.sep
+    for name in _os.listdir(root):
+        path = _os.path.join(root, name)
+        if _os.path.isdir(path):
+            name += _os.sep
         res.append(name)
     return res
 
@@ -801,18 +826,18 @@ def _listdir(root):
 def _complete_path(path=None):
     "Perform completion of filesystem path."
     if not path:
-        return os.listdir('.')
-    path = os.path.expanduser(path)
-    dirname, rest = os.path.split(path)
+        return _os.listdir('.')
+    path = _os.path.expanduser(path)
+    dirname, rest = _os.path.split(path)
     tmp = dirname if dirname else '.'
-    res = [os.path.join(dirname, p)
-           for p in os.listdir(tmp) if p.startswith(rest)]
+    res = [_os.path.join(dirname, p)
+           for p in _os.listdir(tmp) if p.startswith(rest)]
     # more than one match, or single match which does not exist (typo)
-    if len(res) > 1 or not os.path.exists(path):
+    if len(res) > 1 or not _os.path.exists(path):
         return res
     # resolved to a single directory, so return list of files below it
-    if os.path.isdir(path):
-        return [os.path.join(path, p) for p in os.listdir(path)]
+    if _os.path.isdir(path):
+        return [_os.path.join(path, p) for p in _os.listdir(path)]
     # exact file match terminates this completion
     return [path + ' ']
 
@@ -822,11 +847,11 @@ def _complete_path(path=None):
 ###############################################################################
 
 # Create directory if it doesn't exist
-if not os.path.isdir(CONFIG_PATH):
-    if os.path.exists(CONFIG_PATH):
-        os.remove(CONFIG_PATH)
-    os.makedirs(CONFIG_PATH)
-if not os.path.isfile(CONFIG_FILE):
+if not _os.path.isdir(CONFIG_PATH):
+    if _os.path.exists(CONFIG_PATH):
+        _os.remove(CONFIG_PATH)
+    _os.makedirs(CONFIG_PATH)
+if not _os.path.isfile(CONFIG_FILE):
     create_config()
 
 # Load config

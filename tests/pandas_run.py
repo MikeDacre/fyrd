@@ -44,6 +44,13 @@ def test_concat(delete=True):
     assert len(df) == 4
 
 
+def test_split_apply(delete=True):
+    """Test getting the mean with two cores."""
+    df = make_df()
+    df_comp = df[[1,2]].apply(get_mean)
+    print(df_comp)
+
+
 def main(argv=None):
     """Get arguments and run tests."""
     if not argv:
@@ -67,8 +74,9 @@ def main(argv=None):
     if args.verbose:
         fyrd.logme.MIN_LEVEL = 'debug'
 
-    test_mean(args.keep_files)
-    test_concat(args.keep_files)
+    #  test_mean(args.keep_files)
+    #  test_concat(args.keep_files)
+    test_split_apply(args.keep_files)
 
 if __name__ == '__main__' and '__file__' in globals():
     sys.exit(main())

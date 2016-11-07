@@ -2,7 +2,7 @@
 """
 Monitor the queue for torque or slurm.
 
-Last modified: 2016-11-04 18:14
+Last modified: 2016-11-07 09:00
 
 Provides a class to monitor the torque, slurm, or local queues with identical
 syntax.
@@ -720,12 +720,22 @@ def get_cluster_environment():
         tuple: MODE variable ('torque', 'slurm', or 'local')
     """
     global MODE
-    if run.which('sbatch'):
-        MODE = 'slurm'
-    elif run.which('qsub'):
-        MODE = 'torque'
+    conf_queue = conf.get_option('queue', 'queue_type', 'auto')
+    if conf_queue not in ['torque', 'slurm', 'local', 'auto']:
+        logme.log('queue_type in the config file is {}, '.format(conf_queue) +
+                  'but it should be one of torque, slurm, local, or auto. ' +
+                  'Resetting it to auto', 'warn')
+        conf.set_option('queue', 'queue_type', 'auto')
+        conf_queue = 'auto'
+    if conf_queue == 'auto':
+        if run.which('sbatch'):
+            MODE = 'slurm'
+        elif run.which('qsub'):
+            MODE = 'torque'
+        else:
+            MODE = 'local'
     else:
-        MODE = 'local'
+        MODE = conf_queue
     if MODE == 'slurm' or MODE == 'torque':
         logme.log('{} detected, using for cluster submissions'.format(MODE),
                   'debug')
