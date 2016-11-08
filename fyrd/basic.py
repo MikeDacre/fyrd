@@ -2,7 +2,7 @@
 """
 Functions to allow simple job and file submission without the Job class.
 
-Last modified: 2016-11-04 17:49
+Last modified: 2016-11-08 09:18
 """
 import os  as _os
 import sys as _sys
@@ -29,7 +29,7 @@ __all__ = ['submit', 'make_job', 'make_job_file', 'submit_file', 'clean_dir']
 ###############################################################################
 
 
-def submit(command, args=None, name=None, path=None, qtype=None,
+def submit(command, args=None, name=None,qtype=None,
            profile=None, **kwargs):
     """Submit a script to the cluster.
 
@@ -38,7 +38,6 @@ def submit(command, args=None, name=None, path=None, qtype=None,
         args:      Optional arguments to add to command, particularly
                    useful for functions.
         name:      The name of the job.
-        path:      Where to create the script, if None, current dir used.
         qtype:     'torque', 'slurm', or 'normal'
         profile:   The name of a profile saved in the conf
         kwargs:    Keyword arguments to control job options
@@ -54,7 +53,7 @@ def submit(command, args=None, name=None, path=None, qtype=None,
 
     _queue.check_queue()  # Make sure the queue.MODE is usable
 
-    job = Job(command=command, args=args, name=name, path=path, qtype=qtype,
+    job = Job(command=command, args=args, name=name, qtype=qtype,
               profile=profile, **kwargs)
 
     job.write()
@@ -69,7 +68,7 @@ def submit(command, args=None, name=None, path=None, qtype=None,
 #########################
 
 
-def make_job(command, args=None, name=None, path=None, qtype=None,
+def make_job(command, args=None, name=None, qtype=None,
              profile=None, **kwargs):
     """Make a job file compatible with the chosen cluster.
 
@@ -95,14 +94,14 @@ def make_job(command, args=None, name=None, path=None, qtype=None,
 
     _queue.check_queue()  # Make sure the queue.MODE is usable
 
-    job = Job(command=command, args=args, name=name, path=path, qtype=qtype,
+    job = Job(command=command, args=args, name=name, qtype=qtype,
               profile=profile, **kwargs)
 
     # Return the path to the script
     return job
 
 
-def make_job_file(command, args=None, name=None, path=None, qtype=None,
+def make_job_file(command, args=None, name=None, qtype=None,
                   profile=None, **kwargs):
     """Make a job file compatible with the chosen cluster.
 
@@ -129,7 +128,7 @@ def make_job_file(command, args=None, name=None, path=None, qtype=None,
 
     _queue.check_queue()  # Make sure the queue.MODE is usable
 
-    job = Job(command=command, args=args, name=name, path=path, qtype=qtype,
+    job = Job(command=command, args=args, name=name, qtype=qtype,
               profile=profile, **kwargs)
 
     job = job.write()

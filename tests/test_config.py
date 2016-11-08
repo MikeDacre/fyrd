@@ -60,11 +60,13 @@ def test_update():
     assert p.mem   == 16000
     assert p.cores == 2
 
+
 def test_replace():
     """Try to replace an existing profile."""
     p = fyrd.conf.set_profile('tprof', {'mem': 26000}, update=False)
     assert p.mem   == 26000
     assert p.cores == 1
+
 
 def test_del_profile():
     """Try to delete the profile we just made."""

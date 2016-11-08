@@ -2,7 +2,7 @@
 """
 Get and set config file options.
 
-Last modified: 2016-11-07 14:21
+Last modified: 2016-11-08 11:09
 
 The functions defined here provide an easy way to access the config file
 defined by CONFIG_FILE (default ~/.fyrd/config.txt) and the config.get('jobs',
@@ -56,6 +56,7 @@ config file merely overwrites the values definied here.
 DEFAULTS['queue'] = {'max_jobs':     1000,
                      'sleep_len':    1,
                      'queue_update': 2,
+                     'res_time':     2700,
                      'queue_type':   'auto',
                      # Not implemented yet
                      #  'db':           _os.path.join(CONFIG_PATH, 'db.sql'),
@@ -67,6 +68,11 @@ Define options for queue handling:
     sleep_len (int):    sets the amount of time the program will wait between
                         submission attempts
     queue_update (int): sets the amount of time between refreshes of the queue.
+    res_time (int):     Time in seconds to wait if a job is in an uncertain
+                        state, usually preempted or suspended. These jobs often
+                        resolve into running or completed again after some time
+                        so it makes sense to wait a bit, but not forever. The
+                        default is 45 minutes: 2700 seconds.
     queue_type (str):   the type of queue to use, one of 'torque', 'slurm',
                         'local', 'auto'. Default is auto to auto-detect the
                         queue.
@@ -76,7 +82,7 @@ Define options for queue handling:
 DEFAULTS['jobs'] = {'clean_files':     True,
                     'clean_outputs':   False,
                     'file_block_time': 12,
-                    'tmp_files':       None,
+                    'filepath':        None,
                     'suffix':          'cluster',
                     'auto_submit':     True,
                     'profile_file':    _os.path.join(
@@ -92,9 +98,11 @@ Set the options for managing job submission and getting:
                            Some queues can take a long time to copy files under
                            load, so it is worth setting this high, it won't
                            block unless the files do not appear.
-    tmp_files (str):       Path to write all temp and output files by default,
-                           must be globally cluster accessible.
-    suffix (str):          the suffix to use when writing scripts and output
+    filepath (str):        Path to write all temp and output files by default,
+                           must be globally cluster accessible. Note: this is
+                           *not* the runtime path, just where files are written
+                           to.
+    suffix (str):          The suffix to use when writing scripts and output
                            files
     auto_submit (bool):    If wait() or get() are called prior to submission,
                            auto-submit the job. Otherwise throws an error and
@@ -351,20 +359,21 @@ def create_config_interactive():
     cnf = DEFAULTS
     # Get path
     _rl.set_completer(_path_completer)
-    print("\nThis module uses a database to store job information.",
-          "This database should remain relatively small, but can get quite",
-          "large if many jobs are submitted at once.\n"
-          "It only needs to be accessible from the submit host, but should",
-          "be somewhere with sufficient disk space (>500MB free).")
-    print("Where would you like to put the db file?\n")
-    file_path = _os.path.expanduser(
-        _run.get_input('PATH: [{}] '.format(config.get('queue', 'db')))
-    ).strip(' ').lower()
+    # Not implemented yet
+    #  print("\nThis module uses a database to store job information.",
+          #  "This database should remain relatively small, but can get quite",
+          #  "large if many jobs are submitted at once.\n"
+          #  "It only needs to be accessible from the submit host, but should",
+          #  "be somewhere with sufficient disk space (>500MB free).")
+    #  print("Where would you like to put the db file?\n")
+    #  file_path = _os.path.expanduser(
+        #  _run.get_input('PATH: [{}] '.format(config.get('queue', 'db')))
+    #  ).strip(' ').lower()
 
-    file_path = file_path if file_path else cnf['queue']['db']
-    cnf['queue']['db'] = _os.path.expanduser(file_path)
+    #  file_path = file_path if file_path else cnf['queue']['db']
+    #  cnf['queue']['db'] = _os.path.expanduser(file_path)
 
-    print("We also store job profile information in a small config file.")
+    print("We store job profile information in a small config file.")
     file_path = _os.path.expanduser(
         _run.get_input('Where would you like that file to go? [{}]'
                        .format(config.get('jobs', 'profile_file')))
@@ -372,6 +381,53 @@ def create_config_interactive():
 
     file_path = file_path if file_path else cnf['jobs']['profile_file']
     cnf['jobs']['profile_file'] = _os.path.expanduser(file_path)
+
+
+    # Temp file directory
+    print("\nIt is possible to write all temporary and output files to a single",
+          "temp file directory, regardless of where the job is run from.\n" +
+          "As this library allows you to retrieve output files from the class",
+          "directly, this is a good way of keeping your work directory tidy.",
+          "If you do not choose to have files auto-deleted though, you will",
+          "need to keep the directory tidy yourself.\n"
+          "The value of this option is that if you run from a machine where",
+          "some places are not cluster-accessible, jobs will run anyway if",
+          "just one directory is accessible to the cluster.\n"
+          "This option can always be overridden at runtime with the filepath",
+          "argument.\nIf you leave the below option blank, the default will",
+          "be to use the runtime path, which is usually the current working",
+          "directory.\n")
+    t.createListCompleter(['y', 'n'])
+    _rl.set_completer(t.list_completer)
+    set_filedir = _run.get_input(
+        'Would you like to set a temp file path? [Y/n] ')
+    if set_filedir.lower() == 'y':
+        while True:
+            _rl.set_completer(_path_completer)
+            file_path = _run.get_input(
+                'Where would you like that file to go? ')
+            file_path = file_path.strip().lower()
+            if file_path:
+                file_path = _os.path.abspath(file_path)
+                if _os.path.isdir(file_path):
+                    break
+                else:
+                    t.createListCompleter(['y', 'n'])
+                    _rl.set_completer(t.list_completer)
+                    ans = _run.get_input(
+                        'That directory does not exist, would you like to ' +
+                        'try to create it? [y/N] ')
+                    if ans.lower() == 'y':
+                        try:
+                            _os.makedirs(file_path)
+                            break
+                        except OSError:
+                            print("Failed to make {}".format(file_path),
+                                  "Please make it manually or choose another",
+                                  "directory\n")
+                            continue
+                    else:
+                        continue
 
     # Cleaning
     t.createListCompleter(['y', 'n'])

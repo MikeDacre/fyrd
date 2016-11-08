@@ -2,13 +2,7 @@
 """
 Available options for job submission.
 
-<<<<<<< HEAD
-Last modified: 2016-11-07 21:42
-||||||| merged common ancestors
-Last modified: 2016-11-04 18:43
-=======
-Last modified: 2016-11-05 10:26
->>>>>>> 74b34c5835b9a3bc873117947df65fe55661aca9
+Last modified: 2016-11-08 09:21
 
 All keyword arguments that can be used with Job() objects are defined in this
 file. These can be editted by the end user to increase functionality.
@@ -72,7 +66,7 @@ COMMON  = OrderedDict([
               'the import call, or just be a name, e.g. '
               "['from os import path', 'sys']",
       'default': None, 'type': list}),
-    ('filedir',
+    ('filepath',
      {'help': 'Folder to write cluster files to, must be accessible ' +
               'to the compute nodes.',
       'default': '.', 'type': str}),
@@ -166,17 +160,22 @@ SLURM  = OrderedDict([
 
 
 SYNONYMS = {
-    'depend':       'depends',
-    'dependency':   'depends',
-    'dependencies': 'depends',
-    'stdout':       'outfile',
-    'stderr':       'errfile',
-    'queue':        'partition',
-    'memory':       'mem',
-    'cpus':         'cores',
-    'walltime':     'time',
-    'delete_files': 'clean_files',
+    'depend':         'depends',
+    'dependency':     'depends',
+    'dependencies':   'depends',
+    'stdout':         'outfile',
+    'stderr':         'errfile',
+    'queue':          'partition',
+    'memory':         'mem',
+    'cpus':           'cores',
+    'walltime':       'time',
+    'delete_files':   'clean_files',
     'delete_outputs': 'clean_outputs',
+    'filedir':        'filepath',
+    'runpath':        'dir',
+    'path':           'filepath',
+    'scriptpath':     'filepath',
+    'scriptdir':      'filepath',
 }
 
 
@@ -453,14 +452,14 @@ def options_to_string(option_dict, qtype=None):
     cores = int(option_dict.pop('cores')) if 'cores' in option_dict else 1
 
     # Set path if required
-    if 'filedir' in option_dict:
-        filedir = os.path.abspath(option_dict.pop('filedir'))
+    if 'filepath' in option_dict:
+        filepath = os.path.abspath(option_dict.pop('filepath'))
         if 'outfile' in option_dict:
             option_dict['outfile'] = os.path.join(
-                filedir, os.path.basename(option_dict['outfile']))
+                filepath, os.path.basename(option_dict['outfile']))
         if 'errfile' in option_dict:
             option_dict['errfile'] = os.path.join(
-                filedir, os.path.basename(option_dict['errfile']))
+                filepath, os.path.basename(option_dict['errfile']))
 
     if qtype == 'slurm':
         outlist.append('#SBATCH --ntasks {}'.format(nodes))
