@@ -8,7 +8,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
         LICENSE: MIT License, property of Stanford, use as you wish
         VERSION: 0.6.1-beta.5
         CREATED: 2015-12-11 22:19
-  Last modified: 2016-11-04 18:13
+  Last modified: 2016-11-07 21:21
  =============== ===================================================
 
 Allows simple job submission with *dependency tracking and queue waiting* with
@@ -170,6 +170,9 @@ class ClusterError(Exception):
 from . import local
 from . import queue
 from . import job
+from . import conf
+from . import options
+from . import helpers
 from .run import check_pid as _check_pid
 
 from .queue import Queue
@@ -191,7 +194,7 @@ from .options import option_help
 
 __all__ = ['Job', 'Queue', 'wait', 'submit', 'submit_file', 'make_job_file',
            'clean', 'clean_dir', 'check_queue', 'option_help', 'set_profile',
-           'get_profile', 'conf']
+           'get_profile', 'helpers']
 
 ##########################
 #  Set the cluster type  #

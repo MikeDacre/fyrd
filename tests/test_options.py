@@ -7,6 +7,7 @@ sys.path.append(os.path.abspath('.'))
 import fyrd
 fyrd.local.THREADS = 5
 
+
 def test_help():
     """Check that the output of option_help() matches saved output."""
     if os.path.isfile(os.path.join('tests', 'options_help.txt')):
@@ -16,6 +17,7 @@ def test_help():
     else:
         raise Exception('Cannot find options_help.txt file')
     assert fyrd.option_help(mode='string') == open(ofile).read()
+
 
 def test_dict_types():
     """Make sure all expected dictionaries exist and have the right type."""
@@ -39,6 +41,7 @@ def test_dict_types():
     assert isinstance(fyrd.options.CLUSTER_KWDS, OrderedDict)
     assert isinstance(fyrd.options.NORMAL_KWDS, OrderedDict)
     assert isinstance(fyrd.options.ALLOWED_KWDS, OrderedDict)
+
 
 def test_sane_keywords():
     """Run check_arguments() on some made up keywords."""
@@ -77,8 +80,9 @@ def test_split():
     good, bad = fyrd.options.split_keywords(
         {'cores': 2, 'memory': '4GB', 'bob': 'dylan'}
     )
-    assert good == {'cores': 2, 'mem': 4000}
+    assert good == {'cores': 2, 'mem': 4096}
     assert bad == {'bob': 'dylan'}
+
 
 def test_string_formatting():
     """Test options_to_string."""
@@ -93,6 +97,7 @@ def test_string_formatting():
     assert outstr == ''
     with pytest.raises(fyrd.options.OptionsError):
         fyrd.options.option_to_string('nodes', 2)
+
 
 def test_back_to_normal():
     """Return the queue to the normal setting."""

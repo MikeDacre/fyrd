@@ -3,7 +3,7 @@
 """
 Clean all intermediate files created by the cluster module from this dir.
 
-Last modified: 2016-10-27 13:30
+Last modified: 2016-11-07 20:10
 
 Uses the fyrd.job.clean_dir() function
 
@@ -50,8 +50,8 @@ def main(argv=None):
     if args.verbose:
         fyrd.logme.MIN_LEVEL = 'debug'
 
-    files = fyrd.job.clean_dir(directory=args.dir, suffix=args.suffix,
-                               qtype=args.qtype, confirm=args.no_confirm)
+    files = fyrd.basic.clean_dir(directory=args.dir, suffix=args.suffix,
+                                 qtype=args.qtype, confirm=args.no_confirm)
 
     # Print list of files if it wasn't done by the function
     if not args.no_confirm:

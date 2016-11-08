@@ -2,11 +2,12 @@
 """
 Class and methods to handle Job submission.
 
-Last modified: 2016-11-07 11:25
+Last modified: 2016-11-07 21:38
 """
 import os  as _os
 import sys as _sys
-from time     import sleep    as _sleep
+from uuid import uuid4 as _uuid
+from time import sleep as _sleep
 from datetime import datetime as _dt
 from subprocess import CalledProcessError as _CalledProcessError
 
@@ -210,21 +211,27 @@ class Job(object):
 
         # Set name
         if not name:
-            if hasattr(command, '__call__'):
-                parts = str(command).strip('<>').split(' ')
-                parts.remove('function')
-                try:
-                    parts.remove('built-in')
-                except ValueError:
-                    pass
-                name = parts[0]
+            if callable(command):
+                strcmd = str(command).strip('<>')
+                parts = strcmd.split(' ')
+                if parts[0] == 'bound':
+                    name = '_'.join(parts[2:3])
+                else:
+                    parts.remove('function')
+                    try:
+                        parts.remove('built-in')
+                    except ValueError:
+                        pass
+                    name = parts[0]
             else:
                 name = command.split(' ')[0].split('/')[-1]
 
         # Make sure name not in queue
+        self.uuid = str(_uuid()).split('-')[0]
         names     = [i.name.split('.')[0] for i in self.queue]
         namecnt   = len([i for i in names if i == name])
-        self.name = '{}.{}'.format(name, namecnt)
+        name      = '{}.{}.{}'.format(name, self.uuid, namecnt)
+        self.name = name
 
         # Set modules
         self.modules = kwargs.pop('modules') if 'modules' in kwargs else None
@@ -299,6 +306,12 @@ class Job(object):
         #  Command and Function Preparation  #
         ######################################
 
+        # Get imports
+        if 'imports' in kwargs:
+            self.imports = kwargs.pop('imports')
+        else:
+            self.imports = None
+
         # Make functions run remotely
         if hasattr(command, '__call__'):
             self.kind = 'function'
@@ -308,7 +321,7 @@ class Job(object):
             self.poutfile = self.outfile + '.func.pickle'
             self.function = _Function(
                 file_name=script_file, function=command, args=args,
-                outfile=self.poutfile
+                outfile=self.poutfile, imports=self.imports
             )
             # Collapse the command into a python call to the function script
             command = '{} {}'.format(_sys.executable,
@@ -483,7 +496,6 @@ class Job(object):
                                         cores=self.cores)
             self.submitted = True
             self.state = 'submitted'
-            self.update()
 
         elif self.qtype == 'slurm':
             _logme.log('Submitting to slurm', 'debug')
@@ -511,7 +523,6 @@ class Job(object):
                 raise _CalledProcessError(code, args, stdout, stderr)
             self.submitted = True
             self.state = 'submitted'
-            self.update()
 
         elif self.qtype == 'torque':
             _logme.log('Submitting to torque', 'debug')
@@ -544,7 +555,6 @@ class Job(object):
                     raise _CalledProcessError(code, args, stdout, stderr)
             self.submitted = True
             self.state = 'submitted'
-            self.update()
         else:
             raise _ClusterError("Invalid queue type {}".format(self.qtype))
 
@@ -552,7 +562,6 @@ class Job(object):
             raise _ClusterError('Submission appears to have failed, this '
                                 "shouldn't happen")
 
-        _sleep(0.5)  # Give submission a chance
         return self
 
     def update(self):
@@ -579,14 +588,20 @@ class Job(object):
 
     def wait(self):
         """Block until job completes."""
-        _logme.log('Waiting', 'debug')
+        if not self.submitted:
+            if _conf.get_option('jobs', 'auto_submit'):
+                _logme.log('Auto-submitting as not submitted yet', 'debug')
+                self.submit()
+            else:
+                _logme.log('Cannot wait for result as job has not been submitted',
+                           'warn')
+            return
+        _logme.log('Waiting for self {}'.format(self.name), 'debug')
         _sleep(0.1)
         self.update()
         if self.done:
             return
-        _sleep(0.4)
         self.queue.wait(self)
-        _sleep(0.1)
         # Block for up to file_block_time for output files to be copied back
         btme = _conf.get_option('jobs', 'file_block_time')
         start = _dt.now()
@@ -600,7 +615,7 @@ class Job(object):
                 break
         self.update()
 
-    def get(self, save=True, cleanup=True, delete_outfiles=None,
+    def get(self, save=True, cleanup=None, delete_outfiles=None,
             del_no_save=None):
         """Block until job completed and return output of script/function.
 
@@ -618,10 +633,6 @@ class Job(object):
         Returns:
             str: Function output if Function, else STDOUT
         """
-        if not self.submitted:
-            _logme.log('Cannot wait for result as job has not been submitted',
-                       'warn')
-            return
         _logme.log(('Getting outputs, cleanup={}, autoclean={}, '
                     'delete_outfiles={}').format(
                         cleanup, self.auto_delete, delete_outfiles
@@ -629,16 +640,23 @@ class Job(object):
         # Wait for queue
         self.wait()
         # Get output
-        _sleep(0.1)
         self.fetch_outputs(save=save, delete_files=False)
         out = self.out if save else self.get_output(save=save)
         # Cleanup
+        if cleanup is None:
+            cleanup = self.clean_files
+        else:
+            assert isinstance(cleanup, bool)
         if delete_outfiles is None:
             delete_outfiles = self.clean_outputs
-        if save is False and del_no_save is not None:
-            delete_outfiles = del_no_save
+        if save is False:
+            delete_outfiles = del_no_save if del_no_save is not None else False
         if cleanup:
             self.clean(delete_outputs=delete_outfiles)
+        if isinstance(out, Exception):
+            _logme.log('Job {} ({}) failed with {}'
+                       .format(self.name, self.id, out), 'critical')
+            raise out
         return out
 
     def get_output(self, save=True, delete_file=None, update=True):
@@ -691,9 +709,9 @@ class Job(object):
                 self._got_out = True
             return out
         else:
-            _logme.log('No file at {}, cannot get output'
-                       .format(self.poutfile), 'warn')
-            return None
+            _logme.log('No file at {} even though job has completed!'
+                       .format(self.poutfile), 'critical')
+            raise IOError('File not found: {}'.format(self.poutfile))
 
     def get_stdout(self, save=True, delete_file=None, update=True):
         """Get stdout of function or script, same for both.
@@ -979,11 +997,11 @@ class Job(object):
 
     def __repr__(self):
         """Return simple job information."""
-        outstr = "Job:{name}<{mode}".format(name=self.name, mode=self.qtype)
+        outstr = "Job:{name}<{mode}:{qtype}".format(
+            name=self.name, mode=self.kind, qtype=self.qtype)
         if self.submitted:
             outstr += ':{}'.format(self.id)
-        outstr += "(command:{cmnd};args:{args})".format(
-            cmnd=self.command, args=self.args)
+        outstr += "(command:{cmnd})".format(cmnd=self.command)
         if self.submitted or self.done:
             outstr += self.state.upper()
         elif self.written:
@@ -1004,5 +1022,5 @@ class Job(object):
         else:
             state = 'not written'
             id1 = 'NA'
-        return "{name} ID: {id}, state: {state}".format(
+        return "Job: {name} ID: {id}, state: {state}".format(
             name=self.name, id=id1, state=state)

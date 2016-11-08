@@ -2,7 +2,7 @@
 """
 File management and execution functions.
 
-Last modified: 2016-11-04 17:20
+Last modified: 2016-11-07 21:32
 """
 import os
 import re
@@ -17,174 +17,6 @@ from time import sleep
 from . import logme
 
 __all__ = ['cmd', 'which', 'open_zipped']
-
-
-###############################################################################
-#                          Scripts to Write to File                           #
-###############################################################################
-
-
-SCRP_RUNNER = """\
-#!/bin/bash
-{precmd}
-mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
-if [ -f {script} ]; then
-    {command}
-else
-    echo "{script} does not exist, make sure you set your filepath to a "
-    echo "directory that is available to the compute nodes."
-    exit 1
-fi
-"""
-
-SCRP_RUNNER_TRACK = """\
-#!/bin/bash
-{precmd}
-mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
-if [ -f {script} ]; then
-    cd {usedir}
-    date +'%y-%m-%d-%H:%M:%S'
-    echo "Running {name}"
-    {command}
-    exitcode=$?
-    echo Done
-    date +'%y-%m-%d-%H:%M:%S'
-    if [[ $exitcode != 0 ]]; then
-        echo Exited with code: $exitcode >&2
-    fi
-else
-    echo "{script} does not exist, make sure you set your filepath to a "
-    echo "directory that is available to the compute nodes."
-    exit 1
-fi
-"""
-
-CMND_RUNNER = """\
-#!/bin/bash
-{precmd}
-mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
-cd {usedir}
-{command}
-exitcode=$?
-if [[ $exitcode != 0 ]]; then
-    echo Exited with code: $exitcode >&2
-fi
-"""
-
-CMND_RUNNER_TRACK = """\
-#!/bin/bash
-{precmd}
-mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
-cd {usedir}
-date +'%y-%m-%d-%H:%M:%S'
-echo "Running {name}"
-{command}
-exitcode=$?
-echo Done
-date +'%y-%m-%d-%H:%M:%S'
-if [[ $exitcode != 0 ]]; then
-    echo Exited with code: $exitcode >&2
-fi
-"""
-
-FUNC_RUNNER = r"""\
-'''
-Run a function remotely and pickle the result.
-
-To try and make this as resistent to failure as possible, we import everything
-we can, this sometimes results in duplicate imports and always results in
-unnecessary imports, but given the context we don't care, as we just want the
-thing to run successfully on the first try, no matter what.
-'''
-import os
-import sys
-import socket
-from subprocess import Popen, PIPE
-# Try to use dill, revert to pickle if not found
-try:
-    import dill as pickle
-except ImportError:
-    try:
-        import cPickle as pickle # For python2
-    except ImportError:
-        import pickle
-
-{imports}
-sys.path.append('{path}')
-{modimpstr}
-
-
-def run_function(func_c, arglist=None):
-    '''Run a function with arglist and return output.'''
-    if not hasattr(func_c, '__call__'):
-        raise Exception('{{}} is not a callable function.'.format(
-            func_c))
-    if arglist:
-        if isinstance(arglist, (tuple, list)):
-            ot = func_c(*arglist)
-        elif isinstance(arglist, dict):
-            ot = func_c(**arglist)
-        else:
-            ot = func_c(arglist)
-    else:
-        ot = func_c()
-    return ot
-
-
-def cmd(command, arglist=None):
-    '''Run a command and return exitcode, stdout, stderr.'''
-    if isinstance(command, (list, tuple)):
-        if arglist:
-            raise Exception('Cannot submit list/tuple command as i' +
-                            'well as arglist argument')
-        command = ' '.join(command)
-    assert isinstance(command, str)
-    if arglist:
-        if isinstance(arglist, (list, tuple)):
-            arglist = ' '.join(arglist)
-        arglist = command + arglist
-    else:
-        arglist = command
-    pp = Popen(arglist, shell=True, universal_newlines=True,
-               stdout=PIPE, stderr=PIPE)
-    ot, err = pp.communicate()
-    code = pp.returncode
-    return code, ot.rstrip(), err.rstrip()
-
-
-if __name__ == "__main__":
-    with open('{pickle_file}', 'rb') as fin:
-        # Try to install packages first
-        try:
-            function_call, args = pickle.load(fin)
-        except ImportError as e:
-            module = str(e).split(' ')[-1]
-            node   = socket.gethostname()
-            sys.stderr.write('Failed to import your function. This usually '
-                             'happens when you have a module installed locally'
-                             ' that is not available on the compute nodes.\n'
-                             'In this case the module is '
-                             '{{}}.\n'.format(module) +
-                             'However, I can only catch the first uninstalled '
-                             'module. To make sure all of your modules are '
-                             'installed on the compute nodes, do this::\n'
-                             "freeze --local | grep -v '^\-e' | cut -d = -f 1 "
-                             '> module_list.txt\n'
-                             'Then, submit a job to the compute nodes with '
-                             'this command::\n'
-                             'cat module_list.txt | xargs pip install '
-                             '--user\n')
-            raise ImportError(('Module {{}} is not installed on compute '
-                               'node {{}}').format(module, node))
-
-    try:
-        out = run_function(function_call, args)
-    except Exception as e:
-        out = e
-
-    with open('{out_file}', 'wb') as fout:
-        pickle.dump(out, fout)\
-"""
 
 
 ###############################################################################
@@ -419,6 +251,22 @@ def split_file(infile, parts, outpath='', keep_header=True):
     return tuple(outfiles)
 
 
+def indent(string, prefix='    '):
+    """Replicate python3's textwrap.indent for python2.
+
+    Args:
+        string (str): Any string.
+        prefix (str): What to indent with.
+
+    Returns:
+        str: Indented string
+    """
+    out = ''
+    for i in string.split('\n'):
+        out += '{}{}\n'.format(prefix, i)
+    return out
+
+
 def check_pid(pid):
     """Check For the existence of a unix pid."""
     try:
@@ -471,3 +319,178 @@ def _get_input(message):
         return raw_input(message)
     else:
         return input(message)
+
+
+###############################################################################
+#                          Scripts to Write to File                           #
+###############################################################################
+
+
+SCRP_RUNNER = """\
+#!/bin/bash
+{precmd}
+mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
+if [ -f {script} ]; then
+    {command}
+else
+    echo "{script} does not exist, make sure you set your filepath to a "
+    echo "directory that is available to the compute nodes."
+    exit 1
+fi
+"""
+
+SCRP_RUNNER_TRACK = """\
+#!/bin/bash
+{precmd}
+mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
+if [ -f {script} ]; then
+    cd {usedir}
+    date +'%y-%m-%d-%H:%M:%S'
+    echo "Running {name}"
+    {command}
+    exitcode=$?
+    echo Done
+    date +'%y-%m-%d-%H:%M:%S'
+    if [[ $exitcode != 0 ]]; then
+        echo Exited with code: $exitcode >&2
+    fi
+else
+    echo "{script} does not exist, make sure you set your filepath to a "
+    echo "directory that is available to the compute nodes."
+    exit 1
+fi
+"""
+
+CMND_RUNNER = """\
+#!/bin/bash
+{precmd}
+mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
+cd {usedir}
+{command}
+exitcode=$?
+if [[ $exitcode != 0 ]]; then
+    echo Exited with code: $exitcode >&2
+fi
+"""
+
+CMND_RUNNER_TRACK = """\
+#!/bin/bash
+{precmd}
+mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
+cd {usedir}
+date +'%y-%m-%d-%H:%M:%S'
+echo "Running {name}"
+{command}
+exitcode=$?
+echo Done
+date +'%y-%m-%d-%H:%M:%S'
+if [[ $exitcode != 0 ]]; then
+    echo Exited with code: $exitcode >&2
+fi
+"""
+
+FUNC_RUNNER = r"""\
+'''
+Run a function remotely and pickle the result.
+
+To try and make this as resistent to failure as possible, we import everything
+we can, this sometimes results in duplicate imports and always results in
+unnecessary imports, but given the context we don't care, as we just want the
+thing to run successfully on the first try, no matter what.
+'''
+import os
+import sys
+import socket
+from subprocess import Popen, PIPE
+# Try to use dill, revert to pickle if not found
+try:
+    import dill as pickle
+except ImportError:
+    try:
+        import cPickle as pickle # For python2
+    except ImportError:
+        import pickle
+
+out = None
+try:
+{imports}
+{modimpstr}
+except Exception as e:
+    out = e
+
+
+def run_function(func_c, arglist=None):
+    '''Run a function with arglist and return output.'''
+    if not hasattr(func_c, '__call__'):
+        raise Exception('{{}} is not a callable function.'.format(
+            func_c))
+    if arglist:
+        if isinstance(arglist, (tuple, list)):
+            ot = func_c(*arglist)
+        elif isinstance(arglist, dict):
+            ot = func_c(**arglist)
+        else:
+            ot = func_c(arglist)
+    else:
+        ot = func_c()
+    return ot
+
+
+def cmd(command, arglist=None):
+    '''Run a command and return exitcode, stdout, stderr.'''
+    if isinstance(command, (list, tuple)):
+        if arglist:
+            raise Exception('Cannot submit list/tuple command as i' +
+                            'well as arglist argument')
+        command = ' '.join(command)
+    assert isinstance(command, str)
+    if arglist:
+        if isinstance(arglist, (list, tuple)):
+            arglist = ' '.join(arglist)
+        arglist = command + arglist
+    else:
+        arglist = command
+    pp = Popen(arglist, shell=True, universal_newlines=True,
+               stdout=PIPE, stderr=PIPE)
+    ot, err = pp.communicate()
+    code = pp.returncode
+    return code, ot.rstrip(), err.rstrip()
+
+
+if __name__ == "__main__":
+    # If an Exception was raised during import, skip this
+    if not out:
+        with open('{pickle_file}', 'rb') as fin:
+            # Try to install packages first
+            try:
+                function_call, args = pickle.load(fin)
+            except ImportError as e:
+                module = str(e).split(' ')[-1]
+                node   = socket.gethostname()
+                sys.stderr.write('Failed to import your function. This usually '
+                                 'happens when you have a module installed locally'
+                                 ' that is not available on the compute nodes.\n'
+                                 'In this case the module is '
+                                 '{{}}.\n'.format(module) +
+                                 'However, I can only catch the first uninstalled '
+                                 'module. To make sure all of your modules are '
+                                 'installed on the compute nodes, do this::\n'
+                                 "freeze --local | grep -v '^\-e' | cut -d = -f 1 "
+                                 '> module_list.txt\n'
+                                 'Then, submit a job to the compute nodes with '
+                                 'this command::\n'
+                                 'cat module_list.txt | xargs pip install '
+                                 '--user\n')
+                out = ImportError(('Module {{}} is not installed on compute '
+                                   'node {{}}').format(module, node))
+
+    try:
+        out = run_function(function_call, args)
+    except Exception as e:
+        out = e
+
+    with open('{out_file}', 'wb') as fout:
+        pickle.dump(out, fout)\
+"""
+
+

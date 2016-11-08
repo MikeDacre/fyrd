@@ -5,8 +5,24 @@ Pandas is hard to install, so this isn't part of the travis py.test.
 """
 import sys
 import argparse
+from uuid import uuid4
 import fyrd
+import numpy as np
 import pandas as pd
+
+
+###############################################################################
+#                      DataFrame Manipulation Functions                       #
+###############################################################################
+
+
+def make_df():
+    """Create an example df."""
+    df = pd.DataFrame(np.random.randint(0,100,size=(100, 4)),
+                      columns=list('ABCD'))
+    df['s1'] = [str(uuid4()).split('-')[0] for i in range(100)]
+    df['s2'] = [str(uuid4()).split('-')[0] for i in range(100)]
+    return df
 
 
 def get_mean(d):
@@ -19,36 +35,61 @@ def merge_two(d1, d2):
     return pd.concat([d1, d2])
 
 
-def make_df():
-    """Create an example df."""
-    return pd.DataFrame([['hi', 2, -47], ['there', 4, 26.4]])
+def join_columns(d):
+    """Merge three columns plus a sum."""
+    return '{}.{}.{}'.format(d.s1, d.s2, d.A + d.B)
 
 
-def test_mean(delete=True):
+###############################################################################
+#                               Test Functions                                #
+###############################################################################
+
+
+def test_submission(delete=True):
     """Test getting a dataframe and getting the mean."""
     job = fyrd.Job(make_df).submit()
     df = job.get(cleanup=delete, delete_outfiles=delete)
     assert isinstance(df, pd.DataFrame)
-    assert df[0][0] == 'hi'
-    job2 = fyrd.Job(get_mean, (df,)).submit()
-    mean = job2.get(cleanup=delete, delete_outfiles=delete)
-    assert mean[1] == 3
+
+
+def test_mean(delete=True):
+    """Test getting the mean of the dataframe."""
+    df = make_df()
+    cmean = df.mean()
+    job = fyrd.Job(get_mean, (df,)).submit()
+    mean = job.get(cleanup=delete, delete_outfiles=delete)
+    assert mean == cmean
 
 
 def test_concat(delete=True):
     """Test concatenating two dataframes."""
-    df1 = pd.DataFrame([['hi', 6, 42], ['there', 8, 24]])
-    df2 = make_df()
+    df1 = make_df()
+    df2 = pd.DataFrame([[1, 2, 3, 4, 'hi', 'there']], columns=df1.columns)
     job = fyrd.Job(merge_two, (df1, df2)).submit()
     df = job.get(cleanup=delete, delete_outfiles=delete)
-    assert len(df) == 4
+    assert len(df) == 101
 
 
 def test_split_apply(delete=True):
+    """Test running a string merge operation with two cores."""
+    df = make_df()
+    df_comp = df.copy()
+    df_comp['joined'] = df.apply(join_columns, axis=1)
+    new_df = df.copy()
+    new_df['joined'] = fyrd.helpers.parapply(2, df, join_columns, axis=1,
+                                             clean_files=delete,
+                                             clean_outputs=delete)
+    assert new_df.equals(df_comp)
+
+
+def test_split_apply_summary(delete=True):
     """Test getting the mean with two cores."""
     df = make_df()
-    df_comp = df[[1,2]].apply(get_mean)
-    print(df_comp)
+    df_comp = df[['A', 'B']].apply(get_mean)
+    new_df = fyrd.helpers.parapply_summary(
+        2, df[['A', 'B']], get_mean, clean_files=delete, clean_outputs=delete)
+    assert new_df.T.A == df_comp.T.A
+    assert new_df.T.B == df_comp.T.B
 
 
 def main(argv=None):

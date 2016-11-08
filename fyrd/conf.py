@@ -2,7 +2,7 @@
 """
 Get and set config file options.
 
-Last modified: 2016-11-07 11:23
+Last modified: 2016-11-07 14:21
 
 The functions defined here provide an easy way to access the config file
 defined by CONFIG_FILE (default ~/.fyrd/config.txt) and the config.get('jobs',
@@ -73,11 +73,14 @@ Define options for queue handling:
     db_path (str):      where to put the job database
 """
 
-DEFAULTS['jobs'] = {'clean_files':   True,
-                    'clean_outputs': False,
+DEFAULTS['jobs'] = {'clean_files':     True,
+                    'clean_outputs':   False,
                     'file_block_time': 12,
-                    'suffix':        'cluster',
-                    'profile_file':  _os.path.join(CONFIG_PATH, 'profiles.txt')}
+                    'tmp_files':       None,
+                    'suffix':          'cluster',
+                    'auto_submit':     True,
+                    'profile_file':    _os.path.join(
+                        CONFIG_PATH, 'profiles.txt')}
 """
 Set the options for managing job submission and getting:
     clean_files (bool):    means that by default files will be deleted when job
@@ -89,8 +92,13 @@ Set the options for managing job submission and getting:
                            Some queues can take a long time to copy files under
                            load, so it is worth setting this high, it won't
                            block unless the files do not appear.
+    tmp_files (str):       Path to write all temp and output files by default,
+                           must be globally cluster accessible.
     suffix (str):          the suffix to use when writing scripts and output
                            files
+    auto_submit (bool):    If wait() or get() are called prior to submission,
+                           auto-submit the job. Otherwise throws an error and
+                           returns None
     profile_file (str):    the config file where profiles are defined.
 """
 
@@ -222,7 +230,7 @@ def get_option(section=None, key=None, default=None):
                 raise ValueError('Option not in the config file')
 
     elif section:
-        _logme.log('Getting the whole section', 'debug')
+        _logme.log('Getting the whole section: {}'.format(section), 'debug')
         out = _section_to_dict(config.items(section))
 
     else:

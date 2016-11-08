@@ -2,7 +2,7 @@
 """
 Available options for job submission.
 
-Last modified: 2016-11-04 18:43
+Last modified: 2016-11-07 21:42
 
 All keyword arguments that can be used with Job() objects are defined in this
 file. These can be editted by the end user to increase functionality.
@@ -169,6 +169,8 @@ SYNONYMS = {
     'memory':       'mem',
     'cpus':         'cores',
     'walltime':     'time',
+    'delete_files': 'clean_files',
+    'delete_outputs': 'clean_outputs',
 }
 
 
@@ -340,6 +342,7 @@ def check_arguments(kwargs):
                 # Don't allow 0, minimum memory req is 5MB
                 if opt < 5:
                     opt = 5
+            new_kwds[arg] = opt
 
     return new_kwds
 

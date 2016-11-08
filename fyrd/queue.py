@@ -2,7 +2,7 @@
 """
 Monitor the queue for torque or slurm.
 
-Last modified: 2016-11-07 09:00
+Last modified: 2016-11-07 21:33
 
 Provides a class to monitor the torque, slurm, or local queues with identical
 syntax.
@@ -121,6 +121,10 @@ class Queue(object):
         self._Job      = Job
         self._JobQueue = QJob
 
+        # Get sleep time and update time
+        self.queue_update_time = conf.get_option('queue', 'queue_update', 2)
+        self.sleep_len         = conf.get_option('queue', 'sleep_len', 2)
+
         # Set type
         if qtype:
             check_queue(qtype)
@@ -170,9 +174,9 @@ class Queue(object):
                 raise ClusterError('job must be int, string, or Job, ' +
                                    'is {}'.format(type(job)))
 
-        # Wait for 1 second before checking, as jobs take a while to be
+        # Wait for 0.1 second before checking, as jobs take a while to be
         # queued sometimes
-        sleep(1)
+        sleep(0.1)
         for job in jobs:
             logme.log('Checking {}'.format(job), 'debug')
             qtype = job.qtype if isinstance(job, self._Job) else self.qtype
@@ -194,7 +198,7 @@ class Queue(object):
                 not_found = 0
                 lgd = False
                 while True:
-                    self.update()
+                    self._update()
                     # Allow 12 seconds to elapse before job is found in queue,
                     # if it is not in the queue by then, raise exception.
                     if job not in self.jobs:
@@ -206,7 +210,6 @@ class Queue(object):
                                       'for it to appear', 'info')
                             lgd = True
                         sleep(1)
-                        self.update()
                         not_found += 1
                         if not_found == 12:
                             raise self.QueueError(
@@ -216,11 +219,14 @@ class Queue(object):
                         continue
                     # Actually look for job in running/queued queues
                     if job in self.running.keys() or job in self.queued.keys():
-                        sleep(2)
+                        sleep(self.sleep_len)
                     else:
+                        # If we found the job and it isn't either running or
+                        # queued, then it must be done.
                         break
 
-        sleep(1)  # Sleep an extra second to allow post-run scripts to run.
+        # Sleep an extra half second to allow post-run scripts to run
+        sleep(0.5)
         return True
 
     def can_submit(self, max_queue_len=None):
@@ -240,7 +246,6 @@ class Queue(object):
 
         If max_queue_len is None, default from config is used.
         """
-        sleep_len = conf.get_option('queue', 'sleep_len', 5)
         count   = 50
         written = False
         while True:
@@ -251,18 +256,18 @@ class Queue(object):
                            '{} jobs queued. Will wait to submit, retrying '
                            'every {} seconds.')
                           .format(len(self.running), len(self.queued),
-                                  sleep_len),
+                                  self.sleep_len),
                           'info')
                 written = True
             if count == 0:
                 logme.log('Still waiting to submit.', 'info')
                 count = 50
             count -= 1
-            sleep(sleep_len)
+            sleep(self.sleep_len)
 
     def update(self):
         """Refresh the list of jobs from the server, limit queries."""
-        if int(time()) - self.last_update > int(_defaults['queue_update']):
+        if int(time()) - self.last_update > self.queue_update_time:
             self._update()
         else:
             logme.log('Skipping update as last update too recent', 'debug')
@@ -511,7 +516,6 @@ def torque_queue_parser(user=None, partition=None):
     qargs = ['qstat', '-x']
     while True:
         try:
-            sleep(1)
             xmlqueue = ET.fromstring(check_output(qargs))
         except CalledProcessError:
             sleep(1)
@@ -810,40 +814,30 @@ def wait(jobs):
             local.JQUEUE.wait(job)
 
     elif MODE == 'torque':
-        # Wait for 5 seconds before checking, as jobs take a while to be queued
+        # Wait for 1 seconds before checking, as jobs take a while to be queued
         # sometimes
-        sleep(5)
+        sleep(1)
 
         s = re.compile(r' +')  # For splitting qstat output
         # Jobs must be strings for comparison operations
         jobs = [str(j) for j in jobs]
-        while True:
-            c = 0
-            try:
-                q = check_output(['qstat', '-a']).decode().rstrip().split('\n')
-            except CalledProcessError:
-                if c == 5:
-                    raise
-                c += 1
-                sleep(2)
-                continue
-            # Check header
-            if not re.split(r' {2,100}', q[3])[9] == 'S':
-                raise ClusterError('Unrecognized torque qstat format')
-            # Build a list of completed jobs
-            complete = []
-            for j in q[5:]:
-                i = s.split(j)
-                if i[9] == 'C':
-                    complete.append(i[0].split('.')[0])
-            # Build a list of all jobs
-            alljobs  = [s.split(j)[0].split('.')[0] for j in q[5:]]
-            # Trim down job list
-            jobs = [j for j in jobs if j in alljobs]
-            jobs = [j for j in jobs if j not in complete]
-            if len(jobs) == 0:
-                return
-            sleep(2)
+        q = run.cmd('qstat -a', tries=8).rstrip().split('\n')
+        # Check header
+        if not re.split(r' {2,100}', q[3])[9] == 'S':
+            raise ClusterError('Unrecognized torque qstat format')
+        # Build a list of completed jobs
+        complete = []
+        for j in q[5:]:
+            i = s.split(j)
+            if i[9] == 'C':
+                complete.append(i[0].split('.')[0])
+        # Build a list of all jobs
+        alljobs  = [s.split(j)[0].split('.')[0] for j in q[5:]]
+        # Trim down job list
+        jobs = [j for j in jobs if j in alljobs]
+        jobs = [j for j in jobs if j not in complete]
+        if len(jobs) == 0:
+            return
     elif MODE == 'slurm':
         # Wait for 2 seconds before checking, as jobs take a while to be queued
         # sometimes
