@@ -73,6 +73,12 @@ def test_sane_keywords():
         fyrd.options.check_arguments({'mem': 'bob'})
     # Should succeed
     fyrd.options.check_arguments({'nodes': '14'})
+    # Check mem
+    i = fyrd.options.check_arguments({'mem': '4GB'})
+    assert i == {'mem': 4096}
+    # Check time
+    j = fyrd.options.check_arguments({'time': '01-00:00:00'})
+    assert j == {'time': '24:00:00'}
 
 
 def test_split():

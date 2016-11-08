@@ -2,7 +2,13 @@
 """
 Available options for job submission.
 
+<<<<<<< HEAD
 Last modified: 2016-11-07 21:42
+||||||| merged common ancestors
+Last modified: 2016-11-04 18:43
+=======
+Last modified: 2016-11-05 10:26
+>>>>>>> 74b34c5835b9a3bc873117947df65fe55661aca9
 
 All keyword arguments that can be used with Job() objects are defined in this
 file. These can be editted by the end user to increase functionality.
@@ -243,7 +249,7 @@ def split_keywords(kwargs):
             good.update(check_arguments({key: val}))
         except OptionsError:
             bad.update({key: val})
-    return good, bad
+    return check_arguments(good), bad
 
 
 def check_arguments(kwargs):

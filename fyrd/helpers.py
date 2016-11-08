@@ -2,7 +2,7 @@
 """
 High level functions to make complex tasks easier.
 
-Last modified: 2016-11-07 21:19
+Last modified: 2016-11-07 22:00
 """
 import inspect as _inspect
 
@@ -118,9 +118,18 @@ def parapply(jobs, df, func, args=(), profile=None, applymap=False,
         DataFrame: A recombined DataFrame
     """
     # Handle arguments
-    fyrd_kwds, pandas_kwds = _options.split_keywords(kwds)
     if not isinstance(jobs, int):
         raise ValueError('Jobs argument must be an integer.')
+    if not isinstance(df, (_pd.core.frame.DataFrame, _np.ndarray)):
+        raise ValueError('df must be a dataframe or numpy array, is {}'
+                         .format(type(df)))
+    if not callable(func):
+        raise ValueError('function must be callable, current type is {}'
+                         .format(type(func)))
+    if profile is not None and not isinstance(profile, str):
+        raise ValueError('Profile must be a string, is {}'
+                         .format(type(profile)))
+    fyrd_kwds, pandas_kwds = _options.split_keywords(kwds)
 
     # Set up auto-cleaning
     if 'clean_files' not in fyrd_kwds:
@@ -129,7 +138,9 @@ def parapply(jobs, df, func, args=(), profile=None, applymap=False,
         fyrd_kwds['clean_outputs'] = True
 
     # Split dataframe
+    _logme.log('Splitting dataframe', 'debug')
     dfs = _np.array_split(df, jobs)
+    assert len(dfs) == jobs
 
     # Pick function
     sub_func = _run_applymap if applymap else _run_apply
@@ -154,6 +165,7 @@ def parapply(jobs, df, func, args=(), profile=None, applymap=False,
                 'from scipy import stats']
 
     # Run the functions
+    _logme.log('Submitting jobs', 'debug')
     outs = []
     count=1
     for d in dfs:
@@ -166,6 +178,7 @@ def parapply(jobs, df, func, args=(), profile=None, applymap=False,
         count += 1
 
     # Get the results
+    _logme.log('Waiting for results', 'debug')
     results = []
     for out in outs:
         try:
@@ -176,6 +189,7 @@ def parapply(jobs, df, func, args=(), profile=None, applymap=False,
             raise
 
     # Return the recombined DataFrame
+    _logme.log('Done, joinging', 'debug')
     try:
         out = _pd.concat(results, axis=merge_axis)
     except ValueError:
