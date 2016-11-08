@@ -1,11 +1,15 @@
 Used in every mode::
 depends:    A job or list of jobs to depend on
             Type: list; Default: None
+clean_files:Auto clean script files when fetching outputs
+            Type: bool; Default: None
+clean_outputs:Auto clean output files when fetching outputs
+            Type: bool; Default: None
 cores:      Number of cores to use for the job
             Type: int; Default: 1
 modules:    Modules to load with the `module load` command
             Type: list; Default: None
-filedir:    Folder to write cluster files to, must be accessible to the compute
+filepath:   Folder to write cluster files to, must be accessible to the compute
             nodes.
             Type: str; Default: .
 dir:        The working directory for the job

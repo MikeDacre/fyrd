@@ -1,7 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 Available options for job submission.
 
-Last modified: 2016-10-30 18:14
+Last modified: 2016-11-08 09:21
 
 All keyword arguments that can be used with Job() objects are defined in this
 file. These can be editted by the end user to increase functionality.
@@ -46,6 +47,12 @@ COMMON  = OrderedDict([
     ('depends',
      {'help': 'A job or list of jobs to depend on',
       'default': None, 'type': list}),
+    ('clean_files',
+     {'help': 'Auto clean script files when fetching outputs',
+      'default': None, 'type': bool}),
+    ('clean_outputs',
+     {'help': 'Auto clean output files when fetching outputs',
+      'default': None, 'type': bool}),
     ('cores',
      {'help': 'Number of cores to use for the job',
       'default': 1, 'type': int}),
@@ -59,7 +66,7 @@ COMMON  = OrderedDict([
               'the import call, or just be a name, e.g. '
               "['from os import path', 'sys']",
       'default': None, 'type': list}),
-    ('filedir',
+    ('filepath',
      {'help': 'Folder to write cluster files to, must be accessible ' +
               'to the compute nodes.',
       'default': '.', 'type': str}),
@@ -153,15 +160,22 @@ SLURM  = OrderedDict([
 
 
 SYNONYMS = {
-    'depend':       'depends',
-    'dependency':   'depends',
-    'dependencies': 'depends',
-    'stdout':       'outfile',
-    'stderr':       'errfile',
-    'queue':        'partition',
-    'memory':       'mem',
-    'cpus':         'cores',
-    'walltime':     'time',
+    'depend':         'depends',
+    'dependency':     'depends',
+    'dependencies':   'depends',
+    'stdout':         'outfile',
+    'stderr':         'errfile',
+    'queue':          'partition',
+    'memory':         'mem',
+    'cpus':           'cores',
+    'walltime':       'time',
+    'delete_files':   'clean_files',
+    'delete_outputs': 'clean_outputs',
+    'filedir':        'filepath',
+    'runpath':        'dir',
+    'path':           'filepath',
+    'scriptpath':     'filepath',
+    'scriptdir':      'filepath',
 }
 
 
@@ -213,6 +227,28 @@ class OptionsError(ClusterError):
 ###############################################################################
 #                          Option Handling Functions                          #
 ###############################################################################
+
+
+def split_keywords(kwargs):
+    """Split a dictionary of keyword arguments into two dictionaries.
+
+    The first dictionary will contain valid arguments for fyrd, the second will
+    contain all others.
+
+    Returns:
+        tuple: (dict, dict) —  valid args for fyrd, other args
+    """
+    if not isinstance(kwargs, dict):
+        raise ValueError('Invalid argument. Should be a dictionary, is {}'
+                         .format(type(kwargs)))
+    good = {}
+    bad  = {}
+    for key, val in kwargs.items():
+        try:
+            good.update(check_arguments({key: val}))
+        except OptionsError:
+            bad.update({key: val})
+    return check_arguments(good), bad
 
 
 def check_arguments(kwargs):
@@ -311,6 +347,7 @@ def check_arguments(kwargs):
                 # Don't allow 0, minimum memory req is 5MB
                 if opt < 5:
                     opt = 5
+            new_kwds[arg] = opt
 
     return new_kwds
 
@@ -415,14 +452,14 @@ def options_to_string(option_dict, qtype=None):
     cores = int(option_dict.pop('cores')) if 'cores' in option_dict else 1
 
     # Set path if required
-    if 'filedir' in option_dict:
-        filedir = os.path.abspath(option_dict.pop('filedir'))
+    if 'filepath' in option_dict:
+        filepath = os.path.abspath(option_dict.pop('filepath'))
         if 'outfile' in option_dict:
             option_dict['outfile'] = os.path.join(
-                filedir, os.path.basename(option_dict['outfile']))
+                filepath, os.path.basename(option_dict['outfile']))
         if 'errfile' in option_dict:
             option_dict['errfile'] = os.path.join(
-                filedir, os.path.basename(option_dict['errfile']))
+                filepath, os.path.basename(option_dict['errfile']))
 
     if qtype == 'slurm':
         outlist.append('#SBATCH --ntasks {}'.format(nodes))

@@ -1,7 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 Logging with timestamps and optional log files.
 
-Last modified: 2016-11-02 01:07
+Last modified: 2016-11-04 13:09
 
 Print a timestamped message to a logfile, STDERR, or STDOUT.
 

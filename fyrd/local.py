@@ -1,7 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 Manage job dependency tracking with multiprocessing.
 
-Last modified: 2016-10-30 18:05
+Last modified: 2016-11-04 17:28
 
 Runs jobs with a multiprocessing.Pool, but manages dependency using an
 additional Process that loops through all submitted jobs and checks
@@ -23,13 +24,14 @@ import sys
 import atexit
 import signal
 import multiprocessing as mp
+from multiprocessing import cpu_count as _cnt
 from subprocess import check_output, CalledProcessError
 from time import sleep
 
 from . import run
 
 # Get defaults
-from . import config_file
+from . import conf
 
 # Get an Exception object to use
 from . import ClusterError
@@ -46,7 +48,6 @@ __all__ = ['JobQueue']
 #  Normal Mode Multithreading  #
 ################################
 
-from multiprocessing import cpu_count as _cnt
 THREADS  = _cnt()
 
 # Reset broken multithreading
@@ -72,8 +73,7 @@ class JobQueue(object):
         """Spawn a job_runner process to interact with."""
         self._jobqueue = mp.Queue()
         self._outputs  = mp.Queue()
-        self.jobno     = int(config_file.get_option('jobqueue', 'jobno',
-                                                    str(1)))
+        self.jobno     = int(conf.get_option('jobqueue', 'jobno', '1'))
         self.cores     = int(cores) if cores else THREADS
         self.runner    = mp.Process(target=job_runner,
                                     args=(self._jobqueue,
@@ -113,7 +113,7 @@ class JobQueue(object):
             self.jobs.update(self._outputs.get_nowait())
         if self.jobs:
             self.jobno = max(self.jobs.keys())
-            config_file.set_option('jobqueue', 'jobno', str(self.jobno))
+            conf.set_option('jobqueue', 'jobno', str(self.jobno))
 
     def add(self, function, args=None, kwargs=None, dependencies=None,
             cores=1):
@@ -329,7 +329,7 @@ def job_runner(jobqueue, outputs, cores=None, jobno=None):
 
     # Initialize job objects
     jobno   = int(jobno) if jobno \
-              else int(config_file.get_option('jobqueue', 'jobno', str(1)))
+              else int(conf.get_option('jobqueue', 'jobno', str(1)))
     jobs    = {} # This will hold job numbers
     started = [] # A list of started jobs to check against
     cores   = cores if cores else THREADS
