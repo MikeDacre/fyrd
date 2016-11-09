@@ -2,7 +2,7 @@
 """
 Class and methods to handle Job submission.
 
-Last modified: 2016-11-09 00:21
+Last modified: 2016-11-09 10:41
 """
 import os  as _os
 import sys as _sys
@@ -464,11 +464,7 @@ class Job(object):
         """
         if self.submitted:
             _logme.log('Not submitting, already submitted.', 'warn')
-            return
-
-        if not isinstance(max_queue_len, (type(None), int)):
-            raise ValueError('max_queue_len must be int or None, is {}'
-                             .format(type(max_queue_len)))
+            return self
 
         if not self.written:
             self.write()
