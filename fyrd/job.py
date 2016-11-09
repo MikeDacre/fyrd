@@ -2,7 +2,7 @@
 """
 Class and methods to handle Job submission.
 
-Last modified: 2016-11-08 11:21
+Last modified: 2016-11-09 00:21
 """
 import os  as _os
 import sys as _sys
@@ -448,13 +448,12 @@ class Job(object):
                     _logme.log('Deleteing {}'.format(f), 'debug')
                     _os.remove(f)
 
-    def submit(self, max_queue_len=None):
+    def submit(self, wait_on_max_queue=True):
         """Submit this job.
 
         Args:
-            max_queue_len: if specified (or in defaults), then this method will
-                           block until the queue is open enough to allow
-                           submission.
+            wait_on_max_queue (str): Block until queue limit is below the
+                                     maximum before submitting.
 
         To disable max_queue_len, set it to 0. None will allow override by
         the default settings in the config file, and any positive integer will
@@ -476,8 +475,8 @@ class Job(object):
 
         self.update()
 
-        if max_queue_len is not 0:
-            self.queue.wait_to_submit(max_queue_len)
+        if wait_on_max_queue:
+            self.queue.wait_to_submit()
 
         if self.qtype == 'local':
             # Normal mode dependency tracking uses only integer job numbers
