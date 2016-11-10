@@ -2,7 +2,7 @@
 """
 Get and set config file options.
 
-Last modified: 2016-11-08 11:09
+Last modified: 2016-11-09 22:26
 
 The functions defined here provide an easy way to access the config file
 defined by CONFIG_FILE (default ~/.fyrd/config.txt) and the config.get('jobs',
@@ -108,14 +108,6 @@ Set the options for managing job submission and getting:
                            auto-submit the job. Otherwise throws an error and
                            returns None
     profile_file (str):    the config file where profiles are defined.
-"""
-
-DEFAULTS['opts'] = {}
-"""
-Define keyword options from options.py that will be the default in every
-profile.
-
-A good example would be a queue/partition: {'partition': 'normal'}
 """
 
 DEFAULTS['jobqueue'] = {'jobno': 1}
@@ -465,17 +457,15 @@ def create_config_interactive():
     print('\nIs there a default queue you wish to submit to if no other',
           'options are given?\nIf so enter the name below, or leave blank',
           'to ignore.\n')
-    def_queue = _run.get_input('Default queue: ')
-    if def_queue:
-        cnf['opts']['partition'] = def_queue
+    def_queue = _run.get_input('Default queue: ').strip()
 
     print('\nThank you, configuring options.\n'
           'Please edit the file directly to inspect or edit your config.\n')
 
-    create_config(cnf)
+    create_config(cnf, def_queue)
 
 
-def create_config(cnf=None):
+def create_config(cnf=None, def_queue=None):
     """Create an initial config file.
 
     Gets all information from the file-wide DEFAULTS constant and overwrites
@@ -486,7 +476,8 @@ def create_config(cnf=None):
     populated from DEFAULTS.
 
     Args:
-        cnf (dict): A dictionary of config defaults.
+        cnf (dict):      A dictionary of config defaults.
+        def_queue (str): A name for a queue to add to the default profile.
     """
     global config
     config = _configparser.ConfigParser(allow_no_value=True)
@@ -511,6 +502,11 @@ def create_config(cnf=None):
 
     with open(CONFIG_FILE, 'w') as fout:
         config.write(fout)
+
+    if def_queue:
+        def_prof = get_profile('DEFAULT')
+        def_prof.args.update({'partition': def_queue})
+        def_prof.write()
 
 
 ###############################################################################

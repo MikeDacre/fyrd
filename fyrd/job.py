@@ -2,7 +2,7 @@
 """
 Class and methods to handle Job submission.
 
-Last modified: 2016-11-09 00:21
+Last modified: 2016-11-09 22:20
 """
 import os  as _os
 import sys as _sys
@@ -177,23 +177,22 @@ class Job(object):
         self.command = command
         self.args    = args
 
-        # Merge in profile
+        # Merge in profile, this includes all args from the DEFAULT profile
+        # as well, ensuring that those are always set at a minumum.
         if profile:
-            # This is a Profile() object, the arguments are in the args dict
             prof = _conf.get_profile(profile)
-            if prof:
-                for k,v in prof.args.items():
-                    if k not in kwargs:
-                        kwargs[k] = v
-            else:
-                _logme.log('No profile found for {}'.format(profile), 'warn')
+            if not prof:
+                raise _ClusterError('No profile found for {}'.format(profile))
+        else:
+            prof = _conf.get_profile('DEFAULT')
+        for k,v in prof.args.items():
+            if k not in kwargs:
+                kwargs[k] = v
 
         # If no profile or keywords, use default profile, args is a dict
         default_args = _conf.get_profile('default').args
-        if not profile and not kwargs:
-            kwargs = default_args
 
-        # Get required options
+        # Get flesh out args with default
         req_options = _conf.get_option('opts')
         if req_options:
             for k,v in req_options.items():
@@ -465,10 +464,6 @@ class Job(object):
         if self.submitted:
             _logme.log('Not submitting, already submitted.', 'warn')
             return
-
-        if not isinstance(max_queue_len, (type(None), int)):
-            raise ValueError('max_queue_len must be int or None, is {}'
-                             .format(type(max_queue_len)))
 
         if not self.written:
             self.write()
