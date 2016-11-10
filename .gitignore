@@ -69,3 +69,6 @@ target/
 install_module.sh
 
 setuptools*
+
+# Pyenv
+.python-version
