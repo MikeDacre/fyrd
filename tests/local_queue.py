@@ -9,11 +9,27 @@ import fyrd
 
 fyrd.logme.MIN_LEVEL = 'info'
 
+
+###############################################################################
+#                              Support Functions                              #
+###############################################################################
+
+
 def write_to_file(string, file):
     """Write a string to a file."""
     with open(file, 'w') as fout:
         fout.write(string + '\n')
     return 0
+
+
+def raise_me(number, power=2):
+    """Raise number to power."""
+    return number**power
+
+
+###############################################################################
+#                               Test Functions                                #
+###############################################################################
 
 
 def test_job_creation():
@@ -88,6 +104,14 @@ def test_function_submission():
     return 0
 
 
+def test_function_keywords():
+    """Submit a simple function with keyword arguments."""
+    job = fyrd.Job(raise_me, (10,), kwargs={'power': 10}).submit()
+    assert job.get() == 10**10
+    job.clean(delete_outputs=True)
+    return 0
+
+
 def test_dir_clean():
     """Clean all job files in this dir."""
     fyrd.basic.clean_dir(delete_outputs=True)
@@ -116,6 +140,7 @@ def main(argv=None):
     test_job_execution()
     count += test_job_cleaning()
     count += test_function_submission()
+    count += test_function_keywords()
     count += test_dir_clean()
     if count > 0:
         sys.stderr.write('Some tests failed')

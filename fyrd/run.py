@@ -2,7 +2,7 @@
 """
 File management and execution functions.
 
-Last modified: 2016-11-07 21:32
+Last modified: 2016-11-09 23:17
 """
 import os
 import re
@@ -418,43 +418,42 @@ try:
 except Exception as e:
     out = e
 
+ERR_MESSAGE = '''\
+Failed to import your function. This usually happens when you have a module
+installed locally that is not available on the compute nodes.\n In this case
+the module is {{}}.
 
-def run_function(func_c, arglist=None):
+However, I can only catch the first uninstalled module. To make sure all of
+your modules are installed on the compute nodes, do this::
+
+    freeze --local | grep -v ^\-e | cut -d = -f 1 "> module_list.txt\n
+
+Then, submit a job to the compute nodes with this command::
+
+    cat module_list.txt | xargs pip install --user
+'''
+
+
+def run_function(func_c, args=None, kwargs=None):
     '''Run a function with arglist and return output.'''
     if not hasattr(func_c, '__call__'):
-        raise Exception('{{}} is not a callable function.'.format(
-            func_c))
-    if arglist:
-        if isinstance(arglist, (tuple, list)):
-            ot = func_c(*arglist)
-        elif isinstance(arglist, dict):
-            ot = func_c(**arglist)
-        else:
-            ot = func_c(arglist)
+        raise Exception('{{}} is not a callable function.'
+                        .format(func_c))
+    if args and kwargs:
+        ot = func_c(*args, **kwargs)
+    elif args:
+        try:
+            iter(args)
+        except TypeError:
+            args = (args,)
+        if isinstance(args, str):
+            args = (args,)
+        ot = func_c(*args)
+    elif kwargs:
+        ot = func_c(**kwargs)
     else:
         ot = func_c()
     return ot
-
-
-def cmd(command, arglist=None):
-    '''Run a command and return exitcode, stdout, stderr.'''
-    if isinstance(command, (list, tuple)):
-        if arglist:
-            raise Exception('Cannot submit list/tuple command as i' +
-                            'well as arglist argument')
-        command = ' '.join(command)
-    assert isinstance(command, str)
-    if arglist:
-        if isinstance(arglist, (list, tuple)):
-            arglist = ' '.join(arglist)
-        arglist = command + arglist
-    else:
-        arglist = command
-    pp = Popen(arglist, shell=True, universal_newlines=True,
-               stdout=PIPE, stderr=PIPE)
-    ot, err = pp.communicate()
-    code = pp.returncode
-    return code, ot.rstrip(), err.rstrip()
 
 
 if __name__ == "__main__":
@@ -463,34 +462,20 @@ if __name__ == "__main__":
         with open('{pickle_file}', 'rb') as fin:
             # Try to install packages first
             try:
-                function_call, args = pickle.load(fin)
+                function_call, args, kwargs = pickle.load(fin)
             except ImportError as e:
                 module = str(e).split(' ')[-1]
                 node   = socket.gethostname()
-                sys.stderr.write('Failed to import your function. This usually '
-                                 'happens when you have a module installed locally'
-                                 ' that is not available on the compute nodes.\n'
-                                 'In this case the module is '
-                                 '{{}}.\n'.format(module) +
-                                 'However, I can only catch the first uninstalled '
-                                 'module. To make sure all of your modules are '
-                                 'installed on the compute nodes, do this::\n'
-                                 "freeze --local | grep -v '^\-e' | cut -d = -f 1 "
-                                 '> module_list.txt\n'
-                                 'Then, submit a job to the compute nodes with '
-                                 'this command::\n'
-                                 'cat module_list.txt | xargs pip install '
-                                 '--user\n')
+                sys.stderr.write(ERR_MESSAGE.format(module))
                 out = ImportError(('Module {{}} is not installed on compute '
                                    'node {{}}').format(module, node))
 
     try:
-        out = run_function(function_call, args)
+        if not out:
+            out = run_function(function_call, args, kwargs)
     except Exception as e:
         out = e
 
     with open('{out_file}', 'wb') as fout:
-        pickle.dump(out, fout)\
+        pickle.dump(out, fout)
 """
-
-

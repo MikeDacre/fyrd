@@ -2,7 +2,7 @@
 """
 Functions to allow simple job and file submission without the Job class.
 
-Last modified: 2016-11-08 09:18
+Last modified: 2016-11-10 15:51
 """
 import os  as _os
 import sys as _sys
@@ -29,23 +29,27 @@ __all__ = ['submit', 'make_job', 'make_job_file', 'submit_file', 'clean_dir']
 ###############################################################################
 
 
-def submit(command, args=None, name=None,qtype=None,
-           profile=None, **kwargs):
+def submit(command, args=None, kwargs=None, name=None, qtype=None,
+           profile=None, **kwds):
     """Submit a script to the cluster.
 
     Args:
-        command:   The command or function to execute.
-        args:      Optional arguments to add to command, particularly
-                   useful for functions.
-        name:      The name of the job.
-        qtype:     'torque', 'slurm', or 'normal'
-        profile:   The name of a profile saved in the conf
-        kwargs:    Keyword arguments to control job options
+            command (function/str): The command or function to execute.
+            args (tuple/dict):      Optional arguments to add to command,
+                                    particularly useful for functions.
+            kwargs (dict):          Optional keyword arguments to pass to the
+                                    command, only used for functions.
+            name (str):             Optional name of the job. If not defined,
+                                    guessed. If a job of the same name is
+                                    already queued, an integer job number (not
+                                    the queue number) will be added, ie.
+                                    <name>.1
+            qtype (str):            Override the default queue type
+            profile (str):          The name of a profile saved in the
+                                    conf
 
-    There are many keyword arguments available for cluster job submission.
-    These vary somewhat by queue type. For info run::
-
-        fyrd.options.option_help()
+            *All other keywords are parsed into cluster keywords by the
+            options system. For available keywords see `fyrd.option_help()`*
 
     Returns:
         Job object
@@ -53,8 +57,8 @@ def submit(command, args=None, name=None,qtype=None,
 
     _queue.check_queue()  # Make sure the queue.MODE is usable
 
-    job = Job(command=command, args=args, name=name, qtype=qtype,
-              profile=profile, **kwargs)
+    job = Job(command=command, args=args, kwargs=kwargs, name=name,
+              qtype=qtype, profile=profile, **kwds)
 
     job.write()
     job.submit()
@@ -68,68 +72,73 @@ def submit(command, args=None, name=None,qtype=None,
 #########################
 
 
-def make_job(command, args=None, name=None, qtype=None,
-             profile=None, **kwargs):
+def make_job(command, args=None, kwargs=None, name=None, qtype=None,
+             profile=None, **kwds):
     """Make a job file compatible with the chosen cluster.
 
     If mode is local, this is just a simple shell script.
 
     Args:
-        command:   The command or function to execute.
-        args:      Optional arguments to add to command, particularly
-                   useful for functions.
-        name:      The name of the job.
-        path:      Where to create the script, if None, current dir used.
-        qtype:     'torque', 'slurm', or 'normal'
-        profile:   The name of a profile saved in the conf
+            command (function/str): The command or function to execute.
+            args (tuple/dict):      Optional arguments to add to command,
+                                    particularly useful for functions.
+            kwargs (dict):          Optional keyword arguments to pass to the
+                                    command, only used for functions.
+            name (str):             Optional name of the job. If not defined,
+                                    guessed. If a job of the same name is
+                                    already queued, an integer job number (not
+                                    the queue number) will be added, ie.
+                                    <name>.1
+            qtype (str):            Override the default queue type
+            profile (str):          The name of a profile saved in the
+                                    conf
 
-    There are many keyword arguments available for cluster job submission.
-    These vary somewhat by queue type. For info run::
-
-        fyrd.options.option_help()
+            *All other keywords are parsed into cluster keywords by the
+            options system. For available keywords see `fyrd.option_help()`*
 
     Returns:
-        A Job object
+        Job object
     """
 
     _queue.check_queue()  # Make sure the queue.MODE is usable
 
-    job = Job(command=command, args=args, name=name, qtype=qtype,
-              profile=profile, **kwargs)
+    job = Job(command=command, args=args, kwargs=kwargs, name=name,
+              qtype=qtype, profile=profile, **kwds)
 
     # Return the path to the script
     return job
 
 
-def make_job_file(command, args=None, name=None, qtype=None,
-                  profile=None, **kwargs):
+def make_job_file(command, args=None, kwargs=None, name=None, qtype=None,
+                  profile=None, **kwds):
     """Make a job file compatible with the chosen cluster.
 
-    If mode is local, this is just a simple shell script.
-
     Args:
-        command:   The command or function to execute.
-        args:      Optional arguments to add to command, particularly
-                   useful for functions.
-        name:      The name of the job.
-        path:      Where to create the script, if None, current dir used.
-        qtype:     'torque', 'slurm', or 'normal'
-        profile:   The name of a profile saved in the profiles file.
-        kwargs:    Keyword arguments to control job options
+            command (function/str): The command or function to execute.
+            args (tuple/dict):      Optional arguments to add to command,
+                                    particularly useful for functions.
+            kwargs (dict):          Optional keyword arguments to pass to the
+                                    command, only used for functions.
+            name (str):             Optional name of the job. If not defined,
+                                    guessed. If a job of the same name is
+                                    already queued, an integer job number (not
+                                    the queue number) will be added, ie.
+                                    <name>.1
+            qtype (str):            Override the default queue type
+            profile (str):          The name of a profile saved in the
+                                    conf
 
-    There are many keyword arguments available for cluster job submission.
-    These vary somewhat by queue type. For info run::
-
-        fyrd.options.option_help()
+            *All other keywords are parsed into cluster keywords by the
+            options system. For available keywords see `fyrd.option_help()`*
 
     Returns:
-        Path to job script
+        Job object
     """
 
     _queue.check_queue()  # Make sure the queue.MODE is usable
 
-    job = Job(command=command, args=args, name=name, qtype=qtype,
-              profile=profile, **kwargs)
+    job = Job(command=command, args=args, kwargs=kwargs, name=name,
+              qtype=qtype, profile=profile, **kwds)
 
     job = job.write()
 

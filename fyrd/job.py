@@ -2,7 +2,7 @@
 """
 Class and methods to handle Job submission.
 
-Last modified: 2016-11-10 15:36
+Last modified: 2016-11-10 15:40
 """
 import os  as _os
 import sys as _sys
@@ -136,7 +136,7 @@ class Job(object):
     clean_files   = _conf.get_option('jobs', 'clean_files')
     clean_outputs = _conf.get_option('jobs', 'clean_outputs')
 
-    def __init__(self, command, args=None, name=None, qtype=None,
+    def __init__(self, command, args=None, kwargs=None, name=None, qtype=None,
                  profile=None, **kwds):
         """Create a job object will submission information.
 
@@ -144,6 +144,8 @@ class Job(object):
             command (function/str): The command or function to execute.
             args (tuple/dict):      Optional arguments to add to command,
                                     particularly useful for functions.
+            kwargs (dict):          Optional keyword arguments to pass to the
+                                    command, only used for functions.
             name (str):             Optional name of the job. If not defined,
                                     guessed. If a job of the same name is
                                     already queued, an integer job number (not
@@ -152,26 +154,20 @@ class Job(object):
             qtype (str):            Override the default queue type
             profile (str):          The name of a profile saved in the
                                     conf
-            kwargs (dict):          Keyword arguments to control job options
 
-        There are many keyword arguments available for cluster job submission.
-        These vary somewhat by queue type. For info run::
-            fyrd.options.option_help()
+            *All other keywords are parsed into cluster keywords by the
+            options system. For available keywords see `fyrd.option_help()`*
         """
 
         ########################
         #  Sanitize arguments  #
         ########################
 
-        # Make a copy of the keyword arguments, as we will delete arguments
-        # as we go
-        kwargs = _options.check_arguments(kwds.copy())
-
         # Override autoclean state (set in config file)
-        if 'clean_files' in kwargs:
-            self.clean_files = kwargs.pop('clean_files')
-        if 'clean_outputs' in kwargs:
-            self.clean_outputs = kwargs.pop('clean_outputs')
+        if 'clean_files' in kwds:
+            self.clean_files = kwds.pop('clean_files')
+        if 'clean_outputs' in kwds:
+            self.clean_outputs = kwds.pop('clean_outputs')
 
         # Save command
         self.command = command
@@ -179,25 +175,17 @@ class Job(object):
 
         # Merge in profile, this includes all args from the DEFAULT profile
         # as well, ensuring that those are always set at a minumum.
-        if profile:
-            prof = _conf.get_profile(profile)
-            if not prof:
-                raise _ClusterError('No profile found for {}'.format(profile))
-        else:
-            prof = _conf.get_profile('DEFAULT')
+        profile = profile if profile else 'DEFAULT'
+        prof = _conf.get_profile(profile)
+        if not prof:
+            raise _ClusterError('No profile found for {}'.format(profile))
         for k,v in prof.args.items():
-            if k not in kwargs:
-                kwargs[k] = v
+            if k not in kwds:
+                kwds[k] = v
 
-        # If no profile or keywords, use default profile, args is a dict
-        default_args = _conf.get_profile('default').args
-
-        # Get flesh out args with default
-        req_options = _conf.get_option('opts')
-        if req_options:
-            for k,v in req_options.items():
-                if k not in kwargs:
-                    kwargs[k] = v
+        # Use the default profile as a backup if any arguments missing
+        default_args = _conf.DEFAULT_PROFILES['DEFAULT']
+        default_args.update(_conf.get_profile('default').args)
 
         # Get environment
         if not _queue.MODE:
@@ -231,18 +219,18 @@ class Job(object):
         self.name = name
 
         # Set modules
-        self.modules = kwargs.pop('modules') if 'modules' in kwargs else None
+        self.modules = kwds.pop('modules') if 'modules' in kwds else None
         if self.modules:
             self.modules = _run.opt_split(self.modules, (',', ';'))
 
         # Path handling
-        runpath = _os.path.abspath(kwargs['dir'] if 'dir' in kwargs else '.')
+        runpath = _os.path.abspath(kwds['dir'] if 'dir' in kwds else '.')
         self.runpath = runpath
 
         # Set temp file path if different from runtime path
         cpath = _conf.get_option('jobs', 'filepath')
-        if 'filepath' in kwargs:
-            filepath = kwargs['filepath']
+        if 'filepath' in kwds:
+            filepath = kwds['filepath']
         elif cpath:
             filepath = cpath
         else:
@@ -252,45 +240,47 @@ class Job(object):
 
         # Make sure args are a tuple or dictionary
         if args:
+            if isinstance(args, str):
+                args = tuple(args)
             if not isinstance(args, (tuple, dict)):
-                if isinstance(args, (list, set)):
+                try:
                     args = tuple(args)
-                else:
+                except TypeError:
                     args = (args,)
 
         # In case cores are passed as None
-        if 'nodes' not in kwargs:
-            kwargs['nodes'] = default_args['nodes']
-        if 'cores' not in kwargs:
-            kwargs['cores'] = default_args['cores']
-        self.nodes = kwargs['nodes']
-        self.cores = kwargs['cores']
+        if 'nodes' not in kwds:
+            kwds['nodes'] = default_args['nodes']
+        if 'cores' not in kwds:
+            kwds['cores'] = default_args['cores']
+        self.nodes = kwds['nodes']
+        self.cores = kwds['cores']
 
         # Set output files
-        suffix = kwargs.pop('suffix') if 'suffix' in kwargs \
+        suffix = kwds.pop('suffix') if 'suffix' in kwds \
                  else _conf.get_option('jobs', 'suffix')
-        if 'outfile' in kwargs:
-            pth, fle = _os.path.split(kwargs['outfile'])
+        if 'outfile' in kwds:
+            pth, fle = _os.path.split(kwds['outfile'])
             if not pth:
                 pth = self.filepath
-            kwargs['outfile'] = _os.path.join(pth, fle)
+            kwds['outfile'] = _os.path.join(pth, fle)
         else:
-            kwargs['outfile'] = _os.path.join(
+            kwds['outfile'] = _os.path.join(
                 filepath, '.'.join([name, suffix, 'out']))
-        if 'errfile' in kwargs:
-            pth, fle = _os.path.split(kwargs['errfile'])
+        if 'errfile' in kwds:
+            pth, fle = _os.path.split(kwds['errfile'])
             if not pth:
                 pth = self.filepath
-            kwargs['errfile'] = _os.path.join(pth, fle)
+            kwds['errfile'] = _os.path.join(pth, fle)
         else:
-            kwargs['errfile'] = _os.path.join(
+            kwds['errfile'] = _os.path.join(
                 filepath, '.'.join([name, suffix, 'err']))
-        self.outfile = kwargs['outfile']
-        self.errfile = kwargs['errfile']
+        self.outfile = kwds['outfile']
+        self.errfile = kwds['errfile']
 
         # Check and set dependencies
-        if 'depends' in kwargs:
-            dependencies = kwargs.pop('depends')
+        if 'depends' in kwds:
+            dependencies = kwds.pop('depends')
             self.dependencies = []
             if isinstance(dependencies, 'str'):
                 if not dependencies.isdigit():
@@ -299,8 +289,11 @@ class Job(object):
                     dependencies = [int(dependencies)]
             elif isinstance(dependencies, (int, Job)):
                 dependencies = [dependencies]
-            elif not isinstance(dependencies, (tuple, list)):
-                raise _ClusterError('Dependencies must be number or list')
+            else:
+                try:
+                    dependencies = list(dependencies)
+                except TypeError:
+                    raise _ClusterError('Dependencies must be number or list')
             for dependency in dependencies:
                 if isinstance(dependency, str):
                     dependency  = int(dependency)
@@ -313,8 +306,8 @@ class Job(object):
         ######################################
 
         # Get imports
-        if 'imports' in kwargs:
-            self.imports = kwargs.pop('imports')
+        if 'imports' in kwds:
+            self.imports = kwds.pop('imports')
         else:
             self.imports = None
 
@@ -327,11 +320,10 @@ class Job(object):
             self.poutfile = self.outfile + '.func.pickle'
             self.function = _Function(
                 file_name=script_file, function=command, args=args,
-                outfile=self.poutfile, imports=self.imports
+                kwargs=kwargs, outfile=self.poutfile, imports=self.imports
             )
             # Collapse the command into a python call to the function script
-            command = '{} {}'.format(_sys.executable,
-                                     self.function.file_name)
+            command = '{} {}'.format(_sys.executable, self.function.file_name)
             args = None
         else:
             self.kind = 'script'
@@ -353,7 +345,9 @@ class Job(object):
         # Create queue-dependent scripts
         sub_script = ''
         if self.qtype == 'slurm':
-            scrpt = _os.path.join(filepath, '{}.{}.sbatch'.format(name, suffix))
+            scrpt = _os.path.join(
+                filepath, '{}.{}.sbatch'.format(name, suffix)
+            )
 
             # We use a separate script and a single srun command to avoid
             # issues with multiple threads running at once
@@ -366,7 +360,7 @@ class Job(object):
                                        file_name=exec_script)
 
             # Add all of the keyword arguments at once
-            precmd += _options.options_to_string(kwargs, self.qtype)
+            precmd += _options.options_to_string(kwds, self.qtype)
 
             ecmnd = 'srun bash {}'.format(exec_script)
             sub_script = _run.SCRP_RUNNER.format(precmd=precmd,
@@ -377,7 +371,7 @@ class Job(object):
             scrpt = _os.path.join(filepath, '{}.cluster.qsub'.format(name))
 
             # Add all of the keyword arguments at once
-            precmd += _options.options_to_string(kwargs, self.qtype)
+            precmd += _options.options_to_string(kwds, self.qtype)
 
             sub_script = _run.CMND_RUNNER_TRACK.format(
                 precmd=precmd, usedir=runpath, name=name, command=command)
@@ -385,7 +379,7 @@ class Job(object):
         elif self.qtype == 'local':
             # Create the pool
             if not _local.JQUEUE or not _local.JQUEUE.runner.is_alive():
-                threads = kwargs['threads'] if 'threads' in kwargs \
+                threads = kwds['threads'] if 'threads' in kwds \
                         else _local.THREADS
                 _local.JQUEUE = _local.JobQueue(cores=threads)
 
@@ -401,7 +395,7 @@ class Job(object):
                                   file_name=scrpt)
 
         # Save the keyword arguments for posterity
-        self.kwargs = kwargs
+        self.kwargs = kwds
 
     ####################
     #  Public Methods  #
