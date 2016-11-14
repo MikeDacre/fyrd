@@ -54,7 +54,7 @@ for scpt in scpt_dir:
 
 setup(
     name='fyrd',
-    version='0.6.1-beta.5',
+    version='0.6.1-beta.6',
     description=('Submit functions and shell scripts to torque, slurm, ' +
                  'or local machines'),
     long_description=long_description,
@@ -81,6 +81,7 @@ setup(
         'Programming Language :: Python :: 3.3',
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
     ],
 
     keywords='slurm torque multiprocessing cluster job_management',

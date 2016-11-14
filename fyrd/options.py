@@ -2,8 +2,6 @@
 """
 Available options for job submission.
 
-Last modified: 2016-11-14 14:39
-
 All keyword arguments that can be used with Job() objects are defined in this
 file. These can be edited by the end user to increase functionality.
 

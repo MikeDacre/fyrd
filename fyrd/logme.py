@@ -2,8 +2,6 @@
 """
 Logging with timestamps and optional log files.
 
-Last modified: 2016-11-11 03:13
-
 Print a timestamped message to a logfile, STDERR, or STDOUT.
 
 If STDERR or STDOUT are used, colored flags are added.  Colored flags are INFO,

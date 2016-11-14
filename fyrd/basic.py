@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Functions to allow simple job and file submission without the Job class.
-
-Last modified: 2016-11-14 13:23
 """
 import os  as _os
 import sys as _sys

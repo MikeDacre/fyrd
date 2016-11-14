@@ -7,11 +7,8 @@ Manage fyrd config, profiles, and queue.
 Author         Michael D Dacre <mike.dacre@gmail.com>
 Organization   Stanford University
 License        MIT License, use as you wish
-Created        2016-10-08
-Version        0.4.0b1
+Version        0.6.2-beta.6
 ============   ======================================
-
-Last modified: 2016-11-14 14:23
 """
 from __future__ import print_function
 import sys

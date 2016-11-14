@@ -2,8 +2,6 @@
 """
 Get and set config file options.
 
-Last modified: 2016-11-14 13:18
-
 The functions defined here provide an easy way to access the config file
 defined by CONFIG_FILE (default ~/.fyrd/config.txt) and the config.get('jobs',
 'profile_file') (default ~/.fyrd/profile.txt).

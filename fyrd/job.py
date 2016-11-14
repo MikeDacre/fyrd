@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Class and methods to handle Job submission.
-
-Last modified: 2016-11-14 13:27
 """
 import os  as _os
 import sys as _sys

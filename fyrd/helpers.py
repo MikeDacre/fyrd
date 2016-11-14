@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 High level functions to make complex tasks easier.
-
-Last modified: 2016-11-11 02:42
 """
 import inspect as _inspect
 

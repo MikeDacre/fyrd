@@ -2,8 +2,6 @@
 """
 Manage job dependency tracking with multiprocessing.
 
-Last modified: 2016-11-04 17:28
-
 Runs jobs with a multiprocessing.Pool, but manages dependency using an
 additional Process that loops through all submitted jobs and checks
 dependencies before running.

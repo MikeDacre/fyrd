@@ -2,8 +2,6 @@
 """
 Monitor the queue for torque or slurm.
 
-Last modified: 2016-11-11 16:09
-
 Provides a class to monitor the torque, slurm, or local queues with identical
 syntax.
 

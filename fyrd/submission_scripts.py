@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Classes to build submission scripts.
-
-Last modified: 2016-11-09 23:04
 """
 import os  as _os
 import sys as _sys

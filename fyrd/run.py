@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 File management and execution functions.
-
-Last modified: 2016-11-11 02:45
 """
 import os
 import re
