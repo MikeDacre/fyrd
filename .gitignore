@@ -60,7 +60,9 @@ coverage.xml
 *.log
 
 # Sphinx documentation
-docs/sphinx/_build/
+docs/_build/
+docs/_modules/
+docs/_static/
 
 # PyBuilder
 target/
@@ -69,3 +71,6 @@ target/
 install_module.sh
 
 setuptools*
+
+# Pyenv
+.python-version

@@ -80,6 +80,6 @@ def test_delete():
     fyrd.conf.CONFIG_FILE = os.path.abspath(
         os.path.expanduser('~/.fyrd/config.txt')
     )
-    fyrd.conf.PROFILE_FILE = os.path.abspath(
-        os.path.expanduser('~/.fyrd/profiles.txt')
+    fyrd.conf.set_option(
+        'jobs', 'profile_file', os.path.expanduser('~/.fyrd/profiles.txt')
     )

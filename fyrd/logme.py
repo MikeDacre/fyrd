@@ -2,8 +2,6 @@
 """
 Logging with timestamps and optional log files.
 
-Last modified: 2016-11-04 13:09
-
 Print a timestamped message to a logfile, STDERR, or STDOUT.
 
 If STDERR or STDOUT are used, colored flags are added.  Colored flags are INFO,
@@ -19,12 +17,14 @@ MIN_LEVEL can also be provided, logs will only print if vlevel > MIN_LEVEL.
 Level order: critical>error>warn>info>debug>verbose
 
 Usage::
+
     import logme as lm
     lm.log("Screw up!", <outfile>,
         level='debug'|'info'|'warn'|'error'|'normal',
         also_write='stderr'|'stdout')
 
 Example::
+
     lm.log('Hi')
     Prints: 20160223 11:46:24.969 | INFO --> Hi
     lm.log('Hi', level='debug')

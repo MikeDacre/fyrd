@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 File management and execution functions.
-
-Last modified: 2016-11-07 21:32
 """
 import os
 import re
@@ -200,57 +198,6 @@ def write_iterable(iterable, outfile):
         fout.write('\n'.join(iterable))
 
 
-def split_file(infile, parts, outpath='', keep_header=True):
-    """Split a file in parts and return a list of paths.
-
-    NOTE: Linux specific (uses wc).
-
-    Args:
-        outpath:     The directory to save the split files.
-        keep_header: Add the header line to the top of every file.
-
-    Returns:
-        list: Paths to split files.
-    """
-    # Determine how many reads will be in each split sam file.
-    logme.log('Getting line count', 'debug')
-    num_lines = int(os.popen(
-        'wc -l ' + infile + ' | awk \'{print $1}\'').read())
-    num_lines   = int(int(num_lines)/int(parts)) + 1
-
-    # Subset the file into X number of jobs, maintain extension
-    cnt       = 0
-    currjob   = 1
-    suffix    = '.split_' + str(currjob).zfill(4) + '.' + infile.split('.')[-1]
-    file_name = os.path.basename(infile)
-    run_file  = os.path.join(outpath, file_name + suffix)
-    outfiles  = [run_file]
-
-    # Actually split the file
-    logme.log('Splitting file', 'debug')
-    with open(infile) as fin:
-        header = fin.readline() if keep_header else ''
-        sfile = open(run_file, 'w')
-        sfile.write(header)
-        for line in fin:
-            cnt += 1
-            if cnt < num_lines:
-                sfile.write(line)
-            elif cnt == num_lines:
-                sfile.write(line)
-                sfile.close()
-                currjob += 1
-                suffix = '.split_' + str(currjob).zfill(4) + '.' + \
-                    infile.split('.')[-1]
-                run_file = os.path.join(outpath, file_name + suffix)
-                sfile = open(run_file, 'w')
-                outfiles.append(run_file)
-                sfile.write(header)
-                cnt = 0
-        sfile.close()
-    return tuple(outfiles)
-
-
 def indent(string, prefix='    '):
     """Replicate python3's textwrap.indent for python2.
 
@@ -418,43 +365,42 @@ try:
 except Exception as e:
     out = e
 
+ERR_MESSAGE = '''\
+Failed to import your function. This usually happens when you have a module
+installed locally that is not available on the compute nodes.\n In this case
+the module is {{}}.
 
-def run_function(func_c, arglist=None):
+However, I can only catch the first uninstalled module. To make sure all of
+your modules are installed on the compute nodes, do this::
+
+    freeze --local | grep -v ^\-e | cut -d = -f 1 "> module_list.txt\n
+
+Then, submit a job to the compute nodes with this command::
+
+    cat module_list.txt | xargs pip install --user
+'''
+
+
+def run_function(func_c, args=None, kwargs=None):
     '''Run a function with arglist and return output.'''
     if not hasattr(func_c, '__call__'):
-        raise Exception('{{}} is not a callable function.'.format(
-            func_c))
-    if arglist:
-        if isinstance(arglist, (tuple, list)):
-            ot = func_c(*arglist)
-        elif isinstance(arglist, dict):
-            ot = func_c(**arglist)
-        else:
-            ot = func_c(arglist)
+        raise Exception('{{}} is not a callable function.'
+                        .format(func_c))
+    if args and kwargs:
+        ot = func_c(*args, **kwargs)
+    elif args:
+        try:
+            iter(args)
+        except TypeError:
+            args = (args,)
+        if isinstance(args, str):
+            args = (args,)
+        ot = func_c(*args)
+    elif kwargs:
+        ot = func_c(**kwargs)
     else:
         ot = func_c()
     return ot
-
-
-def cmd(command, arglist=None):
-    '''Run a command and return exitcode, stdout, stderr.'''
-    if isinstance(command, (list, tuple)):
-        if arglist:
-            raise Exception('Cannot submit list/tuple command as i' +
-                            'well as arglist argument')
-        command = ' '.join(command)
-    assert isinstance(command, str)
-    if arglist:
-        if isinstance(arglist, (list, tuple)):
-            arglist = ' '.join(arglist)
-        arglist = command + arglist
-    else:
-        arglist = command
-    pp = Popen(arglist, shell=True, universal_newlines=True,
-               stdout=PIPE, stderr=PIPE)
-    ot, err = pp.communicate()
-    code = pp.returncode
-    return code, ot.rstrip(), err.rstrip()
 
 
 if __name__ == "__main__":
@@ -463,34 +409,20 @@ if __name__ == "__main__":
         with open('{pickle_file}', 'rb') as fin:
             # Try to install packages first
             try:
-                function_call, args = pickle.load(fin)
+                function_call, args, kwargs = pickle.load(fin)
             except ImportError as e:
                 module = str(e).split(' ')[-1]
                 node   = socket.gethostname()
-                sys.stderr.write('Failed to import your function. This usually '
-                                 'happens when you have a module installed locally'
-                                 ' that is not available on the compute nodes.\n'
-                                 'In this case the module is '
-                                 '{{}}.\n'.format(module) +
-                                 'However, I can only catch the first uninstalled '
-                                 'module. To make sure all of your modules are '
-                                 'installed on the compute nodes, do this::\n'
-                                 "freeze --local | grep -v '^\-e' | cut -d = -f 1 "
-                                 '> module_list.txt\n'
-                                 'Then, submit a job to the compute nodes with '
-                                 'this command::\n'
-                                 'cat module_list.txt | xargs pip install '
-                                 '--user\n')
+                sys.stderr.write(ERR_MESSAGE.format(module))
                 out = ImportError(('Module {{}} is not installed on compute '
                                    'node {{}}').format(module, node))
 
     try:
-        out = run_function(function_call, args)
+        if not out:
+            out = run_function(function_call, args, kwargs)
     except Exception as e:
         out = e
 
     with open('{out_file}', 'wb') as fout:
-        pickle.dump(out, fout)\
+        pickle.dump(out, fout)
 """
-
-

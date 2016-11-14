@@ -2,8 +2,6 @@
 """
 Monitor the queue for torque or slurm.
 
-Last modified: 2016-11-08 11:31
-
 Provides a class to monitor the torque, slurm, or local queues with identical
 syntax.
 
@@ -69,6 +67,27 @@ _defaults = conf.get_option('queue')
 # This is set in the get_cluster_environment() function.
 MODE = ''
 
+# Define torque-to-slurm mappings
+TORQUE_SLURM_STATES = {
+    'C': 'completed',
+    'E': 'completing',
+    'H': 'held',  # Not a SLURM state
+    'Q': 'pending',
+    'R': 'running',
+    'T': 'suspended',
+    'W': 'running',
+    'S': 'suspended',
+}
+
+# Define job states
+GOOD_STATES      = ['complete', 'completed', 'special_exit']
+ACTIVE_STATES    = ['configuring', 'completing', 'pending',
+                    'running']
+BAD_STATES       = ['boot_fail', 'cancelled', 'failed',
+                    'node_fail', 'timeout']
+UNCERTAIN_STATES = ['hold', 'preempted', 'stopped',
+                    'suspended']
+ALL_STATES = GOOD_STATES + ACTIVE_STATES + BAD_STATES + UNCERTAIN_STATES
 
 ###############################################################################
 #                               The Queue Class                               #
@@ -77,31 +96,34 @@ MODE = ''
 
 class Queue(object):
 
-    """Handle torque, slurm, or multiprocessing objects.
+    """A wrapper for torque, slurm, or local queues.
 
-    All methods are transparent and work the same regardless of queue type.
-
-    Queue.queue is a list of jobs in the queue. For torque and slurm, this is
-    all jobs in the queue for the specified user. In local mode, it is all jobs
-    added to the pool, Queue must be notified of these by adding the job object
-    to the queue directly with add().
-
+    Attributes:
+        jobs (dict)             A dictionary of all jobs in this queue
+                                {jobid: Queue.QueueJob}
+        max_jobs (int):         The maximum number of jobs allowed in the queue
+        job_states (int):       A list of the different states of jobs in this
+                                queue
+        active_job_count (int): A count of all jobs that are either queued or
+                                running in the current queue
+        can_submit (bool):      True if total active jobs is less than max_jobs
     """
 
-    def __init__(self, user=None, qtype=None, partition=None):
-        """Create a queue object specific to a single queue and user.
+    def __init__(self, user=None, partition=None, qtype=None,):
+        """Can filter by user, queue type or partition on initialization.
 
         Args:
-            qtype:     'torque', 'slurm', or 'local', defaults to auto-detect.
-            user:      Optional usernameto filter the queue with.
-                       If user='self' or 'current', the current user will be
-                       used.
-            partition: Optional partition to filter the queue with.
+            user (str):      Optional usernameto filter the queue with.
+                             If user='self' or 'current', the current user will
+                             be used.
+            partition (str): Optional partition to filter the queue with.
+            qtype (str):     'torque', 'slurm', or 'local', defaults to auto-detect.
         """
         # Get user ID as an int UID
         if user:
             if user == 'self' or user == 'current':
                 self.user = getpass.getuser()
+                """The username if defined."""
                 self.uid  = pwd.getpwnam(self.user).pw_uid
             elif user == 'ALL':
                 self.user = None
@@ -115,6 +137,11 @@ class Queue(object):
             self.uid = None
         self.user = pwd.getpwuid(self.uid).pw_name if self.uid else None
         self.partition = partition
+        """The partition if defined."""
+
+        # Set queue length
+        self.max_jobs = conf.get_option('queue', 'max_jobs')
+        """The maximum number of jobs that can run in this queue."""
 
         # Support python2, which hates reciprocal import
         from .job import Job
@@ -138,6 +165,7 @@ class Queue(object):
 
         # Will contain a dict of QueueJob objects indexed by ID
         self.jobs = {}
+        """All jobs currently in this queue."""
 
         self._update()
 
@@ -171,7 +199,8 @@ class Queue(object):
         if not isinstance(jobs, (list, tuple)):
             jobs = [jobs]
         for job in jobs:
-            if not isinstance(job, (str, int, self._Job, self._JobQueue)):
+            if not isinstance(job, (str, int, self.QueueJob, self._Job,
+                                    self._JobQueue)):
                 raise ClusterError('job must be int, string, or Job, ' +
                                    'is {}'.format(type(job)))
 
@@ -181,7 +210,7 @@ class Queue(object):
         for job in jobs:
             logme.log('Checking {}'.format(job), 'debug')
             qtype = job.qtype if isinstance(job, self._Job) else self.qtype
-            if isinstance(job, (self._Job, self._JobQueue)):
+            if isinstance(job, (self._Job, self._JobQueue, self.QueueJob)):
                 job = job.id
             if qtype == 'local':
                 logme.log('Job is in local queue', 'debug')
@@ -198,6 +227,7 @@ class Queue(object):
                 logme.log('Job is in remote queue', 'debug')
                 if isinstance(job, self._Job):
                     job = job.id
+                job = int(job)
                 not_found = 0
                 lgd = False
                 while True:
@@ -209,13 +239,14 @@ class Queue(object):
                             logme.log('Attempt #{}/12'.format(not_found),
                                       'debug')
                         else:
-                            logme.log('{} not in queue, waiting up to 12s ' +
+                            logme.log('{} not in queue, waiting up to 12s '
+                                      .format(job) +
                                       'for it to appear', 'info')
                             lgd = True
                         sleep(1)
                         not_found += 1
                         if not_found == 12:
-                            raise self.QueueError(
+                            raise QueueError(
                                 '{} not in queue, tried 12 times over 12s'
                                 .format(job)
                             )
@@ -226,23 +257,15 @@ class Queue(object):
                     start    = _dt.now()
                     res_time = conf.get_option('queue', 'res_time')
                     count    = 0
-                    # Define job states
-                    good_states      = ['complete', 'completed', 'special_exit']
-                    active_states    = ['configuring', 'completing', 'pending'
-                                        'running']
-                    bad_states       = ['boot_fail', 'cancelled', 'failed',
-                                        'node_fail', 'timeout']
-                    uncertain_states = ['hold', 'preempted', 'stopped',
-                                        'suspended']
                     # Get job state
                     job_state = self.jobs[job].state
                     # Check the state
-                    if job_state in good_states:
+                    if job_state in GOOD_STATES:
                         logme.log('Queue wait for {} complete'
                                   .format(job), 'debug')
                         sleep(0.1)
                         break
-                    elif job_state in active_states:
+                    elif job_state in ACTIVE_STATES:
                         if lgd:
                             logme.log('{} not complete yet, waiting'
                                       .format(job), 'debug')
@@ -251,11 +274,11 @@ class Queue(object):
                             logme.log('{} still not complete, waiting'
                                       .format(job), 'verbose')
                         sleep(self.sleep_len)
-                    elif job_state in bad_states:
+                    elif job_state in BAD_STATES:
                         logme.log('Job {} failed with state {}'
                                   .format(job, job_state), 'error')
                         return False
-                    elif job_state in uncertain_states:
+                    elif job_state in UNCERTAIN_STATES:
                         if not lgd2:
                             logme.log('Job {} in state {}, waiting {} '
                                       .format(job, job_state, res_time) +
@@ -271,8 +294,8 @@ class Queue(object):
                             logme.log('Job {} in unknown state {} '
                                       .format(job, job_state) +
                                       'cannot continue', 'critical')
-                            raise self.QueueError('Unknown job state {}'
-                                                  .format(job_state))
+                            raise QueueError('Unknown job state {}'
+                                             .format(job_state))
                         logme.log('Job {} in unknown state {} '
                                   .format(job, job_state) +
                                   'trying to resolve', 'debug')
@@ -283,27 +306,18 @@ class Queue(object):
         sleep(0.5)
         return True
 
-    def can_submit(self, max_queue_len=None):
-        """Return True if R/Q jobs are less than max_queue_len.
+    def wait_to_submit(self, max_jobs=None):
+        """Block until fewer running/queued jobs in queue than max_jobs.
 
-        If max_queue_len is None, default from config is used.
-        """
-        qlen = max_queue_len if max_queue_len else \
-            conf.get_option('queue', 'max_jobs', 3000)
-        qlen = int(qlen)
-        assert qlen > 0
-        self.update()
-        return True if len(self.queued)+len(self.running) < qlen else False
-
-    def wait_to_submit(self, max_queue_len=None):
-        """Wait until R/Q jobs are less than max_queue_len.
-
-        If max_queue_len is None, default from config is used.
+        Args:
+            max_jobs (int): Override self.max_jobs
         """
         count   = 50
         written = False
+        if max_jobs:
+            self.max_jobs = int(max_jobs)
         while True:
-            if self.can_submit(max_queue_len):
+            if self.can_submit:
                 return
             if not written:
                 logme.log(('The queue is full, there are {} jobs running and '
@@ -326,6 +340,73 @@ class Queue(object):
         else:
             logme.log('Skipping update as last update too recent', 'debug')
         return self
+
+    def get_jobs(self, key):
+        """Return a dict of jobs where state matches key."""
+        retjobs = {}
+        for jobid, job in self.jobs.items():
+            if job.state == key.lower():
+                retjobs[jobid] = job
+        return retjobs
+
+    def get_user_jobs(self, users):
+        """Filter jobs by user.
+
+        Args:
+            users (list): A list of users/owners
+
+        Returns:
+            dict: A filtered job dictionary of {job_id: QueueJob} for all jobs
+                  owned by the queried users.
+        """
+        try:
+            if isinstance(users, (str, int)):
+                users = [users]
+            else:
+                users = list(users)
+        except TypeError:
+            users = [users]
+        return {k: v for k, v in self.jobs.items() if v.owner in users}
+
+    @property
+    def users(self):
+        """Return a list of users with jobs running."""
+        return [job.owner for job in self.jobs.values()]
+
+    @property
+    def job_states(self):
+        """Return a list of job states for all jobs in the queue."""
+        return [job.state for job in self.jobs]
+
+    @property
+    def finished(self):
+        """Return a list of jobs that are neither queued nor running."""
+        return {i: j for i, j in self.jobs.items() \
+                if j.state not in ACTIVE_STATES}
+
+    @property
+    def bad(self):
+        """Return a list of jobs that have bad or uncertain states."""
+        return {i: j for i, j in self.jobs.items() \
+                if j.state in BAD_STATES or j.state in UNCERTAIN_STATES}
+
+    @property
+    def active_job_count(self):
+        """Return a count of all queued or running jobs."""
+        return sum([
+            len(j) for j in [
+                self.get_jobs(i) for i in ACTIVE_STATES
+            ]
+        ])
+
+    @property
+    def can_submit(self):
+        """Return True if R/Q jobs are less than max_jobs.
+
+        If max_jobs is None, default from config is used.
+        """
+        self.update()
+        return self.active_job_count < self.max_jobs
 
     ######################
     # Internal Functions #
@@ -409,26 +490,17 @@ class Queue(object):
                     qjob.state = 'completed'
                     qjob.disappeared = True
 
-    def _get_jobs(self, key):
-        """Return a dict of jobs where state matches key."""
-        retjobs = {}
-        for jobid, job in self.jobs.items():
-            if job.state == key.lower():
-                retjobs[jobid] = job
-        return retjobs
-
     def __getattr__(self, key):
         """Make running and queued attributes dynamic."""
         key = key.lower()
+        if key in TORQUE_SLURM_STATES:
+            key = TORQUE_SLURM_STATES[key]
         if key == 'complete':
             key = 'completed'
         elif key == 'queued':
             key = 'pending'
-        if key == 'running' or key == 'pending' or key == 'completed':
-            return self._get_jobs(key)
-        # Define whether the queue is open
-        if key == 'can_submit':
-            return self.can_submit()
+        if key in ALL_STATES:
+            return self.get_jobs(key)
 
     def __getitem__(self, key):
         """Allow direct accessing of jobs by job id."""
@@ -471,17 +543,29 @@ class Queue(object):
 
     class QueueJob(object):
 
-        """Only used for torque/slurm jobs in the queue."""
+        """A very simple class to store info about jobs in the queue.
+
+        Only used for torque and slurm queues.
+
+        Attributes:
+            id (int)            Job ID
+            name (str)          Job name
+            owner (str)         User who owns the job
+            queue (str)         The queue/partition the job is running in
+            state (str)         Current state of the job, normalized to slurm
+                                states
+            nodes (list)        List of nodes job is running on
+            exitcode (int)      Exit code of completed job
+            disappeared (bool): Job cannot be found in the queue anymore
+        """
 
         id          = None
         name        = None
         owner       = None
-        user        = None
         queue       = None
         state       = None
         nodes       = None
         exitcode    = None
-        threads     = None
         disappeared = False
 
         def __init__(self):
@@ -507,15 +591,15 @@ class Queue(object):
             """Print job ID."""
             return str(self.id)
 
-    ################
-    #  Exceptions  #
-    ################
+################
+#  Exceptions  #
+################
 
-    class QueueError(Exception):
+class QueueError(Exception):
 
-        """Simple Exception wrapper."""
+    """Simple Exception wrapper."""
 
-        pass
+    pass
 
 
 ###############################################################################
@@ -598,17 +682,7 @@ def torque_queue_parser(user=None, partition=None):
             job_name  = xmljob.find('Job_Name').text
             job_queue = xmljob.find('queue').text
             job_state = xmljob.find('job_state').text
-            torque_slurm_states = {
-                'C': 'completed',
-                'E': 'completing',
-                'H': 'held',  # Not a SLURM state
-                'Q': 'pending',
-                'R': 'running',
-                'T': 'suspended',
-                'W': 'running',
-                'S': 'suspended',
-            }
-            job_state = torque_slurm_states[job_state]
+            job_state = TORQUE_SLURM_STATES[job_state]
             logme.log('Job {} state: {}'.format(job_id, job_state),
                       'debug')
             ndsx = xmljob.find('exec_host')

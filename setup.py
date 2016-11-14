@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Setup Script for Fyrd
 """
@@ -9,9 +10,34 @@ from setuptools import setup
 from setuptools.command.test import test as TestCommand
 log = setuptools.distutils.log
 
-here = os.path.abspath(os.path.dirname(__file__))
+###############################################################################
+#                            A class to run tests                             #
+###############################################################################
+
+class TestRunner(TestCommand):
+
+    """Run script in tests directory with py.test and without.
+
+    The local queue can't be tested with py.test, so we run it outside of
+    py.test, we also skip remote tests here because they require some config
+    before being able to successfully execute.
+    """
+
+    def run_tests(self):
+        """Run the test script, skip remote tests here."""
+        import sys
+        from subprocess import check_call
+        # The remote queue testing can fail for a variety of config reasons
+        # so we won't run it here
+        check_call([sys.executable, 'tests/run_tests.py', '-l'])
+
+
+###############################################################################
+#                     Build the things we need for setup                      #
+###############################################################################
 
 # Get the long description from the README file
+here = os.path.abspath(os.path.dirname(__file__))
 with codecs.open(os.path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
@@ -22,21 +48,13 @@ for scpt in scpt_dir:
     scpts.append(os.path.join('bin', scpt))
 
 
-class TestRunner(TestCommand):
-
-    """Run script in tests directory."""
-
-    def run_tests(self):
-        """Run the test script, skip remote tests here."""
-        import sys
-        from subprocess import check_call
-        # The remote queue testing can fail for a variety of config reasons
-        # so we won't run it here
-        check_call([sys.executable, 'tests/run_tests.py', '-l'])
+###############################################################################
+#                                Setup Options                                #
+###############################################################################
 
 setup(
     name='fyrd',
-    version='0.6.1-beta.5',
+    version='0.6.1-beta.6',
     description=('Submit functions and shell scripts to torque, slurm, ' +
                  'or local machines'),
     long_description=long_description,
@@ -63,13 +81,19 @@ setup(
         'Programming Language :: Python :: 3.3',
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
     ],
 
     keywords='slurm torque multiprocessing cluster job_management',
 
-    install_requires=['dill'],
+    install_requires=['dill', 'tabulate'],
     tests_require=['pytest'],
     packages=['fyrd'],
     cmdclass={'test': TestRunner},
     scripts=scpts,
+    entry_points={
+        'console_scripts': [
+            'fyrd = fyrd.__main__:main',
+        ]
+    },
 )

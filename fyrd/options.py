@@ -2,10 +2,8 @@
 """
 Available options for job submission.
 
-Last modified: 2016-11-08 09:21
-
 All keyword arguments that can be used with Job() objects are defined in this
-file. These can be editted by the end user to increase functionality.
+file. These can be edited by the end user to increase functionality.
 
 Options are defined in dictionaries with the syntax:
     'name': {'slurm': The command to be used for slurm
@@ -21,9 +19,11 @@ All of these fields are required except in the case that:
 """
 import os
 import sys
-from textwrap import wrap
+from textwrap import wrap as _wrap
 from itertools import groupby
 from collections import OrderedDict
+
+from tabulate import tabulate as _tabulate
 
 from . import run
 from . import logme
@@ -60,11 +60,7 @@ COMMON  = OrderedDict([
      {'help': 'Modules to load with the `module load` command',
       'default': None, 'type': list}),
     ('imports',
-     {'help': 'Imports to be used in function calls (e.g. sys, os) '
-              'if not provided, defaults to all current imports, which '
-              'may not work if you use complex imports. The list can include '
-              'the import call, or just be a name, e.g. '
-              "['from os import path', 'sys']",
+     {'help': 'Imports to be used in function calls (e.g. sys, os)',
       'default': None, 'type': list}),
     ('filepath',
      {'help': 'Folder to write cluster files to, must be accessible ' +
@@ -159,24 +155,24 @@ SLURM  = OrderedDict([
 ################################################################
 
 
-SYNONYMS = {
-    'depend':         'depends',
-    'dependency':     'depends',
-    'dependencies':   'depends',
-    'stdout':         'outfile',
-    'stderr':         'errfile',
-    'queue':          'partition',
-    'memory':         'mem',
-    'cpus':           'cores',
-    'walltime':       'time',
-    'delete_files':   'clean_files',
-    'delete_outputs': 'clean_outputs',
-    'filedir':        'filepath',
-    'runpath':        'dir',
-    'path':           'filepath',
-    'scriptpath':     'filepath',
-    'scriptdir':      'filepath',
-}
+SYNONYMS = OrderedDict([
+    ('depend',         'depends'),
+    ('dependency',     'depends'),
+    ('dependencies',   'depends'),
+    ('stdout',         'outfile'),
+    ('stderr',         'errfile'),
+    ('queue',          'partition'),
+    ('memory',         'mem'),
+    ('cpus',           'cores'),
+    ('walltime',       'time'),
+    ('delete_files',   'clean_files'),
+    ('delete_outputs', 'clean_outputs'),
+    ('filedir',        'filepath'),
+    ('runpath',        'dir'),
+    ('path',           'filepath'),
+    ('scriptpath',     'filepath'),
+    ('scriptdir',      'filepath'),
+])
 
 
 ###############################################################################
@@ -424,12 +420,12 @@ def options_to_string(option_dict, qtype=None):
     """Return a multi-line string for slurm or torque job submission.
 
     Args:
-        option_dict: Dict in format {option: value} where value can be None.
-                     If value is None, default used.
-        qtype:       'torque', 'slurm', or 'local': override queue.MODE
+        option_dict (dict): Dict in format {option: value} where value can be
+                            None. If value is None, default used.
+        qtype (str):        'torque', 'slurm', or 'local': override queue.MODE
 
     Returns:
-        str: A multiline string of torque or slurm options.
+        str: A multi-line string of torque or slurm options.
     """
     # Import a couple of queue functions here
     from . import queue
@@ -478,14 +474,20 @@ def options_to_string(option_dict, qtype=None):
     return '\n'.join(outlist)
 
 
-def option_help(qtype=None, mode='string'):
+def option_help(mode='string', qtype=None, tablefmt='simple'):
     """Print a sting to stdout displaying information on all options.
 
     Args:
-        qtype: If provided only return info on that queue type.
-        mode:  string: Return a formatted string
-               print:  Print the string to stdout
-               table:  Return a table of lists
+        mode (str):     string:       Return a formatted string
+                        print:        Print the string to stdout
+                        list:         Return a simple list of keywords
+                        table:        Return a table of lists
+                        merged_table: Combine all keywords into a single table
+        qtype (str):    If provided only return info on that queue type.
+        tablefmt (str): A tabulate-style table format, one of::
+
+            'plain', 'simple', 'grid', 'pipe', 'orgtbl',
+            'rst', 'mediawiki', 'latex', 'latex_booktabs'
 
     Returns:
         str: A formatted string
@@ -493,7 +495,7 @@ def option_help(qtype=None, mode='string'):
 
     hlp = OrderedDict()
 
-    # Expicitly get the function call help out of core to treat separately
+    # Explicitly get the function call help out of core to treat separately
     common = COMMON.copy()
     impts  = common.pop('imports')
 
@@ -549,18 +551,19 @@ def option_help(qtype=None, mode='string'):
         for option_class, hlp_info in hlp.items():
             tmpstr = ''
             for option, inf in hlp_info['help'].items():
-                default = inf['default'] if 'default' in inf else None
-                typ = inf['type']
-                helpitems = wrap(inf['help'])
+                default   = inf['default'] if 'default' in inf else None
+                typ       = inf['type']
+                helpitems = _wrap(inf['help'])
                 helpstr   = helpitems[0]
                 if len(helpitems) > 1:
-                    helpstr  += '\n            '
-                    helpstr  += '\n            '.join(helpitems[1:])
+                    hstr     = '\n' + ' '*15
+                    helpstr += hstr
+                    helpstr += hstr.join(helpitems[1:])
                 if isinstance(typ, (tuple, list, set)):
                     typ = [t.__name__ for t in typ]
                 else:
                     typ = typ.__name__
-                tmpstr += ('{o:<12}{h}\n{s:<12}Type: {t}; Default: {d}\n'
+                tmpstr += ('{o:<15}{h}\n{s:<15}Type: {t}; Default: {d}\n'
                            .format(o=option + ':', h=helpstr, s=' ',
                                    t=typ, d=default))
             outstr += '{}::\n{}\n'.format(hlp_info['summary'], tmpstr)
@@ -570,28 +573,74 @@ def option_help(qtype=None, mode='string'):
             sys.stdout.write(outstr)
         else:
             return outstr
+
     elif mode == 'table':
         tables = OrderedDict()
-        for option_class, hlp_info in hlp.items():
-            tmptable = []
-            for option, inf in hlp_info['help'].items():
-                helpitems = wrap(inf['help'])
-                default = inf['default'] if 'default' in inf else None
-                typ = inf['type']
-                if isinstance(typ, (tuple, list, set)):
-                    typ = [t.__name__ for t in typ]
+        for sect, ddct in hlp.items():
+            summary = '{}: {}'.format(sect.title(), ddct['summary'])
+            outtable = [['Option', 'Description', 'Type', 'Default']]
+            dct = ddct['help']
+            for opt, inf in dct.items():
+                if isinstance(inf['type'], (tuple, list, set)):
+                    typ = [t.__name__ for t in inf['type']]
                 else:
-                    typ = typ.__name__
-                tmptable.append((option, '{:<70}'
-                                 .format(helpitems[0])))
-                if len(helpitems) > 1:
-                    for helpitem in helpitems[1:]:
-                        tmptable.append(('', '{}'
-                                         .format(helpitem)))
-                tmptable.append(('', 'Type: {}; Default: {}'
-                                 .format(typ, default)))
-            tables[option_class] = {'summary': hlp_info['summary'],
-                                    'table': tmptable}
-        return tables
+                    typ = inf['type'].__name__
+                outtable.append([
+                    opt,
+                    inf['help'],
+                    typ,
+                    str(inf['default'])
+                ])
+            tables[summary] = outtable
+
+        tables['Synonyms'] = [
+            ['Synonym', 'Option']
+        ] + [
+            list(i) for i in SYNONYMS.items()
+        ]
+
+        out_string = ''
+        for section, table in tables.items():
+            out_string += '\n' + section + '\n'
+            out_string += '-'*len(section) + '\n\n'
+            out_string += _tabulate(
+                table, headers='firstrow', tablefmt=tablefmt
+            ) + '\n\n'
+
+        return out_string
+
+    elif mode == 'merged_table':
+        table = []
+        headers  = ['Option', 'Description', 'Type', 'Default', 'Section']
+        for sect, ddct in hlp.items():
+            dct = ddct['help']
+            for opt, inf in dct.items():
+                if isinstance(inf['type'], (tuple, list, set)):
+                    typ = [t.__name__ for t in inf['type']]
+                else:
+                    typ = inf['type'].__name__
+                table.append([
+                    opt,
+                    inf['help'],
+                    typ,
+                    str(inf['default']),
+                    sect
+                ])
+        out_string  = _tabulate(
+            table, headers=headers, tablefmt=tablefmt
+        ) + '\n\n'
+        out_string += 'Synonyms\n'
+        out_string += '-'*8 + '\n\n'
+        out_string += _tabulate(
+            [list(i) for i in SYNONYMS.items()],
+            headers=['Synonym', 'Option'],
+            tablefmt=tablefmt
+        )
+
+        return out_string
+
+    elif mode == 'list':
+        return '\n'.join(['\n'.join(i['help'].keys()) for i in hlp.values()])
+
     else:
         raise ClusterError('mode must be "print", "string", or "table"')

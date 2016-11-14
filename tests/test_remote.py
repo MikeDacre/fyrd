@@ -10,11 +10,27 @@ env = fyrd.get_cluster_environment()
 
 fyrd.logme.MIN_LEVEL = 'debug'
 
+
+###############################################################################
+#                              Support Functions                              #
+###############################################################################
+
+
 def write_to_file(string, file):
     """Write a string to a file."""
     with open(file, 'w') as fout:
         fout.write(string + '\n')
     return 0
+
+
+def raise_me(number, power=2):
+    """Raise number to power."""
+    return number**power
+
+
+###############################################################################
+#                               Test Functions                                #
+###############################################################################
 
 
 def test_job_creation():
@@ -82,6 +98,15 @@ def test_function_submission():
     with open('bobfile') as fin:
         assert fin.read().rstrip() == '42'
     os.remove('bobfile')
+    job.clean(delete_outputs=True)
+
+
+@pytest.mark.skipif(env == 'local',
+                    reason="Fails in local mode")
+def test_function_keywords():
+    """Submit a simple function with keyword arguments."""
+    job = fyrd.Job(raise_me, (10,), kwargs={'power': 10}).submit()
+    assert job.get() == 10**10
     job.clean(delete_outputs=True)
 
 

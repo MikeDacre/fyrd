@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Classes to build submission scripts.
-
-Last modified: 2016-11-07 21:46
 """
 import os  as _os
 import sys as _sys
@@ -75,28 +73,32 @@ class Function(Script):
 
     """A special Script used to run a function."""
 
-    def __init__(self, file_name, function, args=None, imports=None,
-                 pickle_file=None, outfile=None):
+    def __init__(self, file_name, function, args=None, kwargs=None,
+                 imports=None, pickle_file=None, outfile=None):
         """Create a function wrapper.
 
         NOTE: Function submission will fail if the parent file's code is not
         wrapped in an if __main__ wrapper.
 
         Args:
-            file_name:   A root name to the outfiles
-            function:    Function handle.
-            args:        Arguments to the function as a tuple.
-            imports:     A list of imports, if not provided, defaults to all
-                         current imports, which may not work if you use complex
-                         imports.  The list can include the import call, or
-                         just be a name, e.g ['from os import path', 'sys']
-            pickle_file: The file to hold the function.
-            outfile:     The file to hold the output.
+            file_name (str):     A root name to the outfiles
+            function (callable): Function handle.
+            args (tuple):        Arguments to the function as a tuple.
+            kwargs (dict):       Named keyword arguments to pass in the
+                                 function call
+            imports(list):       A list of imports, if not provided, defaults
+                                 to all current imports, which may not work if
+                                 you use complex imports.  The list can include
+                                 the import call, or just be a name, e.g
+                                 ['from os import path', 'sys']
+            pickle_file (str): The file to hold the function.
+            outfile (str):     The file to hold the output.
         """
         self.function = function
         rootmod       = _inspect.getmodule(self.function)
         self.parent   = rootmod.__name__
         self.args     = args
+        self.kwargs   = kwargs
 
         # Get the module path
         if hasattr(rootmod, '__file__'):
@@ -235,11 +237,6 @@ class Function(Script):
                     filtered_imports.append(('try:\n    import {}\n'
                                              'except ImportError:\n    pass\n')
                                             .format(name))
-                # Broad global imports
-                #  if names[0] not in ignore_list:
-                    #  filtered_imports.append(('try:\n    from {} import *\n'
-                                             #  'except ImportError:\n    pass\n')
-                                            #  .format(names[0]))
 
             else:
                 if imp.startswith('import') or imp.startswith('from'):
@@ -274,7 +271,7 @@ class Function(Script):
         """Write the pickle file and call the parent Script write function."""
         _logme.log('Writing pickle file {}'.format(self.pickle_file), 'debug')
         with open(self.pickle_file, 'wb') as fout:
-            _pickle.dump((self.function, self.args), fout)
+            _pickle.dump((self.function, self.args, self.kwargs), fout)
         super(Function, self).write(overwrite)
 
     def clean(self, delete_output=False):
