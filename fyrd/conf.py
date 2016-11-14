@@ -2,7 +2,7 @@
 """
 Get and set config file options.
 
-Last modified: 2016-11-09 22:26
+Last modified: 2016-11-14 13:18
 
 The functions defined here provide an easy way to access the config file
 defined by CONFIG_FILE (default ~/.fyrd/config.txt) and the config.get('jobs',
@@ -20,6 +20,7 @@ Options will also be pre-sanitized before being added to profile. e.g. 'mem':
 from __future__ import print_function
 import os       as _os
 import readline as _rl
+from textwrap import dedent as _dnt
 try:
     import configparser as _configparser
 except ImportError:
@@ -45,76 +46,109 @@ Where the main config will be kept.
 """
 
 # Set default options
-DEFAULTS = {}
-"""
-Default Configuration Options.
+DEFAULTS = {
+    'queue': {
+        'max_jobs':     1000,
+        'sleep_len':    1,
+        'queue_update': 2,
+        'res_time':     2700,
+        'queue_type':   'auto',
+        # Not implemented yet
+        #  'db':           _os.path.join(CONFIG_PATH, 'db.sql'),
+    },
+    'jobs': {
+        'clean_files':     True,
+        'clean_outputs':   False,
+        'file_block_time': 12,
+        'filepath':        None,
+        'suffix':          'cluster',
+        'auto_submit':     True,
+        'generic_python':  False,
+        'profile_file':    _os.path.join(
+            CONFIG_PATH, 'profiles.txt'
+        )
+    },
+    'jobqueue': {
+        'jobno': 1
+    },
+}
 
-Options must be set in this dictionary to be accepted in the config file. The
-config file merely overwrites the values definied here.
-"""
+CONF_HELP = {
+    'summary': _dnt(
+        """
+        The following options and sections are recognized and defined by the
+        DEFAULTS dictionary in the config.py file. The can be updated in the
+        config file.
 
-DEFAULTS['queue'] = {'max_jobs':     1000,
-                     'sleep_len':    1,
-                     'queue_update': 2,
-                     'res_time':     2700,
-                     'queue_type':   'auto',
-                     # Not implemented yet
-                     #  'db':           _os.path.join(CONFIG_PATH, 'db.sql'),
-                    }
-"""
-Define options for queue handling:
-    max_jobs (int):     sets the maximum number of running jobs before
-                        submission will pause and wait for the queue to empty
-    sleep_len (int):    sets the amount of time the program will wait between
-                        submission attempts
-    queue_update (int): sets the amount of time between refreshes of the queue.
-    res_time (int):     Time in seconds to wait if a job is in an uncertain
-                        state, usually preempted or suspended. These jobs often
-                        resolve into running or completed again after some time
-                        so it makes sense to wait a bit, but not forever. The
-                        default is 45 minutes: 2700 seconds.
-    queue_type (str):   the type of queue to use, one of 'torque', 'slurm',
-                        'local', 'auto'. Default is auto to auto-detect the
-                        queue.
-    db_path (str):      where to put the job database
-"""
+        Any options added to the config file not present here will be ignored
+        or deleted, any options added which do not match the types below will
+        be overwritten with the defaults.
+        """
+    ),
+    'queue': _dnt(
+        """
+        [queue]
+        Define options for queue handling
 
-DEFAULTS['jobs'] = {'clean_files':     True,
-                    'clean_outputs':   False,
-                    'file_block_time': 12,
-                    'filepath':        None,
-                    'suffix':          'cluster',
-                    'auto_submit':     True,
-                    'profile_file':    _os.path.join(
-                        CONFIG_PATH, 'profiles.txt')}
-"""
-Set the options for managing job submission and getting:
-    clean_files (bool):    means that by default files will be deleted when job
-                           completes
-    clean_outputs (bool):  is the same but for output files (they are saved
-                           first)
-    file_block_time (int): Max amount of time to block after job completes in
-                           the queue while waiting for output files to appear.
-                           Some queues can take a long time to copy files under
-                           load, so it is worth setting this high, it won't
-                           block unless the files do not appear.
-    filepath (str):        Path to write all temp and output files by default,
-                           must be globally cluster accessible. Note: this is
-                           *not* the runtime path, just where files are written
-                           to.
-    suffix (str):          The suffix to use when writing scripts and output
-                           files
-    auto_submit (bool):    If wait() or get() are called prior to submission,
-                           auto-submit the job. Otherwise throws an error and
-                           returns None
-    profile_file (str):    the config file where profiles are defined.
-"""
+        Options:
+            max_jobs (int):     sets the maximum number of running jobs before
+                                submission will pause and wait for the queue to
+                                empty
+            sleep_len (int):    sets the amount of time the program will wait
+                                between submission attempts
+            queue_update (int): sets the amount of time between refreshes of
+                                the queue.
+            res_time (int):     Time in seconds to wait if a job is in an
+                                uncertain state, usually preempted or
+                                suspended. These jobs often resolve into
+                                running or completed again after some time so
+                                it makes sense to wait a bit, but not forever.
+                                The default is 45 minutes: 2700 seconds.
+            queue_type (str):   the type of queue to use, one of 'torque',
+                                'slurm', 'local', 'auto'. Default is auto to
+                                auto-detect the queue.
+            db_path (str):      where to put the job database
+        """
+    ),
+    'jobs': _dnt(
+        """
+        [jobs]
+        Set the options for managing job submission and getting
 
-DEFAULTS['jobqueue'] = {'jobno': 1}
-"""
-Sets options for the local queue system, will be removed in the future in
-favor of database.
-"""
+        Options:
+            clean_files (bool):    means that by default files will be deleted
+                                   when job completes
+            clean_outputs (bool):  is the same but for output files (they are
+                                   saved first)
+            file_block_time (int): Max amount of time to block after job
+                                   completes in the queue while waiting for
+                                   output files to appear.  Some queues can
+                                   take a long time to copy files under load,
+                                   so it is worth setting this high, it won't
+                                   block unless the files do not appear.
+            filepath (str):        Path to write all temp and output files by
+                                   default, must be globally cluster
+                                   accessible. Note: this is *not* the runtime
+                                   path, just where files are written to.
+            suffix (str):          The suffix to use when writing scripts and
+                                   output files
+            auto_submit (bool):    If wait() or get() are called prior to
+                                   submission, auto-submit the job. Otherwise
+                                   throws an error and returns None
+            generic_python (bool): Use /usr/bin/env python instead of the
+                                   current executable, not advised, but
+                                   sometimes necessary.
+            profile_file (str):    the config file where profiles are defined.
+        """
+    ),
+    'jobqueue': _dnt(
+        """
+        [jobqueue]
+        Sets options for the local queue system, will be removed in the future
+        in favor of database.
+        """
+    ),
+}
 
 # Pre-defined profiles, 'DEFAULT' is required.
 DEFAULT_PROFILES = {
@@ -315,6 +349,10 @@ def load_config():
                 write_config()
     return config
 
+def get_config():
+    """Return a dictionary representation of the entire config."""
+    return _config_to_dict(load_config())
+
 
 def write_config():
     """Write the current config to CONFIG_FILE."""
@@ -327,11 +365,13 @@ def write_config():
 ###############################################################################
 
 
-def create_config_interactive():
+def create_config_interactive(prompt=True):
     """Interact with the user to create a new config.
 
     Uses readline autocompletion to make setup easier.
 
+    Args:
+        prompt (bool): As for confirmation before beginning wizard.
     """
     # Use tab completion
     t = _TabCompleter()
@@ -339,14 +379,15 @@ def create_config_interactive():
     _rl.parse_and_bind("tab: complete")
 
     # Get permission
-    t.createListCompleter(['y', 'n'])
-    _rl.set_completer(t.list_completer)
-    print("Do you want to initialize your config at {}"
-          .format(CONFIG_FILE))
-    print("This will erase your current configuration (if it exists)")
-    choice = _run.get_input("Initialize config? [y/N] ").strip().lower()
-    if not choice == 'y':
-        return
+    if prompt:
+        t.createListCompleter(['y', 'n'])
+        _rl.set_completer(t.list_completer)
+        print("Do you want to initialize your config at {}"
+            .format(CONFIG_FILE))
+        print("This will erase your current configuration (if it exists)")
+        choice = _run.get_input("Initialize config? [y/N] ").strip().lower()
+        if not choice == 'y':
+            return
 
     cnf = DEFAULTS
     # Get path
@@ -525,6 +566,7 @@ class Profile(object):
             name (str):  Name of the profile
             kwds (dict): Dictionary of keyword arguments (will be validated).
         """
+        name = 'DEFAULT' if name.lower() == 'default' else name
         self.name = name
         self.args = kwds
 
@@ -560,9 +602,11 @@ class Profile(object):
 
     def __str__(self):
         """Pretty print."""
+        title = 'DEFAULT' if self.name.lower() == 'default' else self.name
         return "{}:\n\t{}".format(
-            self.name.title(),
-            '\n\t'.join(['{}:\t{}'.format(i, j) for i, j in self.args.items()])
+            title,
+            '\n\t'.join(['{:<11}{:}'.format(i, j) \
+                         for i, j in self.args.items()])
         )
 
 
@@ -579,7 +623,7 @@ def get_profile(profile=None):
     """
     load_profiles()
     # Allow lowercase default profile
-    if profile.lower() == 'default':
+    if profile and profile.lower() == 'default':
         profile = 'DEFAULT'
     if profile:
         if profile in _sections(profiles):
@@ -615,6 +659,7 @@ def set_profile(name, kwds, update=True):
         update (bool): Update the profile rather than overwriting it.
     """
     load_profiles()
+    name = 'DEFAULT' if name.lower() == 'default' else name
 
     if not isinstance(kwds, dict):
         raise Exception('Profile arguments must be a dictionary')
@@ -643,7 +688,14 @@ def del_profile(name):
         name (str): The name of the profile to delete.
     """
     load_profiles()
-    if name in _sections(profiles):
+    if name.lower() == 'default':
+        for key in _section_to_dict(profiles.items('DEFAULT')):
+            if key not in DEFAULT_PROFILES['DEFAULT']:
+                profiles.remove_option('DEFAULT', key)
+            else:
+                profiles.set('DEFAULT', key,
+                             str(DEFAULT_PROFILES['DEFAULT'][key]))
+    elif name in _sections(profiles):
         _logme.log('Removing profile {}'.format(name))
         profiles.remove_section(name)
     else:
@@ -701,6 +753,17 @@ def load_profiles():
     if not _os.path.isfile(config.get('jobs', 'profile_file')):
         create_profiles()
     profiles.read(config.get('jobs', 'profile_file'))
+
+    # Recreate DEFAULT if necessary.
+    def_prof = _config_to_dict(profiles)['DEFAULT']
+    changed = False
+    for key, val in DEFAULT_PROFILES['DEFAULT'].items():
+        if key not in def_prof:
+            profiles.set('DEFAULT', key, val)
+            changed = True
+    if changed:
+        write_profiles()
+
     return profiles
 
 
@@ -813,7 +876,7 @@ def _config_to_dict(cnf):
     out = {}
     def_items = cnf.items('DEFAULT')
     if def_items:
-        out[def_items] = _section_to_dict(def_items)
+        out['DEFAULT'] = _section_to_dict(def_items)
     for sect in _sections(cnf):
         out[sect] = _section_to_dict(cnf.items(sect))
     return(out)

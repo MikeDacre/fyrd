@@ -2,7 +2,7 @@
 """
 Class and methods to handle Job submission.
 
-Last modified: 2016-11-10 15:40
+Last modified: 2016-11-14 13:27
 """
 import os  as _os
 import sys as _sys
@@ -49,6 +49,22 @@ class Job(object):
     Holds information about submit time, number of cores, the job script,
     and more.
 
+    Below are the core attributes and methods required to use this class.
+
+    Attributes:
+        out (str):            The output of the function or a copy of stdout
+                              for a script
+        stdout (str):         Any output to STDOUT
+        stderr (str):         Any output to STDERR
+        exitcode (int):       The exitcode of the running processes (the script
+                              runner if the Job is a function.
+        start (datetime):     A datetime object containing time execution
+                              started on the remote node.
+        end (datetime):       Like start but when execution ended.
+        runtime (timedelta):  A timedelta object containing runtime.
+        files (list):         A list of script files associated with this class
+        done (bool):          True if the job has completed
+
     Methods:
         submit(): submit the job if it is ready
         wait():   block until the job is done
@@ -59,18 +75,7 @@ class Job(object):
                   `False`, does not delete the output files by default.
         clean():  delete any files created by this object
 
-    Output attributes:
-        out:      The output of the function or a copy of stdout for a script
-        stdout:   Any output to STDOUT
-        stderr:   Any output to STDERR
-        exitcode: The exitcode of the running processes (the script runner if
-                  the Job is a function.
-        start:    A datetime object containing time execution started on the
-                  remote node.
-        end:      Like start but when execution ended.
-        runtime:  A timedelta object containing runtime.
-
-    Printing the class will display detailed job information.
+    Printing or reproducing the class will display detailed job information.
 
     Both `wait()` and `get()` will update the queue every few seconds
     (defined by the queue_update item in the config) and add queue information
@@ -89,7 +94,7 @@ class Job(object):
     at the same time.
 
     Finally, if the job command is a function, this object will also contain a
-    .function attribute, which contains the script to run the function.
+    `.function` attribute, which contains the script to run the function.
 
     """
 
@@ -138,7 +143,7 @@ class Job(object):
 
     def __init__(self, command, args=None, kwargs=None, name=None, qtype=None,
                  profile=None, **kwds):
-        """Create a job object will submission information.
+        """Initialization function arguments.
 
         Args:
             command (function/str): The command or function to execute.
@@ -323,6 +328,10 @@ class Job(object):
                 kwargs=kwargs, outfile=self.poutfile, imports=self.imports
             )
             # Collapse the command into a python call to the function script
+            executable = '#!/usr/bin/env python{}'.format(
+                _sys.version_info.major) if _conf.get_option(
+                    'jobs', 'generic_python') else _sys.executable
+
             command = '{} {}'.format(_sys.executable, self.function.file_name)
             args = None
         else:
@@ -559,28 +568,6 @@ class Job(object):
 
         return self
 
-    def update(self):
-        """Update status from the queue."""
-        if not self._updating:
-            self._update()
-        else:
-            _logme.log('Already updating, aborting.', 'debug')
-
-    def update_queue_info(self):
-        """Set queue_info from the queue even if done."""
-        _logme.log('Updating queue_info', 'debug')
-        queue_info1 = self.queue[self.id]
-        self.queue.update()
-        queue_info2 = self.queue[self.id]
-        if queue_info2:
-            self.queue_info = queue_info2
-        elif queue_info1:
-            self.queue_info = queue_info1
-        elif self.queue_info is None and self.submitted:
-            _logme.log('Cannot find self in the queue and queue_info is empty',
-                       'warn')
-        return self.queue_info
-
     def wait(self):
         """Block until job completes."""
         if not self.submitted:
@@ -601,8 +588,11 @@ class Job(object):
         # Block for up to file_block_time for output files to be copied back
         btme = _conf.get_option('jobs', 'file_block_time')
         start = _dt.now()
+        lgd = False
         while True:
-            _logme.log('Checking for output files', 'debug')
+            if not lgd:
+                _logme.log('Checking for output files', 'debug')
+                lgd = True
             count = 0
             for i in self.outfiles:
                 if _os.path.isfile(i):
@@ -896,6 +886,28 @@ class Job(object):
         self._exitcode = code
         self._got_exitcode = True
         return code
+
+    def update(self):
+        """Update status from the queue."""
+        if not self._updating:
+            self._update()
+        else:
+            _logme.log('Already updating, aborting.', 'debug')
+
+    def update_queue_info(self):
+        """Set queue_info from the queue even if done."""
+        _logme.log('Updating queue_info', 'debug')
+        queue_info1 = self.queue[self.id]
+        self.queue.update()
+        queue_info2 = self.queue[self.id]
+        if queue_info2:
+            self.queue_info = queue_info2
+        elif queue_info1:
+            self.queue_info = queue_info1
+        elif self.queue_info is None and self.submitted:
+            _logme.log('Cannot find self in the queue and queue_info is empty',
+                       'warn')
+        return self.queue_info
 
     def fetch_outputs(self, save=True, delete_files=None):
         """Save all outputs in their current state. No return value.

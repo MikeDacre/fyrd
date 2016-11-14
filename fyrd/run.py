@@ -2,7 +2,7 @@
 """
 File management and execution functions.
 
-Last modified: 2016-11-09 23:17
+Last modified: 2016-11-11 02:45
 """
 import os
 import re
@@ -198,57 +198,6 @@ def write_iterable(iterable, outfile):
     """Write all elements of iterable to outfile."""
     with open_zipped(outfile, 'w') as fout:
         fout.write('\n'.join(iterable))
-
-
-def split_file(infile, parts, outpath='', keep_header=True):
-    """Split a file in parts and return a list of paths.
-
-    NOTE: Linux specific (uses wc).
-
-    Args:
-        outpath:     The directory to save the split files.
-        keep_header: Add the header line to the top of every file.
-
-    Returns:
-        list: Paths to split files.
-    """
-    # Determine how many reads will be in each split sam file.
-    logme.log('Getting line count', 'debug')
-    num_lines = int(os.popen(
-        'wc -l ' + infile + ' | awk \'{print $1}\'').read())
-    num_lines   = int(int(num_lines)/int(parts)) + 1
-
-    # Subset the file into X number of jobs, maintain extension
-    cnt       = 0
-    currjob   = 1
-    suffix    = '.split_' + str(currjob).zfill(4) + '.' + infile.split('.')[-1]
-    file_name = os.path.basename(infile)
-    run_file  = os.path.join(outpath, file_name + suffix)
-    outfiles  = [run_file]
-
-    # Actually split the file
-    logme.log('Splitting file', 'debug')
-    with open(infile) as fin:
-        header = fin.readline() if keep_header else ''
-        sfile = open(run_file, 'w')
-        sfile.write(header)
-        for line in fin:
-            cnt += 1
-            if cnt < num_lines:
-                sfile.write(line)
-            elif cnt == num_lines:
-                sfile.write(line)
-                sfile.close()
-                currjob += 1
-                suffix = '.split_' + str(currjob).zfill(4) + '.' + \
-                    infile.split('.')[-1]
-                run_file = os.path.join(outpath, file_name + suffix)
-                sfile = open(run_file, 'w')
-                outfiles.append(run_file)
-                sfile.write(header)
-                cnt = 0
-        sfile.close()
-    return tuple(outfiles)
 
 
 def indent(string, prefix='    '):

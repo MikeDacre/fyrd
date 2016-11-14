@@ -2,3 +2,4 @@
 dill>=0.2.5
 Sphinx>=1.4.1
 sphinxcontrib-napoleon>=0.5.3
+sphinx-argparse>=0.1.15

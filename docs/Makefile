@@ -5,16 +5,15 @@
 SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
 PAPER         =
-BUILDDIR      = ../../docs
-PDFBUILDDIR   = /tmp
-PDF           = ../Fyrd.pdf
+BUILDDIR      = _build
+PDF           = fyrd_manual.pdf
 
 # Internal variables.
 PAPEROPT_a4     = -D latex_paper_size=a4
 PAPEROPT_letter = -D latex_paper_size=letter
-ALLSPHINXOPTS   = -d $(BUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) .
+ALLSPHINXOPTS   = -d $(BUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) sphinx
 # the i18n builder cannot share the environment and doctrees with the others
-I18NSPHINXOPTS  = $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) .
+I18NSPHINXOPTS  = $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) sphinx
 
 .PHONY: help
 help:
@@ -48,8 +47,7 @@ help:
 
 .PHONY: clean
 clean:
-	rm -rf $(PDFBUILDDIR)/latex
-	rm ../Fyrd.pdf
+	rm -rf $(BUILDDIR)/*
 
 .PHONY: html
 html:
@@ -94,9 +92,9 @@ qthelp:
 	@echo
 	@echo "Build finished; now you can run "qcollectiongenerator" with the" \
 	      ".qhcp project file in $(BUILDDIR)/qthelp, like this:"
-	@echo "# qcollectiongenerator $(BUILDDIR)/qthelp/PythonCluster.qhcp"
+	@echo "# qcollectiongenerator $(BUILDDIR)/qthelp/Fyrd.qhcp"
 	@echo "To view the help file:"
-	@echo "# assistant -collectionFile $(BUILDDIR)/qthelp/PythonCluster.qhc"
+	@echo "# assistant -collectionFile $(BUILDDIR)/qthelp/Fyrd.qhc"
 
 .PHONY: applehelp
 applehelp:
@@ -113,8 +111,8 @@ devhelp:
 	@echo
 	@echo "Build finished."
 	@echo "To view the help file:"
-	@echo "# mkdir -p $$HOME/.local/share/devhelp/PythonCluster"
-	@echo "# ln -s $(BUILDDIR)/devhelp $$HOME/.local/share/devhelp/PythonCluster"
+	@echo "# mkdir -p $$HOME/.local/share/devhelp/Fyrd"
+	@echo "# ln -s $(BUILDDIR)/devhelp $$HOME/.local/share/devhelp/Fyrd"
 	@echo "# devhelp"
 
 .PHONY: epub
@@ -139,11 +137,11 @@ latex:
 
 .PHONY: latexpdf
 latexpdf:
-	$(SPHINXBUILD) -b latex $(ALLSPHINXOPTS) $(PDFBUILDDIR)/latex
+	$(SPHINXBUILD) -b latex $(ALLSPHINXOPTS) $(BUILDDIR)/latex
 	@echo "Running LaTeX files through pdflatex..."
-	make -C $(PDFBUILDDIR)/latex all-pdf
-	cp $(PDFBUILDDIR)/latex/*.pdf $(PDF)
-	@echo "pdflatex finished; see $(PDF)"
+	$(MAKE) -C $(BUILDDIR)/latex all-pdf
+	cp $(BUILDDIR)/latex/*.pdf $(PDF)
+	@echo "pdflatex finished; see $(PDF)."
 
 .PHONY: latexpdfja
 latexpdfja:

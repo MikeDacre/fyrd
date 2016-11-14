@@ -2,7 +2,15 @@
 Fyrd
 ####
 
-Submit jobs to compute clusters with slurm, torque, or simple multiprocessing.
+One liner script and function to torque, slurm, or a local machine with
+dependency tracking using python. Uses the same syntax irrespective of cluster
+environment!
+
+.. image:: http://i.imgur.com/NNbprZH.png
+   :alt: fyrd cluster logo — a Saxon shield remeniscent of those used in fyrds
+   :target: https://fyrd.readthedocs.org
+   :height: 200
+   :width: 200
 
 +---------+----------------------------------------------------+
 | Author  | Michael D Dacre <mike.dacre@gmail.com>             |
@@ -20,54 +28,161 @@ Submit jobs to compute clusters with slurm, torque, or simple multiprocessing.
    :target: https://www.codacy.com/app/mike-dacre/fyrd?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=MikeDacre/fyrd&amp;utm_campaign=Badge_Grade
 .. image:: https://img.shields.io/badge/python%20versions-2.7%203.4%203.5%203.6-brightgreen.svg
 
-Pronounced 'feared' (sort of), Anglo-Saxon for an army, particularly an army of
-freemen (an army of nodes). Formerly known as 'Python Cluster'.
-
-Allows simple job submission with *dependency tracking and queue waiting* with
+Allows simple job submission with *dependency tracking and queue waiting* on
 either torque, slurm, or locally with the multiprocessing module. It uses simple
-techiques to avoid overwhelming the queue and to catch bugs on the fly.
+techniques to avoid overwhelming the queue and to catch bugs on the fly.
 
-It additionally implements a new `multiprocessing` based local queing system that
-allows torque and slurm style job submission and tracking on any machine in 'local'
-mode.
+It is routinely tested on Mac OS and Linux with slurm and torque clusters, or
+in the absence of a cluster, on Python versions `2.7.10`, `2.7.11`, `2.7.12`,
+`3.3.0`, `3.4.0`, `3.5.2`, `3.6-dev`, and `3.7-dev`. The full test suite is
+available in the `tests` folder.
 
-For complete documentation see `the documentation site <https://fyrd.readthedocs.io>`_
-and the `Fyrd.pdf <Fyrd.pdf>`_ document in this repository.
+Fyrd is pronounced 'feared' (sort of), it is an Anglo-Saxon term for an army,
+particularly an army of freemen (in this case an army of compute nodes). The
+logo is based on a Saxon shield commonly used by these groups. This software
+was formerly known as 'Python Cluster'.
 
-NOTE: This software is still in beta, the scripts in bin/ do not all function
-properly and the software has not been fully tested on slurm systems. Please
-report any problems to the github issues page. Version 0.6.2 will resolve all
-of these outstanding bugs.
-
-NOTE: While this software is extremely powerful for pure python-based cluster job
-submission, `snakemake <https://bitbucket.org/snakemake/snakemake/wiki/Home>`_ is
-possibly a better choice for very large workflows.
-
-In the future this code will work with Makefiles and will be more robust, but it
-needs further development before that happens, for now it can just be used as a
-simple python submission library.
+For usage instructions and complete documentation see `the documentation site
+<https://fyrd.readthedocs.io>`_ and the `fyrd_manual.pdf
+</docs/fyrd_manual.pdf>`_ document in this repository.
 
 .. contents:: **Contents**
 
+Overview
+========
+
+This library was created to make working with torque or slurm clusters as easy
+as working with the multiprocessing library. It aims to provide:
+
+- Easy submission of either python functions or shell scripts to torque or slurm
+  from within python.
+- Simple dependency tracking for jobs.
+- The ability to submit jobs with any of the torque or slurm keyword arguments.
+- Easy customization.
+- Very simple usage that scales to complex applications.
+- A simple queue monitoring API that functions identically with torque and slurm
+  queues.
+- A fallback local mode that allows code to run locally using the multiprocessing
+  module without needing any changes to syntax.
+
+To do this, all major torque and slurm keyword arguments are encoded in dictionaries
+in the `fyrd/options.py` file using synonyms so that all arguments are standardized
+on the fly. Job management is handled by the `Job` class in `fyrd/job.py`, which
+accepts any of the keyword arguments in the options file. To make submission as simple
+as possible, the code makes used of profiles defined in the `~/.fyrd/profiles.txt`
+config file. These allow simple grouping of keyword arguments into named profiles to
+make submission even easier. Dependency tracking is handled by the `depends=`
+argument to `Job`, which accepts job numbers or `Job` objects, either singularly or
+as lists.
+
+To allow simple queue management and job waiting, a `Queue` class is
+implemented in `fyrd/queue.py`. It uses iterators, also defined in that file,
+to parse torque or slurm queues transparently and allow access to their
+attributes through the `Queue` class and the `Queue.jobs` dictionary. The `Job`
+class uses this system to block until the job completes when either the
+`wait()` or `get()` methods are called.
+
+To allow similar functionality on a system not connected to a torque or slurm
+queue, a local queue that behaves similarly, including allowing dependency
+tracking, is implemented in the `fyrd/jobqueue.py` file. It is based on
+multiprocessing but behaves like torque.  It is not a good idea to use this
+module in place of multiprocessing due to the dependency tracking overhead, it
+is primarily intended as a fallback, but it does work well enough to use
+independently.
+
+As all clusters are different, common alterable parameters are defined in a
+config file located at `~/.fyrd/config.txt`. This includes an option for max
+queue size, which makes job submission block until the queue has opened up,
+preventing job submission failure on systems with queue limits (most clusters).
+
+To make life easier, a bunch of simple wrapper functions are defined in
+`fyrd/basic.py` that allow submission without having to worry about using the
+class system, or to submit existing job files. Several helper function are also
+created in `fyrd/helpers.py` that allow the automation of more complex tasks,
+like running `apply` on a pandas dataframe in parallel on the cluster
+(`fyrd.helpers.parapply()`).
+
+The end result is that submitting 10 thousand very small jobs to a small cluster
+can be done like this:
+
+.. code:: python
+
+   jobs = []
+   for i in huge_list:
+       jobs.append(fyrd.Job(my_function, (i,), profile='small').submit())
+   results = []
+   for i in jobs:
+       results.append(i.get())
+
+The results list in this example will contain the function outputs, even if those
+outputs are integers, objects, or other Python types. Similarly, shell scripts can
+be run like this:
+
+.. code:: python
+
+   script = r"""zcat {} | grep "#config" | awk '{split($1,a,"."); print a[2]"\t"$2}'"""
+   jobs   = []
+   for i in [i for i in os.listdir('.') if i.endswith('.gz')]:
+       jobs.append(fyrd.Job(script.format(i), profile='long').submit())
+   results = []
+   for i in jobs:
+       i.wait()
+       results.append(i.stdout)
+
+Results will contain the contents of STDOUT for the submitted script
+
+Here is the same code with dependency tracking:
+
+.. code:: python
+
+   script = r"""zcat {} | grep "#config" | awk '{split($1,a,"."); print a[2]"\t"$2}'"""
+   jobs   = []
+   jobs2  = []
+   for i in [i for i in os.listdir('.') if i.endswith('.gz')]:
+       j = fyrd.Job(script.format(i), profile='long').submit()
+       jobs.append(j)
+       jobs2.append(fyrd.Job(my_function, depends=j).submit())
+   results = []
+   for i in jobs2:
+       i.wait()
+       results.append(i.out)
+
+As you can see, the `profile` keyword is not required, if not supplied the
+default profile is used. It is also important to note that `.out` will contain
+the same contents as `.stdout` for all script submissions, but for function
+submissions, `.out` contains the function output, not STDOUT.
+
 Installation
-============
+-------------
 
-This module will work with Python 2.7+ on Linux systems.
+This module will work with Python 2.7+ on Linux and Mac OS systems.
 
-To install, use the standard python method:
+It is not on PyPI yet, but it will be as of version 0.6.2.
+
+To install, do the following:
 
 .. code:: shell
 
-  git clone https://github.com/MikeDacre/fyrd
-  cd fyrd
-  pip install --user .
+   pip install https://github.com/MikeDacre/fyrd/archive/v0.6.1-beta.5.tar.gz
+   fyrd conf init
 
-I recommend installing using pyenv in a pyenv anaconda environement, this will
+To get the latest version:
+
+.. code:: shell
+
+   pip install https://github.com/MikeDacre/fyrd/tarball/master
+   fyrd conf init
+
+The `fyrd conf init` command initializes your environment interactively by
+asking questions about the local cluster system.
+
+I recommend installing using pyenv in a pyenv anaconda environment, this will
 make your life much simpler, but is not required.
 
 In general you want either `pyenv <https://github.com/yyuu/pyenv>`_ or user
-level install even if you have sudo access, as most cluster environments share
-/home/<user> across the cluster, making this module available everywhere.
+level install (`pip install --user`) even if you have sudo access, as most
+cluster environments share /home/<user> across the cluster, making this module
+available everywhere.
 
 Importing is simple:
 
@@ -76,21 +191,26 @@ Importing is simple:
   import fyrd
 
 Prerequisites
--------------
+.............
 
-The only external module that I use in this software is `dill
-<https://pypi.python.org/pypi/dill>`_. It isn't 100% required but it makes
-function submission much more stable.
+This software requires two external modules:
+- `dill <https://pypi.python.org/pypi/dill>`_ —  which makes function submission more stable
+- `tabulate <https://pypi.python.org/pypi/tabulate>`_ —  allows readable printing of help
 
-If you choose to use `dill`, it *must* be installed cluster wide.
-
-Function Submission
--------------------
+Cluster Dependencies
+....................
 
 In order to submit functions to the cluster, this module must import them on the
 compute node. This means that all of your python modules must be available on
-every compute node. To avoid pain and debugging, you can do this manually by
-running this on your loggin node:
+every compute node.
+
+By default, the same python executable used for submission is used on the
+cluster to run functions, however, this can be overridden by the
+'generic_python' option on the cluster. If using this option, you must install
+all of your local modules on the cluster also.
+
+To avoid pain and debugging, you can do this manually by running this on your
+login node:
 
 .. code:: shell
 
@@ -102,527 +222,23 @@ And then on the compute nodes:
 
   cat module_list.txt | xargs pip install --user
 
-This will ensure that all of your modules are installed globally.
+Alternately, if your pyenv is available on the cluster nodes, then all of
+your modules are already available, so you don't need to worry about this!
 
-In general it is a good idea to install modules as `--user` with pip to avoid
-this issue.
 
-Simple Usage
-============
+Issues and Contributing
+=======================
 
-Simple Job Submission
----------------------
+If you have any trouble with this software add an issue in
+https://github.com/MikeDacre/python-cluster/issues
 
-At its simplest, this module can be used by just executing `submit(<command>)`,
-where command is a function or system command/shell script. The module will
-autodetect the cluster, generate an intuitive name, run the job, and write all
-outputs to files in the current directory. These can be cleaned with
-`clean_dir()`.
+I am always looking for help testing the software, expanding the number of
+keywords, and implementing new features. If you want to help out, contact
+me or just fork the repo and send me a pull request when you are done.
 
-To run with dependency tracking, run:
-
-.. code:: python
-
-  import fyrd
-  job  = fyrd.submit(<command1>)
-  job2 = fyrd.submit(<command2>, dependencies=job1)
-  out  = job2.get()  # Will block until job completes
-
-Functions
----------
-
-The submit function works well with python functions as well as with shell
-scripts and shell commands, in fact, this is the most powerful feature of this
-package. For example:
-
-.. code:: python
-   import fyrd
-   def my_function(something):
-     return something
-   outs = []
-   if __name__ == '__main__':
-     for i in range(80):
-       outs.append(fyrd.submit(my_function, (i,), mem='10MB', walltime='00:00:30'))
-     final_sum = 0
-     for i in outs:
-       final_sum += i.get()
-
-By default this will submit every instance as a job on the cluster, then get the
-results and clean up all intermediate files, and the code will work identically
-on a Mac with no cluster access, a slurm cluster, or a torque cluster, with no
-need to change syntax.
-
-**However**, in order for this to work, *fyrd* ends up importing your original
-script file on the nodes. This means that all code in your file will be
-executed, so anything that isn't a function or class must be protected with an:
-
-.. code:: python
-
-  if __name__ == '__main__':
-
-protecting statment.
-
-If you do not do this you can end up with multi-submission and infinate
-recursion, which could mess up your jobs or just crash the job, but either way,
-it won't be good.
-
-File Submission
----------------
-
-If you want to just submit a file, that can be done like this:
-
-.. code:: python
-
-  from fyrd import submit_file
-  submit_file('/path/to/script', dependencies=[7, 9])
-
-This will return the job number and will enter the job into the queue as
-dependant on jobs 7 and 9. The dependencies can be omitted.
- 
-Setting Environment
--------------------
-
-To set the environement, set `queue.MODE` to one of `['torque', 'slurm', 'local']`,
-or run `get_cluster_environment()`.
- 
-The Job Class
--------------
-
-The core of this submission system is a `Job` class, this class allows easy
-job handling and debugging. All of the above commands work well with the Job
-class also, but more fine grained control is possible. For example:
-
-.. code:: python
-  
-  my_job = """#!/bin/bash
-  parallel /usr/bin/parser {} ::: folder/*.txt
-  for i in folder/*.txt; do
-      echo $i >> my_output.txt
-      echo job_$i done!
-  fi"""
-  job = fyrd.Job(my_job, cores=16)
-  job.submit()
-  job.wait()
-  print(job.stdout)
-  if job.exitcode != 0:
-      print(job.stderr)
-
-Far more is also possible, this is a large package. For a full description, see
-the API documentation here: 
-`Job Management <https://fyrd.readthedocs.io/en/latest/api.html#job-management>`_
-
-Keywords
---------
-
-The `Job` class, and therefore every submission script, accepts a large number of
-keyword arguments, which can be easily altered in the `fyrd/options.py` file.
-The arguments are fully documented
-`here <https://fyrd.readthedocs.io/en/latest/api.html#options>`_
-
-Profiles and Configuration
---------------------------
-
-One of the big problems with working with multiple clusters is that the vary.
-Because of this, *fyrd* makes use of profiles defined in `~/.fyrd/profiles.txt`.
-To initiate these profiles run `cluster-profile` from the command line after
-installation. These allow thr grouping of keywords as names using the following
-syntax::
-
-  [large]
-  partition = normal
-  cores = 16
-  nodes = 1
-  time = 24:00:00
-  mem = 32000
-
-This means that you can now do this:
-
-.. code:: python
-
-   Job(my_function, profile='large')
-
-You can create as many of these as you like.
-
-If no arguments are given the default profile (called 'DEFAULT' in the config file)
-is used.
-
-Additionally, there are a number of other configurable options available in the
-`~/.fyrd/config.txt` file, allowing you to control various aspects of the module
-differently on different machines (or identically if you prefer).
-
-Scripts
-=======
-
-While this software is designed to be used as a python library, several scripts
-are provided to make life easier.
-
-my-queue
---------
-
-Uses python-cluster to check the job queue for only one user's jobs.  Produces
-a very simple display, for full job information, the regular tools can be used
-(e.g squeue)::
-
-  Choose jobs to show, default is all:
-    -r, --running  Show running jobs only
-    -q, --queued   Show queued jobs only
-
-  Choose alternate output style:
-    -c, --count    Display count only
-    -l, --list     Print space separated list of job numbers
-
-cluster-profile
----------------
-
-This script allows the user to save cluster keyword arguments in a config file
-located at ~/.python-fyrd.
-
-Rather than edit that file directly, use this script to add profiles and
-options.
-
-There are two classes of options: global options, and profiles.
-
-Global options will be used in all profiles, but only if the option is not
-already present in the profile definition. Profiles must be called every time
-and allow bundled keyword arguments, they can also be overridden by providing
-keyword arguments at runtime.
-
-Global options are great for saving a default queue.
-
-Modes::
-
-  General:
-    :list:   Display all global options and profiles.
-
-  Profile Management:
-    :add:    Add a profile
-             Usage: add profile_name keyword:arg [keyword:arg ...]
-    :edit:   Edit an existing profile
-             Usage: edit profile_name keyword:arg [keyword:arg ...]
-    :remove: Delete an existing profile (The default profile will be recreated
-             if it does not exist when a job is submitted.
-             Usage: remove|del profile_name
-
-  Global Option Management:
-    :add-global:    Add a global keyword
-                    Usage: add-global keyword:arg [keyword:arg ...]
-    :remove-global: Remove a global keyword
-                    Usage: remove-global|del-global keyword [keyword ...]
-
-  Dangerous:
-    :reset: Completely reset your entire profile to the defaults. 
-
-
-monitor-jobs
-------------
- 
-Blocks until provided jobs complete. Allows to monitor by user, partition, or
-simple job list::
-
-  Arguments are cumulative except user. For example::
-    auto_resubmit -p bob -j 172436 172437
-  user can be 'self'
-  This command will monitor all jobs in the bob partition as
-  well as the two jobs specified directly.
-  However::
-    monitor_jobs -p bob -u fred
-  This command will only monitor fred's jobs in bob (the union).
-
-clean-job-files
----------------
-
-Uses the fyrd.job.clean_dir() function to clean all job files in the current
-directory.
-
-Caution: The clean() function will delete **EVERY** file with extensions
-matching those these::
-
-    .<suffix>.err
-    .<suffix>.out
-    .<suffix>.sbatch & .fyrd.script for slurm mode
-    .<suffix>.qsub for torque mode
-    .<suffix> for local mode
-    _func.<suffix>.py
-    _func.<suffix>.py.pickle.in
-    _func.<suffix>.py.pickle.out
-
-Usage::
-
-  Will work with no commands.
-
-  optional arguments:
-    -h, --help                        show this help message and exit
-    -d DIR, --dir DIR                 Directory to clean
-    -s, --suffix SUFFIX               Directory to clean
-    -q, --qtype {torque,slurm,local}  Limit deletions to this qtype
-    -n, --no-confirm                  Do not confirm before deleting (for scripts)
-    -v, --verbose                     Show debug information
-
-cluster-keywords
-----------------
-
-Prints simple help information on the available keyword arguments. It calls the
-cluster_help() function, which means that keyword information is always up to
-date.
-
-
-Queue Management
-================
-
-This module provides simple queue management functions
-
-To generate a queue object, do the following:
-
-.. code:: python
-
-  import fyrd
-  q = fyrd.Queue(user='self')
-
-This will give you a simple queue object containg a list of jobs that belong to
-you.  If you do not provide user, all jobs are included for all users. You can
-provide `qtype` to explicitly force the queue object to contain jobs from one
-queing system (e.g. local or torque).
-
-To get a dictionary of all jobs, running jobs, queued jobs, and complete jobs,
-use:
-
-.. code:: python
-
-  q.jobs
-  q.running
-  q.complete
-  q.queued
-
-Every job has a number of attributes, including owner, nodes, cores, memory.
-
-Advanced Usage
-==============
-
-Keyword Arguments
------------------
-
-To make submission easier, this module defines a number of keyword arguments in
-the options.py file that can be used for all submission and Job() functions.
-These include things like 'cores' and 'nodes' and 'mem'. 
-
-The following is a complete list of arguments that can be used in this version::
-
-  Used in every mode::
-  cores:      Number of cores to use for the job
-              Type: int; Default: 1
-  modules:    Modules to load with the `module load` command
-              Type: list; Default: None
-  filedir:    Folder to write cluster files to, must be accessible to the compute
-              nodes.
-              Type: str; Default: .
-  dir:        The working directory for the job
-              Type: str; Default: path argument
-  suffix:     A suffix to append to job files (e.g. job.suffix.qsub)
-              Type: str; Default: cluster
-  outfile:    File to write STDOUT to
-              Type: str; Default: None
-  errfile:    File to write STDERR to
-              Type: str; Default: None
-
-  Used for function calls::
-  imports:    Imports to be used in function calls (e.g. sys, os) if not provided,
-              defaults to all current imports, which may not work if you use complex
-              imports. The list can include the import call, or just be a name, e.g.
-              ['from os import path', 'sys']
-              Type: list; Default: None
-
-  Used only in local mode::
-  threads:    Number of threads to use on the local machine
-              Type: int; Default: 8
-
-  Options that work in both slurm and torque::
-  nodes:      Number of nodes to request
-              Type: int; Default: 1
-  features:   A comma-separated list of node features to require
-              Type: list; Default: None
-  time:       Walltime in HH:MM:SS
-              Type: str; Default: 12:00:00
-  mem:        Memory to use in MB (e.g. 4000)
-              Type: ['int', 'str']; Default: 4000
-  partition:  The partition/queue to run in (e.g. local/batch)
-              Type: str; Default: None
-  account:    Account to be charged
-              Type: str; Default: None
-  export:     Comma separated list of environmental variables to export
-              Type: str; Default: None
-
-  Used for slurm only::
-  begin:      Start after this much time
-              Type: str; Default: None
-
-In addition some synonyms are allowed::
-
-  cpus:                             cores
-  memory:                           mem
-  queue:                            partition
-  depend, dependencies, dependency: depends
-
-*Note:* Type is enforced, any provided argument must match that python type
-(automatic conversion is attempted), the default is just a recommendation and is
-not currently used. These arguments are passed like regular arguments to the
-submission and Job() functions, eg::
-
-  Job(nodes=1, cores=4, mem='20MB')
-
-This will be interpretted correctly on any system. If torque or slurm are not
-available, any cluster arguments will be ignored. The module will attempt to
-honor the cores request, but if it exceeds the maximum number of cores on the
-local machine, then the request will be trimmed accordingly (i.e. a 50 core
-request will become 8 cores on an 8 core machine).
-
-### Adding your own keywords
-
-There are many more options available for torque and slurm, to add your own,
-edit the options.py file, and look for CLUSTER_OPTS (or TORQUE/SLURM if your
-keyword option is only availble on one system). Add your option using the same
-format as is present in that file. The format is::
-
-  ('name', {'slurm': '--option-str={}', 'torque': '--torque-option={}',
-            'help': 'This is an option!', 'type': str, 'default': None})
-
-You can also add list options, but they must include 'sjoin' and 'tjoin' keys to
-define how to merge the list for slurm and torque, or you must write custom
-option handling code in ``fyrd.options.options_to_string()``. For an
-excellent example of both approaches included in a single option, see the
-'features' keyword above.
-
-I happily accept pull requests for new option additions (any any other
-improvements for that matter).
-
-Profiles and the Config File
-----------------------------
-
-To avoid having to enter all keyword arguments every time, profiles can be used.
-These profiles can store any of the above keywords and drastically simplify
-submission. For example::
-
-  job = submit(my_function, profile='large')
-  
-Instead of::
-
-  job = submit(my_funtion, nodes=2, cores=16, mem='64GB', partition='bigjobs',
-               features=['highmem'], export='PYTHONPATH')
-
-These profiles are saved in a config file at ~/.python-cluster and can be
-editted in that file directly, or using the below functions. To edit them in the
-file directly, you must make sure that the section is labelled 'prof_<name>'
-where <name> is whatever you want it to be called. e.g.::
-
-  [prof_default]
-  nodes = 1
-  cores = 16
-  time = 24:00:00
-  mem = 32000
-
-*Note:* a default profile must always exist, it will be added back if it does
-not exist.
-
-The easiest way to manage profiles is with the cluster_profile script in bin.
-It defines several easy methods to manage both profiles and global options, see
-the scripts section above for information.
-
-
-Alternatively, the functions ``fyrd.conf.set_profile()`` and
-``fyrd.conf.get_profile()`` can be used:
-
-.. code:: python
-
-  fyrd.conf.set_profile('small', {'nodes': 1, 'cores': 1,
-                                            'mem': '2GB'})
-  fyrd.conf.get_profile('small')
-
-To see all profiles run:
-
-.. code:: python
-
-  conf.get_profile()
-
-Other options are defined in the config file, including the maximum number of
-jobs in the queue, the time to sleep between submissions, and other options. To
-see these run:
-
-.. code:: python
-
-  fyrd.conf.get_option()
-
-You can set options with:
-
-.. code:: python
-
-  fyrd.conf.set_option()
-
-The defaults can be directly edited in ``conf.py``, they are clearly
-documented.
-
-Job Files
----------
-
-All jobs write out a job file before submission, even though this is not
-necessary (or useful) with multiprocessing. In local mode, this is a `.cluster`
-file, in slurm is is a `.fyrd.sbatch` and a `.fyrd.script` file, in torque
-it is a `.fyrd.qsub` file. 'cluster' is set by the suffix keyword, and can be
-overridden.
-
-To change the directory these files are written to, use the 'filedir' keyword
-argument to Job or submit.
-
-*NOTE:* This directory *must* be accessible to the compute nodes!!!
-
-All jobs are assigned a name that is used to generate the output files,
-including STDOUT and STDERR files. The default name for the out files is STDOUT:
-name.fyrd.out and STDERR: name.fyrd.err. These can be overwridden with
-keyword arguments.
-
-All Job objects have a ``clean()`` method that will delete any left over files.
-In addition there is a clean_job_files script that will delete all files made by
-this package in any given directory. Be very careful with the script though, it
-can clobber a lot of work all at once if it is used wrong. 
-
-Dependecy Tracking
-------------------
-
-Dependency tracking is supported in all modes. Local mode uses a unique queueing
-system that works similarly to torque and slurm and which is defined in
-jobqueue.py.
-
-To use dependency tracking in any mode pass a list of job ids to submit or
-submit_file with the `dependencies` keyword argument.
-
-Logging
--------
-
-I use a custion logging script called logme to log errors. To get verbose
-output, set logme.MIN_LEVEL to 'debug'. To reduce output, set logme.MIN_LEVEL to
-'warn'.
-
-Code Overview
-=============
-
-There are two important classes for interaction with the batch system: Job and
-Queue. The essential flow of a job submission is:
-
-.. code:: python
-
-  job = Job(command/function, arguments, name)
-  job.write()  # Writes the job submission files
-  job.submit() # Submits the job
-  job.wait()   # Waits for the job to complete
-  job.stdout   # Prints the output from the job
-  job.clean()  # Delete all of the files written
-
-You can also wait for many jobs with the Queue class:
-
-.. code:: python
-
-  q = Queue(user='self')
-  q.wait([job1, job2])
-
-The jobs in this case can be either a Job class or a job number.
+Please look through the code and follow the style as closely as possible,
+also, please either message me or add information to the issues page before
+starting work so that I know what you are working on!
 
 
 Why the Name?
@@ -636,34 +252,11 @@ seemed appropriate.
 The project used to be called "Python Cluster", which is more descriptive but
 frankly boring. Also, about half a dozen other projects have almost the same
 name, so it made no sense to keep that name and put the project onto PyPI.
- 
 
-Issues and Contributing
-=======================
 
-If you have any trouble with this software add an issue in
-https://github.com/MikeDacre/python-cluster/issues
+Documentation
+=============
 
-If you want to help improve it, please fork the repo and send me pull requests
-when you are done.
- 
-
-Roadmap
-=======
-
-Right now this software is in _beta_, to get to version 1.0 it needs to be
-tested by users and demonstrated to be stable. In addition, I would like to
-implement the following features prior to the release of v1.0:
-
- - Auto update Job scripts when attributes are changed until files are already
-   written.
- - DONE: Profile managing script in bin
- - Update of all bin scripts to work with new options
- - Persistent job tracking in an sqlite database stored in $HOME
- - Mac OS X functionality
- - Autoadjusting of job options based on queue features (i.e. implement a 'max'
-   option and try to guess the max cores available for a request on any machine)
- - Allow users to define their own keyword arguments in their configuration
-
-If you have any other feature suggestions please email them to me at
-mike.dacre@gmail.com or open an issue.
+This software is much more powerful that this document gives it credit for,
+to get the most out of it, read the docs at https://fyrd.readthedocs.org
+or get the PDF version from the file in `docs/fyrd.pdf`.

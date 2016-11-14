@@ -2,7 +2,7 @@
 """
 Functions to allow simple job and file submission without the Job class.
 
-Last modified: 2016-11-10 15:51
+Last modified: 2016-11-14 13:23
 """
 import os  as _os
 import sys as _sys
@@ -313,7 +313,6 @@ def clean_dir(directory='.', suffix=None, qtype=None, confirm=False,
     extensions = ['_func.' + suffix + '.py']
     if delete_outputs:
         extensions += ['.' + suffix + '.err', '.' + suffix + '.out',
-                       '_func.' + suffix + '.py.pickle.in',
                        '_func.' + suffix + '.py.pickle.out',
                        '.' + suffix + '.out.func.pickle']
 
@@ -326,6 +325,7 @@ def clean_dir(directory='.', suffix=None, qtype=None, confirm=False,
             extensions.append('.' + suffix + '.qsub')
     else:
         extensions.append('.' + suffix)
+        extensions.append('_func.' + suffix + '.py.pickle.in')
         extensions += ['.' + suffix + '.sbatch', '.' + suffix + '.script']
         extensions.append('.' + suffix + '.qsub')
 

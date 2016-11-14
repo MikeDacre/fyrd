@@ -1,26 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-Print simple help information on cluster keywords.
-
-Last modified: 2016-10-27 13:26
-"""
-from __future__ import print_function
-from fyrd import option_help
-
-info = """\
-fyrd keyword help
-=================
-
-All job submission functions in this module make use of the same simple
-keyword arguments. These keywords can be speified directly (e.g.
-`fyrd.submit('ls', cores=10, mem=8000)`) or bundled together into profiles
-with the cluster-profile script, and then specified as a profile (e.g.
-`fyrd.submit('ls', profile='large')`).
-
-Available keywords
-------------------
-
-"""
-
-print(info, option_help)
+#!/usr/bin/env bash
+# Simple alias for `fyrd keywords`
+fyrd keywords $@
