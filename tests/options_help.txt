@@ -9,11 +9,14 @@ cores:         Number of cores to use for the job
                Type: int; Default: 1
 modules:       Modules to load with the `module load` command
                Type: list; Default: None
-filepath:      Folder to write cluster files to, must be accessible to the compute
-               nodes.
+scriptpath:    Folder to write cluster script files to, must be accessible to the
+               compute nodes.
                Type: str; Default: .
-dir:           The working directory for the job
-               Type: str; Default: path argument
+outpath:       Folder to write cluster output files to, must be accessible to the
+               compute nodes.
+               Type: str; Default: .
+runpath:       The working directory for the job
+               Type: str; Default: .
 suffix:        A suffix to append to job files (e.g. job.suffix.qsub)
                Type: str; Default: cluster
 outfile:       File to write STDOUT to

@@ -269,7 +269,27 @@ def submit_file(script_file, dependencies=None, threads=None, qtype=None):
         return _local.JQUEUE.add(_run.cmd, (command,), dependencies=depends)
 
 
-def clean_dir(directory='.', suffix=None, qtype=None, confirm=False,
+def clean_work_dirs(outputs=False, confirm=False):
+    """Clean all files in the scriptpath and outpath directories.
+
+    Args:
+        outputs (bool): Also delete output files.
+        confirm (bool): Confirm on command line before deleteing.
+
+    Returns:
+        list: A list of deleted files.
+    """
+    files = []
+    scriptpath = _conf.get_option('jobs', 'scriptpath')
+    outpath    = _conf.get_option('jobs', 'outpath')
+    if scriptpath:
+        files += clean_dir(scriptpath, delete_outputs=outputs, confirm=confirm)
+    if outputs and outpath and outpath != scriptpath:
+        files += clean_dir(outpath, delete_outputs=True, confirm=confirm)
+    return files
+
+
+def clean_dir(directory=None, suffix=None, qtype=None, confirm=False,
               delete_outputs=None):
     """Delete all files made by this module in directory.
 
@@ -302,10 +322,8 @@ def clean_dir(directory='.', suffix=None, qtype=None, confirm=False,
         delete_outputs = _conf.get_option('jobs', 'clean_outputs')
 
     # Sanitize arguments
-    if not directory:
-        directory = '.'
-    if not suffix:
-        suffix = _conf.get_option('jobs', 'suffix')
+    directory = _os.path.abspath(directory if directory else '.')
+    suffix = suffix if suffix else _conf.get_option('jobs', 'suffix')
 
     # Extension patterns to delete
     extensions = ['_func.' + suffix + '.py']
@@ -327,8 +345,8 @@ def clean_dir(directory='.', suffix=None, qtype=None, confirm=False,
         extensions += ['.' + suffix + '.sbatch', '.' + suffix + '.script']
         extensions.append('.' + suffix + '.qsub')
 
-    files = [i for i in _os.listdir(_os.path.abspath(directory))
-             if _os.path.isfile(i)]
+    files = [_os.path.join(directory, i) for i in _os.listdir(directory)]
+    files = [i for i in files if _os.path.isfile(i)]
 
     if not files:
         _logme.log('No files found.', 'debug')
@@ -345,10 +363,12 @@ def clean_dir(directory='.', suffix=None, qtype=None, confirm=False,
 
     if confirm:
         if deleted:
+            prompt = [_os.path.basename(i) for i in deleted]
+            _sys.stdout.write('Directory: {}\n'.format(directory))
             _sys.stdout.write('Files to delete::\n\t')
-            _sys.stdout.write('\n\t'.join(deleted) + '\n')
+            _sys.stdout.write('\n\t'.join(prompt) + '\n')
             answer = _run.get_input("Do you want to delete these files? [Y/n]",
-                                    ['y', 'n'])
+                                    'yesno', 'y')
             if answer == 'y':
                 delete  = True
                 _sys.stdout.write('Deleting...\n')

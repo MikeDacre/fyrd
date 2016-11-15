@@ -165,12 +165,37 @@ class Job(object):
         ########################
         #  Sanitize arguments  #
         ########################
+        kwds = _options.check_arguments(kwds)
 
         # Override autoclean state (set in config file)
         if 'clean_files' in kwds:
             self.clean_files = kwds.pop('clean_files')
         if 'clean_outputs' in kwds:
             self.clean_outputs = kwds.pop('clean_outputs')
+
+        # Path handling
+        self.runpath = _os.path.abspath(kwds['dir'] if 'dir' in kwds else '.')
+        kwds['dir'] = self.runpath
+
+        # Set the output path
+        cpath = _conf.get_option('jobs', 'outpath')
+        if 'outpath' in kwds:
+            outpath = kwds['outpath']
+        elif cpath:
+            outpath = cpath
+        else:
+            outpath = self.runpath
+        self.outpath = _os.path.abspath(outpath)
+
+        # Set the script path
+        cpath = _conf.get_option('jobs', 'scriptpath')
+        if 'scriptpath' in kwds:
+            scriptpath = kwds['scriptpath']
+        elif cpath:
+            scriptpath = cpath
+        else:
+            scriptpath = self.outpath
+        self.scriptpath = _os.path.abspath(scriptpath)
 
         # Save command
         self.command = command
@@ -226,21 +251,6 @@ class Job(object):
         if self.modules:
             self.modules = _run.opt_split(self.modules, (',', ';'))
 
-        # Path handling
-        runpath = _os.path.abspath(kwds['dir'] if 'dir' in kwds else '.')
-        self.runpath = runpath
-
-        # Set temp file path if different from runtime path
-        cpath = _conf.get_option('jobs', 'filepath')
-        if 'filepath' in kwds:
-            filepath = kwds['filepath']
-        elif cpath:
-            filepath = cpath
-        else:
-            filepath = self.runpath
-        filepath = _os.path.abspath(filepath)
-        self.filepath = filepath
-
         # Make sure args are a tuple or dictionary
         if args:
             if isinstance(args, str):
@@ -265,19 +275,19 @@ class Job(object):
         if 'outfile' in kwds:
             pth, fle = _os.path.split(kwds['outfile'])
             if not pth:
-                pth = self.filepath
+                pth = self.outpath
             kwds['outfile'] = _os.path.join(pth, fle)
         else:
             kwds['outfile'] = _os.path.join(
-                filepath, '.'.join([name, suffix, 'out']))
+                self.outpath, '.'.join([name, suffix, 'out']))
         if 'errfile' in kwds:
             pth, fle = _os.path.split(kwds['errfile'])
             if not pth:
-                pth = self.filepath
+                pth = self.outpath
             kwds['errfile'] = _os.path.join(pth, fle)
         else:
             kwds['errfile'] = _os.path.join(
-                filepath, '.'.join([name, suffix, 'err']))
+                self.outpath, '.'.join([name, suffix, 'err']))
         self.outfile = kwds['outfile']
         self.errfile = kwds['errfile']
 
@@ -318,7 +328,7 @@ class Job(object):
         if hasattr(command, '__call__'):
             self.kind = 'function'
             script_file = _os.path.join(
-                filepath, '{}_func.{}.py'.format(name, suffix)
+                self.scriptpath, '{}_func.{}.py'.format(name, suffix)
                 )
             self.poutfile = self.outfile + '.func.pickle'
             self.function = _Function(
@@ -353,15 +363,15 @@ class Job(object):
         sub_script = ''
         if self.qtype == 'slurm':
             scrpt = _os.path.join(
-                filepath, '{}.{}.sbatch'.format(name, suffix)
+                self.scriptpath, '{}.{}.sbatch'.format(name, suffix)
             )
 
             # We use a separate script and a single srun command to avoid
             # issues with multiple threads running at once
-            exec_script  = _os.path.join(filepath,
+            exec_script  = _os.path.join(self.scriptpath,
                                          '{}.{}.script'.format(name, suffix))
             exe_script   = _run.CMND_RUNNER_TRACK.format(
-                precmd=precmd, usedir=runpath, name=name, command=command)
+                precmd=precmd, usedir=self.runpath, name=name, command=command)
             # Create the exec_script Script object
             self.exec_script = _Script(script=exe_script,
                                        file_name=exec_script)
@@ -375,13 +385,14 @@ class Job(object):
                                                  command=ecmnd)
 
         elif self.qtype == 'torque':
-            scrpt = _os.path.join(filepath, '{}.cluster.qsub'.format(name))
+            scrpt = _os.path.join(self.scriptpath,
+                                  '{}.cluster.qsub'.format(name))
 
             # Add all of the keyword arguments at once
             precmd += _options.options_to_string(kwds, self.qtype)
 
             sub_script = _run.CMND_RUNNER_TRACK.format(
-                precmd=precmd, usedir=runpath, name=name, command=command)
+                precmd=precmd, usedir=self.runpath, name=name, command=command)
 
         elif self.qtype == 'local':
             # Create the pool
@@ -390,9 +401,9 @@ class Job(object):
                         else _local.THREADS
                 _local.JQUEUE = _local.JobQueue(cores=threads)
 
-            scrpt = _os.path.join(filepath, '{}.cluster'.format(name))
+            scrpt = _os.path.join(self.scriptpath, '{}.cluster'.format(name))
             sub_script = _run.CMND_RUNNER_TRACK.format(
-                precmd=precmd, usedir=runpath, name=name, command=command)
+                precmd=precmd, usedir=self.runpath, name=name, command=command)
 
         else:
             raise _ClusterError('Invalid queue type')
@@ -554,16 +565,24 @@ class Job(object):
 
         return self
 
+    def resubmit(self):
+        """Attempt to auto resubmit, deletes prior files."""
+        self.clean(delete_outputs=True)
+        self.state = 'Not_Submitted'
+        self.write()
+        return self.submit()
+
     def wait(self):
         """Block until job completes."""
         if not self.submitted:
             if _conf.get_option('jobs', 'auto_submit'):
                 _logme.log('Auto-submitting as not submitted yet', 'debug')
                 self.submit()
+                _sleep(0.5)
             else:
-                _logme.log('Cannot wait for result as job has not been submitted',
-                           'warn')
-            return False
+                _logme.log('Cannot wait for result as job has not been ' +
+                           'submitted', 'warn')
+                return False
         _sleep(0.1)
         self.update()
         if self.done:
@@ -573,6 +592,7 @@ class Job(object):
             return False
         # Block for up to file_block_time for output files to be copied back
         btme = _conf.get_option('jobs', 'file_block_time')
+        #  btme = 2
         start = _dt.now()
         lgd = False
         while True:
@@ -584,8 +604,10 @@ class Job(object):
                 if _os.path.isfile(i):
                     count += 1
             if count == len(self.outfiles):
-                _logme.log('All output files found', 'debug')
+                _logme.log('All output files found in {} seconds'
+                           .format(count), 'debug')
                 break
+            _sleep(0.1)
             if (_dt.now() - start).seconds > btme:
                 _logme.log('Job completed but files have not appeared for ' +
                            '>{} seconds'.format(btme))
