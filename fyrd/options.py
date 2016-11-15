@@ -548,7 +548,7 @@ def option_help(mode='string', qtype=None, tablefmt='simple'):
 
     if mode == 'print' or mode == 'string':
         outstr = ''
-        for option_class, hlp_info in hlp.items():
+        for hlp_info in hlp.values():
             tmpstr = ''
             for option, inf in hlp_info['help'].items():
                 default   = inf['default'] if 'default' in inf else None

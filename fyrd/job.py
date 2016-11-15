@@ -330,7 +330,7 @@ class Job(object):
                 _sys.version_info.major) if _conf.get_option(
                     'jobs', 'generic_python') else _sys.executable
 
-            command = '{} {}'.format(_sys.executable, self.function.file_name)
+            command = '{} {}'.format(executable, self.function.file_name)
             args = None
         else:
             self.kind = 'script'
@@ -469,6 +469,14 @@ class Job(object):
         if not self.written:
             self.write()
 
+        dependencies = []
+        if self.dependencies:
+            for depend in self.dependencies:
+                if isinstance(depend, Job):
+                    dependencies.append(int(depend.id))
+                else:
+                    dependencies.append(int(depend))
+
         self.update()
 
         if wait_on_max_queue:
@@ -477,14 +485,6 @@ class Job(object):
         if self.qtype == 'local':
             # Normal mode dependency tracking uses only integer job numbers
             _logme.log('Submitting to local', 'debug')
-            dependencies = []
-            if self.dependencies:
-                for depend in self.dependencies:
-                    if isinstance(depend, Job):
-                        dependencies.append(int(depend.id))
-                    else:
-                        dependencies.append(int(depend))
-
             command = 'bash {}'.format(self.submission.file_name)
             fileargs  = dict(stdout=self.outfile,
                              stderr=self.errfile)
@@ -502,15 +502,9 @@ class Job(object):
         elif self.qtype == 'slurm':
             _logme.log('Submitting to slurm', 'debug')
             if self.dependencies:
-                dependencies = []
-                for depend in self.dependencies:
-                    if isinstance(depend, Job):
-                        dependencies.append(str(depend.id))
-                    else:
-                        dependencies.append(str(depend))
-                    depends = '--dependency=afterok:{}'.format(
-                        ':'.join(dependencies))
-                    args = ['sbatch', depends, self.submission.file_name]
+                depends = '--dependency=afterok:{}'.format(
+                    ':'.join(dependencies))
+                args = ['sbatch', depends, self.submission.file_name]
             else:
                 args = ['sbatch', self.submission.file_name]
 
@@ -529,12 +523,6 @@ class Job(object):
         elif self.qtype == 'torque':
             _logme.log('Submitting to torque', 'debug')
             if self.dependencies:
-                dependencies = []
-                for depend in self.dependencies:
-                    if isinstance(depend, Job):
-                        dependencies.append(str(depend.id))
-                    else:
-                        dependencies.append(str(depend))
                 depends = '-W depend={}'.format(
                     ','.join(['afterok:' + d for d in dependencies]))
                 args = ['qsub', depends, self.submission.file_name]

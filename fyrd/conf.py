@@ -877,7 +877,7 @@ def _config_to_dict(cnf):
         out['DEFAULT'] = _section_to_dict(def_items)
     for sect in _sections(cnf):
         out[sect] = _section_to_dict(cnf.items(sect))
-    return(out)
+    return out
 
 
 ###############################################################################

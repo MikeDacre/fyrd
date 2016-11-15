@@ -310,7 +310,6 @@ def delete_profile_option(args):
 #######################
 
 
-
 def keyword_help(args):
     """Print keyword info."""
     if args.split_tables:
@@ -449,7 +448,7 @@ def get_values(keywords):
 def _sort_conf(key):
     """Use with sorted: return an integer value for each section in config."""
     sections = {'queue': 1, 'jobs': 2, 'jobqueue': 3}
-    return(sections[key])
+    return sections[key]
 
 
 ###############################################################################
@@ -506,7 +505,6 @@ def command_line_parser():
     Returns:
         argparse parser
     """
-
     parser  = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter
