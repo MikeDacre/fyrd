@@ -10,10 +10,13 @@
 # This script will then reinstall the latest version of this code into each
 # of these virtualenvs and run the test suite in each. It will additionally
 # run the pandas specific tests in the anaconda environment only.
+PYENV_HOME=$HOME/.pyenv
+PATH=$PYENV_HOME/bin:$PATH
 eval "$(pyenv init -)"
 eval "$(pyenv virtualenv-init -)"
 
-versions=('2.7.10' '2.7.11' '2.7.12' '3.3.0' '3.4.0' '3.5.2' '3.6-dev' '3.7-dev')
+versions=('2.7.10' '2.7.11' '2.7.12' '3.3.0' '3.4.0' '3.5.2')
+bad_build_versions=('3.6-dev' '3.7-dev')
 
 counter=0
 codes=0
@@ -25,7 +28,7 @@ for i in ${versions[@]}; do
   pyenv virtualenv $i $v
   pyenv shell $v
   echo "Installing fyrd"
-  python ./setup.py develop >/dev/null
+  python ./setup.py install >/dev/null
   echo "Installing requirements"
   pip install -r tests/test_requirements.txt >/dev/null
   echo "Running test suite"
@@ -55,9 +58,16 @@ for i in ${version[@]}; do
   pip install pandas numpy scipy >/dev/null
   echo "Running test suite"
   python tests/run_tests.py $@
+  code=$!
+  counter=$((counter+1))
+  codes=$((codes+code))
   python tests/pandas_run.py $@
+  code=$!
+  counter=$((counter+1))
+  codes=$((codes+code))
   echo "Deleteing $v"
   pyenv virtualenv-delete $v
 done
 
 echo "All tests complete, please review the outputs manually."
+exit $codes
