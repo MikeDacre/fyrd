@@ -47,6 +47,7 @@ def test_job_execution():
     job = fyrd.Job('echo hi', profile='default', clean_files=True,
                    clean_outputs=True).submit()
     job.wait()
+    print(job.outfile)
     assert os.path.isfile(job.outfile)
     assert os.path.isfile(job.errfile)
     assert os.path.isfile(job.submission.file_name)
@@ -85,7 +86,7 @@ def test_job_cleaning():
                     reason="Fails in local mode")
 def test_function_submission():
     """Submit a function."""
-    job = fyrd.Job(write_to_file, ('42', 'bobfile'))
+    job = fyrd.Job(write_to_file, ('42', 'bobfile'), clean_files=False)
     job.submit()
     out = job.get()
     sys.stdout.write('{};\nOut: {}\nSTDOUT: {}\nSTDERR: {}\n'
@@ -95,6 +96,8 @@ def test_function_submission():
     assert job.out == 0
     assert job.stdout == '\n'
     assert job.stderr == ''
+    print(job.runpath)
+    assert os.path.isfile('bobfile')
     with open('bobfile') as fin:
         assert fin.read().rstrip() == '42'
     os.remove('bobfile')

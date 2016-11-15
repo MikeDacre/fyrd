@@ -57,8 +57,9 @@ DEFAULTS = {
     'jobs': {
         'clean_files':     True,
         'clean_outputs':   False,
-        'file_block_time': 12,
-        'filepath':        None,
+        'file_block_time': 200,
+        'scriptpath':      None,
+        'outpath':         None,
         'suffix':          'cluster',
         'auto_submit':     True,
         'generic_python':  False,
@@ -124,10 +125,13 @@ CONF_HELP = {
                                    take a long time to copy files under load,
                                    so it is worth setting this high, it won't
                                    block unless the files do not appear.
-            filepath (str):        Path to write all temp and output files by
+            scriptpath (str):      Path to write all script files by
                                    default, must be globally cluster
                                    accessible. Note: this is *not* the runtime
                                    path, just where files are written to.
+            outpath (str):         Path to write all output files to by
+                                   by default, must be globally cluster
+                                   accessible.
             suffix (str):          The suffix to use when writing scripts and
                                    output files
             auto_submit (bool):    If wait() or get() are called prior to
@@ -381,7 +385,7 @@ def create_config_interactive(prompt=True):
         t.createListCompleter(['y', 'n'])
         _rl.set_completer(t.list_completer)
         print("Do you want to initialize your config at {}"
-            .format(CONFIG_FILE))
+              .format(CONFIG_FILE))
         print("This will erase your current configuration (if it exists)")
         choice = _run.get_input("Initialize config? [y/N] ").strip().lower()
         if not choice == 'y':
@@ -430,35 +434,12 @@ def create_config_interactive(prompt=True):
           "directory.\n")
     t.createListCompleter(['y', 'n'])
     _rl.set_completer(t.list_completer)
-    set_filedir = _run.get_input(
-        'Would you like to set a temp file path? [Y/n] ')
-    if set_filedir.lower() == 'y':
-        while True:
-            _rl.set_completer(_path_completer)
-            file_path = _run.get_input(
-                'Where would you like that file to go? ')
-            file_path = file_path.strip().lower()
-            if file_path:
-                file_path = _os.path.abspath(file_path)
-                if _os.path.isdir(file_path):
-                    break
-                else:
-                    t.createListCompleter(['y', 'n'])
-                    _rl.set_completer(t.list_completer)
-                    ans = _run.get_input(
-                        'That directory does not exist, would you like to ' +
-                        'try to create it? [y/N] ')
-                    if ans.lower() == 'y':
-                        try:
-                            _os.makedirs(file_path)
-                            break
-                        except OSError:
-                            print("Failed to make {}".format(file_path),
-                                  "Please make it manually or choose another",
-                                  "directory\n")
-                            continue
-                    else:
-                        continue
+    if _run.get_yesno('Would you like to set a script file path?', 'y'):
+        file_path = _get_set_path('Where would you like to put that file?')
+        cnf['jobs']['scriptpath'] = file_path
+    if _run.get_yesno('Would you like to set an output file path?', 'n'):
+        file_path = _get_set_path('Where would you like to put that file?')
+        cnf['jobs']['outpath'] = file_path
 
     # Cleaning
     t.createListCompleter(['y', 'n'])
@@ -467,21 +448,12 @@ def create_config_interactive(prompt=True):
           'results have been retrieved.\n'
           'This option can be overridden at run time on a per-job basis.\n'
           'Do you want to autoclean:\n')
-    clean_files = _run.get_input('Autoclean script files? [Y/n] ')
-    if not clean_files:
-        clean_files = cnf['jobs']['clean_files']
-    else:
-        clean_files = True if clean_files.lower() != 'n' else False
+    clean_files = _run.get_yesno('Autoclean script files?', 'y')
     cnf['jobs']['clean_files'] = clean_files
 
-    clean_outs = _run.get_input(
-        'Autoclean output files (e.g. .out and .err)? [y/N] '
-    )
-    if not clean_outs:
-        clean_outs = cnf['jobs']['clean_outputs']
-    else:
-        clean_outs = False if clean_outs.lower() != 'y' else True
-    cnf['jobs']['clean_files'] = clean_files
+    clean_outs = _run.get_yesno('Autoclean output files (e.g. .out and .err)?',
+                                'n')
+    cnf['jobs']['clean_outputs'] = clean_outs
 
     # Wait times
     t.createListCompleter(cnf['queue'].values())
@@ -877,7 +849,7 @@ def _config_to_dict(cnf):
         out['DEFAULT'] = _section_to_dict(def_items)
     for sect in _sections(cnf):
         out[sect] = _section_to_dict(cnf.items(sect))
-    return(out)
+    return out
 
 
 ###############################################################################
@@ -961,6 +933,37 @@ def _complete_path(path=None):
         return [_os.path.join(path, p) for p in _os.listdir(path)]
     # exact file match terminates this completion
     return [path + ' ']
+
+
+def _get_set_path(message):
+    """Get a path from the user, make the directory if necessary."""
+    t = _TabCompleter()
+    while True:
+        _rl.set_completer(_path_completer)
+        file_path = _run.get_input(message + ' ')
+        file_path = file_path.strip().lower()
+        if file_path:
+            file_path = _os.path.abspath(file_path)
+            if _os.path.isdir(file_path):
+                break
+            else:
+                t.createListCompleter(['y', 'n'])
+                _rl.set_completer(t.list_completer)
+                ans = _run.get_input(
+                    'That directory does not exist, would you like to ' +
+                    'try to create it? [y/N] ')
+                if ans.lower() == 'y':
+                    try:
+                        _os.makedirs(file_path)
+                        break
+                    except OSError:
+                        print("Failed to make {}".format(file_path),
+                              "Please make it manually or choose another",
+                              "directory\n")
+                        continue
+                else:
+                    continue
+    return file_path
 
 
 ###############################################################################

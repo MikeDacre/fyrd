@@ -3,8 +3,9 @@
     clean_outputs
     cores
     modules
-    filepath
-    dir
+    scriptpath
+    outpath
+    runpath
     suffix
     outfile
     errfile

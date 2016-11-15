@@ -135,9 +135,13 @@ Available keywords
 """
 
 CLEAN_HELP = """\
-Clean all intermediate files created by the cluster module from this dir.
+Clean all intermediate files created by the cluster module.
 
-Uses the fyrd.job.clean_dir() function
+If not directory is passed, the default if either scriptpath or outpath are
+set in the config is to clean files in those locations is to clean those
+directories. If they are not set, the default is the current directory.
+
+By default, outputs are not cleaned, to clean them too, pass '-o'
 
 Caution:
     The clean() function will delete **EVERY** file with
@@ -310,7 +314,6 @@ def delete_profile_option(args):
 #######################
 
 
-
 def keyword_help(args):
     """Print keyword info."""
     if args.split_tables:
@@ -379,16 +382,32 @@ def wait(args):
 
 def clean_dir(args):
     """Clean up a job directory."""
-    files = fyrd.basic.clean_dir(directory=args.dir, suffix=args.suffix,
-                                 qtype=args.qtype, confirm=args.no_confirm,
-                                 delete_outputs=args.outputs)
+    if args.dir:
+        directory = args.dir
+        run_tmp_clean = False
+    else:
+        scriptpath = fyrd.conf.get_option('jobs', 'scriptpath')
+        outpath    = fyrd.conf.get_option('jobs', 'outpath')
+        if scriptpath:
+            run_tmp_clean = True
+        if outpath and args.outputs:
+            run_tmp_clean = True
+        if not run_tmp_clean:
+            directory = os.path.abspath('.')
 
-    if not files and args.no_confirm:
-        print('No files found.')
-        return
+    if run_tmp_clean:
+        files = fyrd.basic.clean_work_dirs(outputs=args.outputs,
+                                           confirm=args.no_confirm)
+    else:
+        files = fyrd.basic.clean_dir(directory=directory, suffix=args.suffix,
+                                     qtype=args.qtype, confirm=args.no_confirm,
+                                     delete_outputs=args.outputs)
+
+    if not files:
+        print('No files deleted.')
 
     # Print list of files if it wasn't done by the function
-    if not args.no_confirm:
+    elif not args.no_confirm:
         sys.stdout.write('Deleted files:\n\t')
         sys.stdout.write('\n\t'.join(files))
         sys.stdout.write('\n')
@@ -449,7 +468,7 @@ def get_values(keywords):
 def _sort_conf(key):
     """Use with sorted: return an integer value for each section in config."""
     sections = {'queue': 1, 'jobs': 2, 'jobqueue': 3}
-    return(sections[key])
+    return sections[key]
 
 
 ###############################################################################
@@ -506,7 +525,6 @@ def command_line_parser():
     Returns:
         argparse parser
     """
-
     parser  = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter
@@ -717,11 +735,11 @@ def command_line_parser():
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
+    clean.add_argument('dir', nargs='?',
+                       help="Directory to clean (optional)")
+
     clean.add_argument('-o', '--outputs', action='store_true',
                        help="Clean output files too")
-    clean.add_argument('-d', '--dir',
-                       default=fyrd.conf.get_option('jobs', 'filepath'),
-                       help="Directory to clean")
     clean.add_argument('-s', '--suffix',
                        default=fyrd.conf.get_option('jobs', 'suffix'),
                        help="Suffix to use for cleaning")

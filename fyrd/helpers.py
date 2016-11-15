@@ -2,6 +2,7 @@
 """
 High level functions to make complex tasks easier.
 """
+import os as _os
 import inspect as _inspect
 
 ###############################################################################
@@ -21,7 +22,6 @@ try:
     import pandas as _pd
 except ImportError:
     _logme.log('Could not import numpy and pandas for helpers', 'debug')
-    pass
 
 __all__ = ['parapply', 'split_file']
 
@@ -165,7 +165,7 @@ def parapply(jobs, df, func, args=(), profile=None, applymap=False,
     # Run the functions
     _logme.log('Submitting jobs', 'debug')
     outs = []
-    count=1
+    count = 1
     for d in dfs:
         nm = '{}_{}_of_{}'.format(name, count, jobs)
         outs.append(
@@ -254,8 +254,8 @@ def split_file(infile, parts, outpath='', keep_header=True):
         list: Paths to split files.
     """
     # Determine how many reads will be in each split sam file.
-    logme.log('Getting line count', 'debug')
-    num_lines = int(os.popen(
+    _logme.log('Getting line count', 'debug')
+    num_lines = int(_os.popen(
         'wc -l ' + infile + ' | awk \'{print $1}\'').read())
     num_lines   = int(int(num_lines)/int(parts)) + 1
 
@@ -263,12 +263,12 @@ def split_file(infile, parts, outpath='', keep_header=True):
     cnt       = 0
     currjob   = 1
     suffix    = '.split_' + str(currjob).zfill(4) + '.' + infile.split('.')[-1]
-    file_name = os.path.basename(infile)
-    run_file  = os.path.join(outpath, file_name + suffix)
+    file_name = _os.path.basename(infile)
+    run_file  = _os.path.join(outpath, file_name + suffix)
     outfiles  = [run_file]
 
     # Actually split the file
-    logme.log('Splitting file', 'debug')
+    _logme.log('Splitting file', 'debug')
     with open(infile) as fin:
         header = fin.readline() if keep_header else ''
         sfile = open(run_file, 'w')
@@ -283,7 +283,7 @@ def split_file(infile, parts, outpath='', keep_header=True):
                 currjob += 1
                 suffix = '.split_' + str(currjob).zfill(4) + '.' + \
                     infile.split('.')[-1]
-                run_file = os.path.join(outpath, file_name + suffix)
+                run_file = _os.path.join(outpath, file_name + suffix)
                 sfile = open(run_file, 'w')
                 outfiles.append(run_file)
                 sfile.write(header)

@@ -548,20 +548,22 @@ class Queue(object):
         Only used for torque and slurm queues.
 
         Attributes:
-            id (int)            Job ID
-            name (str)          Job name
-            owner (str)         User who owns the job
-            queue (str)         The queue/partition the job is running in
-            state (str)         Current state of the job, normalized to slurm
+            id (int):           Job ID
+            name (str):         Job name
+            owner (str):        User who owns the job
+            threads (int):      Number of cores used by the job
+            queue (str):        The queue/partition the job is running in
+            state (str):        Current state of the job, normalized to slurm
                                 states
-            nodes (list)        List of nodes job is running on
-            exitcode (int)      Exit code of completed job
+            nodes (list):       List of nodes job is running on
+            exitcode (int):     Exit code of completed job
             disappeared (bool): Job cannot be found in the queue anymore
         """
 
         id          = None
         name        = None
         owner       = None
+        threads     = None
         queue       = None
         state       = None
         nodes       = None

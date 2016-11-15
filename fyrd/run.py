@@ -224,7 +224,38 @@ def check_pid(pid):
         return True
 
 
-def get_input(message, valid_answers=None):
+def get_yesno(message, default=None):
+    """Get yes/no answer from user.
+
+    Args:
+        message (str): A message to print, an additional space will be added.
+        default (str): One of {'y', 'n'}, the default if the user gives no
+                       answer. If None, answer forced.
+
+    Returns:
+        bool: True on yes, False on no
+    """
+    if default:
+        if default.lower().startswith('y'):
+            tailstr = '[Y/n] '
+        elif default.lower().startswith('n'):
+            tailstr = '[y/N] '
+        else:
+            raise ValueError('Invalid default')
+    else:
+        tailstr = '[y/n] '
+    message = message + tailstr if message.endswith(' ') \
+                else message + ' ' + tailstr
+    ans = get_input(message, 'yesno', default)
+    if ans.lower().startswith('y'):
+        return True
+    elif ans.lower().startswith('n'):
+        return False
+    else:
+        raise ValueError('Invalid response: {}'.format(ans))
+
+
+def get_input(message, valid_answers=None, default=None):
     """Get input from the command line and check answers.
 
     Allows input to work with python 2/3
@@ -233,14 +264,22 @@ def get_input(message, valid_answers=None):
         message (str):        A message to print, an additional space will be
                               added.
         valid_answers (list): A list of answers to accept, if None, ignored.
-                              Case insensitive.
+                              Case insensitive. There is one special option
+                              here: 'yesno', this allows all case insensitive
+                              variations of y/n/yes/no.
+        default (str):        The default answer.
 
     Returns:
         str: The response
     """
+    if not message.endswith(' '):
+        message = message + ' '
     if valid_answers:
         if isinstance(valid_answers, str):
-            valid_answers = [valid_answers]
+            if valid_answers.lower() == 'yesno':
+                valid_answers = ['yes', 'no', 'y', 'n']
+            else:
+                valid_answers = [valid_answers]
         if not isinstance(valid_answers, (list, tuple, set, frozenset)):
             logme.log('valid_answers must be a list, is {}'
                       .format(type(valid_answers)), 'critical')
@@ -248,6 +287,8 @@ def get_input(message, valid_answers=None):
         valid_answers = [i.lower() for i in valid_answers]
         while True:
             ans = _get_input(message)
+            if not ans and default:
+                return default
             if ans.lower() in valid_answers:
                 return ans
             else:

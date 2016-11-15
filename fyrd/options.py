@@ -62,13 +62,17 @@ COMMON  = OrderedDict([
     ('imports',
      {'help': 'Imports to be used in function calls (e.g. sys, os)',
       'default': None, 'type': list}),
-    ('filepath',
-     {'help': 'Folder to write cluster files to, must be accessible ' +
+    ('scriptpath',
+     {'help': 'Folder to write cluster script files to, must be accessible ' +
               'to the compute nodes.',
       'default': '.', 'type': str}),
-    ('dir',
+    ('outpath',
+     {'help': 'Folder to write cluster output files to, must be accessible ' +
+              'to the compute nodes.',
+      'default': '.', 'type': str}),
+    ('runpath',
      {'help': 'The working directory for the job',
-      'default': 'path argument', 'type': str,
+      'default': '.', 'type': str,
       'slurm': '--workdir={}', 'torque': '-d {}'}),
     ('suffix',
      {'help': 'A suffix to append to job files (e.g. job.suffix.qsub)',
@@ -167,11 +171,17 @@ SYNONYMS = OrderedDict([
     ('walltime',       'time'),
     ('delete_files',   'clean_files'),
     ('delete_outputs', 'clean_outputs'),
-    ('filedir',        'filepath'),
-    ('runpath',        'dir'),
-    ('path',           'filepath'),
-    ('scriptpath',     'filepath'),
-    ('scriptdir',      'filepath'),
+    ('filedir',        'scriptpath'),
+    ('filepath',       'scriptpath'),
+    ('dir',            'runpath'),
+    ('path',           'runpath'),
+    ('scriptdir',      'scriptpath'),
+    ('cleanfiles',     'clean_files'),
+    ('delfiles',       'clean_files'),
+    ('cleanouts',      'clean_outputs'),
+    ('delouts',        'clean_outputs'),
+    ('deloutputs',     'clean_outputs'),
+    ('cleanoutputs',   'clean_outputs'),
 ])
 
 
@@ -548,7 +558,7 @@ def option_help(mode='string', qtype=None, tablefmt='simple'):
 
     if mode == 'print' or mode == 'string':
         outstr = ''
-        for option_class, hlp_info in hlp.items():
+        for hlp_info in hlp.values():
             tmpstr = ''
             for option, inf in hlp_info['help'].items():
                 default   = inf['default'] if 'default' in inf else None

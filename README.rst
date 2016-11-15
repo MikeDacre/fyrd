@@ -163,7 +163,7 @@ To install, do the following:
 
 .. code:: shell
 
-   pip install https://github.com/MikeDacre/fyrd/archive/v0.6.1-beta.5.tar.gz
+   pip install https://github.com/MikeDacre/fyrd/archive/v0.6.1-beta.6.tar.gz
    fyrd conf init
 
 To get the latest version:

@@ -6,7 +6,6 @@ import os  as _os
 import sys as _sys
 import inspect as _inspect
 from textwrap import dedent as _ddent
-from types import ModuleType as _ModuleType
 
 # Try to use dill, revert to pickle if not found
 try:
@@ -131,9 +130,11 @@ class Function(Script):
             imp1 = 'from {} import {}'.format(
                 self.parent, self.function.__name__)
             imp2 = 'from {} import *'.format(self.parent)
+            bimp1 = None
         else:
             imp1 = 'import {}'.format(self.function.__name__)
             imp2 = None
+            bimp1 = None
 
         # Try to set a sane import string to make the function work
         if bimp1:
@@ -185,23 +186,38 @@ class Function(Script):
         else:
             imports = []
 
-        # Import everything currently in globals
-        for name, module in {k:i for k,i in globals().items()
-                             if isinstance(i, _ModuleType)}.items():
-            if name == '__main__' or not name.startswith('__'):
-                imports.append((name, module.__name__))
+        func_imports = []
 
-        # Import everything in the root file
-        if hasattr(rootmod, '__file__'):
-            imports += [(k,v.__name__) for k,v in
-                        _inspect.getmembers(rootmod, _inspect.ismodule)
-                        if not k.startswith('__')]
+        # Import everything in current and function globals
+        import_places = [
+            #  dict(globals().items()),
+            dict(_inspect.getmembers(function))['__globals__'],
+        ]
+        for place in import_places:
+            for name, item in place.items():
+                # Module
+                if _inspect.ismodule(item):
+                    if name != '__main__' or not name.startswith('__'):
+                        imports.append((name, item.__name__))
+                # Function
+                elif callable(item):
+                    try:
+                        func_imports.append((name, item.__name__,
+                                             item.__module__))
+                    except AttributeError:
+                        pass
+
+        # Import all modules in the root module
+        imports += [(k,v.__name__) for k,v in
+                    _inspect.getmembers(rootmod, _inspect.ismodule)
+                    if not k.startswith('__')]
 
         imports = sorted(list(set(imports)), key=_sort_imports)
+        func_imports = sorted(list(set(func_imports)), key=_sort_imports)
         _logme.log('Imports: {}'.format(imports), 'debug')
 
         # Create a sane set of imports
-        ignore_list = ['os', 'sys', 'dill', 'pickle']
+        ignore_list = ['os', 'sys', 'dill', 'pickle', '__main__']
         filtered_imports = []
         for imp in imports:
             if imp in ignore_list:
@@ -249,6 +265,24 @@ class Function(Script):
                                              'except ImportError:\n    pass\n')
                                             .format(imp))
 
+            # Function imports
+            for iname, name, mod in func_imports:
+                if iname in ignore_list:
+                    continue
+                if iname == name:
+                    filtered_imports.append(
+                        ('try:\n    from {} import {}\n'
+                         'except ImportError:\n    pass\n')
+                        .format(mod, name)
+                    )
+                else:
+                    filtered_imports.append(
+                        ('try:\n    from {} import {} as {}\n'
+                         'except ImportError:\n    pass\n')
+                        .format(mod, name, iname)
+                    )
+
+
         # Get rid of duplicates and sort imports
         impts = _ident('\n'.join(set(filtered_imports)), '    ')
 
@@ -295,5 +329,7 @@ class Function(Script):
 def _sort_imports(x):
     """Sort a list of tuples and strings, for use with sorted."""
     if isinstance(x, tuple):
+        if x[1] == '__main__':
+            return 0
         return x[1]
     return x
