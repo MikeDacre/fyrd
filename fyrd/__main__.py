@@ -383,7 +383,7 @@ def wait(args):
 def clean_dir(args):
     """Clean up a job directory."""
     if args.dir:
-        dir = args.dir
+        directory = args.dir
         run_tmp_clean = False
     else:
         scriptpath = fyrd.conf.get_option('jobs', 'scriptpath')
@@ -393,13 +393,13 @@ def clean_dir(args):
         if outpath and args.outputs:
             run_tmp_clean = True
         if not run_tmp_clean:
-            dir = os.path.abspath('.')
+            directory = os.path.abspath('.')
 
     if run_tmp_clean:
         files = fyrd.basic.clean_work_dirs(outputs=args.outputs,
                                            confirm=args.no_confirm)
     else:
-        files = fyrd.basic.clean_dir(directory=args.dir, suffix=args.suffix,
+        files = fyrd.basic.clean_dir(directory=directory, suffix=args.suffix,
                                      qtype=args.qtype, confirm=args.no_confirm,
                                      delete_outputs=args.outputs)
 

@@ -6,7 +6,6 @@ import os  as _os
 import sys as _sys
 import inspect as _inspect
 from textwrap import dedent as _ddent
-from types import ModuleType as _ModuleType
 
 # Try to use dill, revert to pickle if not found
 try:
