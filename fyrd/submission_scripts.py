@@ -39,6 +39,10 @@ class Script(object):
     def write(self, overwrite=True):
         """Write the script file."""
         _logme.log('Script: Writing {}'.format(self.file_name), 'debug')
+        pth = _os.path.split(_os.path.abspath(self.file_name))[0]
+        if not _os.path.isdir(pth):
+            raise OSError('{} Does not exist, cannot write scripts'
+                          .format(pth))
         if overwrite or not _os.path.exists(self.file_name):
             with open(self.file_name, 'w') as fout:
                 fout.write(self.script + '\n')
