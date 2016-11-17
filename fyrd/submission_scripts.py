@@ -185,109 +185,22 @@ class Function(Script):
         #  Take care of imports  #
         ##########################
         if imports:
-            if not isinstance(imports, (list, tuple)):
+            if isinstance(imports, str):
                 imports = [imports]
+            else:
+                try:
+                    imports = list(imports)
+                except TypeError:
+                    pass
         else:
             imports = []
+        imports = _run.normalize_imports(imports, prot=False)
 
-        func_imports = []
+        # Compute imports automatically
+        auto_imports     = _run.get_imports(function, 'string')
+        filtered_imports = _run.normalize_imports(imports + auto_imports)
 
-        # Import everything in current and function globals
-        import_places = [
-            #  dict(globals().items()),
-            dict(_inspect.getmembers(function))['__globals__'],
-        ]
-        for place in import_places:
-            for name, item in place.items():
-                # Module
-                if _inspect.ismodule(item):
-                    if name != '__main__' or not name.startswith('__'):
-                        imports.append((name, item.__name__))
-                # Function
-                elif callable(item):
-                    try:
-                        func_imports.append((name, item.__name__,
-                                             item.__module__))
-                    except AttributeError:
-                        pass
-
-        # Import all modules in the root module
-        imports += [(k,v.__name__) for k,v in
-                    _inspect.getmembers(rootmod, _inspect.ismodule)
-                    if not k.startswith('__')]
-
-        imports = sorted(list(set(imports)), key=_sort_imports)
-        func_imports = sorted(list(set(func_imports)), key=_sort_imports)
-        _logme.log('Imports: {}'.format(imports), 'debug')
-
-        # Create a sane set of imports
-        ignore_list = ['os', 'sys', 'dill', 'pickle', '__main__']
-        filtered_imports = []
-        for imp in imports:
-            if imp in ignore_list:
-                continue
-            if isinstance(imp, tuple):
-                iname, name = imp
-                names = name.split('.')
-                if iname in ignore_list:
-                    continue
-                if name.startswith('@') or iname.startswith('@'):
-                    continue
-                if iname != name:
-                    if len(names) > 1:
-                        if '.'.join(names[1:]) != iname:
-                            filtered_imports.append(
-                                ('try:\n    from {} import {} as {}\n'
-                                 'except ImportError:\n    pass\n')
-                                .format('.'.join(names[:-1]), names[-1], iname)
-                            )
-                        else:
-                            filtered_imports.append(
-                                ('try:\n    from {} import {}\n'
-                                 'except ImportError:\n    pass\n')
-                                .format(names[0], '.'.join(names[1:]))
-                            )
-                    else:
-                        filtered_imports.append(
-                            ('try:\n    import {} as {}\n'
-                             'except ImportError:\n    pass\n')
-                            .format(name, iname)
-                        )
-                else:
-                    filtered_imports.append(('try:\n    import {}\n'
-                                             'except ImportError:\n    pass\n')
-                                            .format(name))
-
-            else:
-                if imp.startswith('import') or imp.startswith('from'):
-                    filtered_imports.append('try:\n    ' + imp.rstrip() +
-                                            '\nexcept ImportError:\n    pass')
-                else:
-                    if imp.startswith('@'):
-                        continue
-                    filtered_imports.append(('try:\n    import {}\n'
-                                             'except ImportError:\n    pass\n')
-                                            .format(imp))
-
-            # Function imports
-            for iname, name, mod in func_imports:
-                if iname in ignore_list:
-                    continue
-                if iname == name:
-                    filtered_imports.append(
-                        ('try:\n    from {} import {}\n'
-                         'except ImportError:\n    pass\n')
-                        .format(mod, name)
-                    )
-                else:
-                    filtered_imports.append(
-                        ('try:\n    from {} import {} as {}\n'
-                         'except ImportError:\n    pass\n')
-                        .format(mod, name, iname)
-                    )
-
-
-        # Get rid of duplicates and sort imports
+        # Get rid of duplicates and join imports
         impts = _ident('\n'.join(set(filtered_imports)), '    ')
 
         # Set file names
@@ -328,12 +241,3 @@ class Function(Script):
                            'debug')
                 _os.remove(self.outfile)
         super(Function, self).clean(delete_output)
-
-
-def _sort_imports(x):
-    """Sort a list of tuples and strings, for use with sorted."""
-    if isinstance(x, tuple):
-        if x[1] == '__main__':
-            return 0
-        return x[1]
-    return x
