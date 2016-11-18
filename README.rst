@@ -22,11 +22,16 @@ environment!
 
 .. image:: https://readthedocs.org/projects/fyrd/badge/?version=latest
    :target: https://fyrd.readthedocs.io/
+.. image:: https://badge.buildkite.com/b6659b460caf5205919916c4e9d212c4e04d4301fa55a51180.svg?branch=master
+   :target: https://buildkite.com/mikedacre/fyrd-cluster-tests
 .. image:: https://travis-ci.org/MikeDacre/fyrd.svg?branch=master
    :target: https://travis-ci.org/MikeDacre/python-cluster
 .. image:: https://api.codacy.com/project/badge/Grade/c163cff81a1941a18b2c5455901695a3
    :target: https://www.codacy.com/app/mike-dacre/fyrd?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=MikeDacre/fyrd&amp;utm_campaign=Badge_Grade
 .. image:: https://img.shields.io/badge/python%20versions-2.7%203.4%203.5%203.6-brightgreen.svg
+.. image:: https://requires.io/github/MikeDacre/fyrd/requirements.svg?branch=master
+     :target: https://requires.io/github/MikeDacre/fyrd/requirements/?branch=master
+     :alt: Requirements Status
 
 Allows simple job submission with *dependency tracking and queue waiting* on
 either torque, slurm, or locally with the multiprocessing module. It uses simple
@@ -226,20 +231,96 @@ Alternately, if your pyenv is available on the cluster nodes, then all of
 your modules are already available, so you don't need to worry about this!
 
 
+Testing
+=======
+
+To fully test this software, I use `py.test` tests written in the tests folder.
+Unfortunately, local queue tests do not work with `py.test`, so I have separated
+them out into the `local_queue.py` script. To run all tests, run `python
+tests/run_tests.py`.
+
+To ensure sensible testing always, I use `buildkite <https://buildkite.com>`_,
+which is an amazing piece of software. It integrates into this repository and
+runs tests on all python versions I support on my two clusters (a slurm cluster
+and a torque cluster) every day and on every push or pull request. I also use
+`travis ci <travis-ci.org>`_ to run local queue tests, and
+`codacy <https://www.codacy.com/>`_ and
+`scrutinizer <https://scrutinizer-ci.com/>`_ to monitor code style.
+
+All code in the master branch must pass the travis-ci and buildkite tests, code
+in dev also *usually* passes those test, but it is not guaranteed. All other
+branches are unstable and will often fail the tests.
+
+Releases
+========
+
+I use the following work-flow to release versions of fyrd:
+
+1. Develop new features and fix new bugs in a feature branch
+2. Write tests for the new feature
+3. When all tests are passing, merge into dev
+4. Do more extensive manual testing in dev, possibly add additional
+   commits.
+5. Repeat the above for other related features and bugs
+6. When a related set of fixes and features are done and well tested,
+   merge into master with a pull request through github, all travis and 
+   buildkite tests must pass for the merge to work.
+7. At some point after the new features are in master, add a new tagged
+   beta release.
+8. After the beta is determined to be stable and all issues attached to
+   that version milestone are resolved, create a non-beta tag
+
+New releases are added when enough features and fixes have accumulated to
+justify it, new minor version are added only when there are very large changes
+in the code and are always tracked by milestones.
+   
+While this project is still in its infancy, the API cannot be considered stable
+and the major version will remain 0. once version 1.0 is reached, any API
+changes will result in a major version change.
+
+As such, and non-beta release can be considered stable, beta releases and the
+master branch are very likely to be stable, dev is usually but not always
+stable, all other branches are very unstable.
+
 Issues and Contributing
 =======================
 
 If you have any trouble with this software add an issue in
 https://github.com/MikeDacre/python-cluster/issues
 
-I am always looking for help testing the software, expanding the number of
-keywords, and implementing new features. If you want to help out, contact
-me or just fork the repo and send me a pull request when you are done.
+For peculiar technical questions or help getting the code installed, email
+me at `mike.dacre@gmail.com <mailto:mike.dacre@gmail.com>`_.
 
-Please look through the code and follow the style as closely as possible,
-also, please either message me or add information to the issues page before
-starting work so that I know what you are working on!
+I am always looking for help with this software, and I will gladly accept
+pull requests. In particular, I am looking for help with:
 
+- Testing the code in different cluster environments
+- Expanding the list of keyword options
+- Adding new clusters other than torque and slurm
+- Implementing new features in the issues section
+
+If you are interested in helping out with any of those things, or if you would
+be willing to give me access to your cluster to allow me to run tests and port
+fyrd to your environment, please contact me.
+
+If you are planning on contributing and submitting a pull request, please
+follow these rules:
+
+- Follow the code style as closely as possible, I am a little obsessive about
+  that
+- If you add new functions or features:
+  - Add some tests to the test suite that fully test your new feature
+  - Add notes to the documentation on what your feature does and how it works
+- Make sure your code passes the full test suite, which means you need to run
+  `python tests/run_tests.py` from the root of the repository at a bare
+  minimum. Ideally, you will install pyenv and run `bash tests/pyenv_tests.py`
+- Squash all of your commits into a single commit with a well written and
+  informative commit message.
+- Send me a pull request to either the `dev` or `master` branches.
+
+It may take a few days for me to fully review your pull request, as I will test
+it extensively. If it is a big new feature implementation I may request that
+you send the pull request to the `dev` branch instead of to `master`.
 
 Why the Name?
 =============
