@@ -15,32 +15,48 @@ PATH=$PYENV_HOME/bin:$PATH
 eval "$(pyenv init -)"
 eval "$(pyenv virtualenv-init -)"
 
-versions=('2.7.10' '2.7.11' '2.7.12' '3.3.0' '3.4.0' '3.5.2')
-bad_build_versions=('3.6-dev' '3.7-dev')
+versions=('2.7.10' '2.7.11' '2.7.12' '3.3.0' '3.4.0' '3.5.2' '3.6-dev' '3.7-dev')
 
 counter=0
+aborted=0
 codes=0
 for i in ${versions[@]}; do
   echo "Testing in $i"
   v="fyrd_$i"
   pyenv install -s $i
+  if [[ $? > 0 ]]; then
+    aborted=$((aborted+1))
+    continue
+  fi
   echo "Creating virtualenv $v"
-  pyenv virtualenv $i $v
+  pyenv virtualenv --force $i $v
+  if [[ $? > 0 ]]; then
+    aborted=$((aborted+1))
+    continue
+  fi
   pyenv shell $v
   echo "Installing fyrd"
   python ./setup.py install >/dev/null
+  if [[ $? > 0 ]]; then
+    aborted=$((aborted+1))
+    continue
+  fi
   echo "Installing requirements"
   pip install -r tests/test_requirements.txt >/dev/null
+  if [[ $? > 0 ]]; then
+    aborted=$((aborted+1))
+    continue
+  fi
   echo "Running test suite"
   python tests/run_tests.py $@
-  code=$!
+  code=$?
   counter=$((counter+1))
   codes=$((codes+code))
   echo "Deleteing $v"
   pyenv virtualenv-delete -f $v
 done
 
-echo "Completed main tests. Ran $counter, total exit code: $codes"
+echo "Completed main tests."
 echo ""
 
 echo "Running pandas tests in anaconda"
@@ -49,25 +65,54 @@ for i in ${version[@]}; do
   echo "Testing in $i"
   v="fyrd_$i"
   pyenv install -s $i
+  if [[ $? > 0 ]]; then
+    aborted=$((aborted+1))
+    continue
+  fi
   echo "Creating virtualenv $v"
-  pyenv virtualenv $i $v
+  pyenv virtualenv --force $i $v
+  if [[ $? > 0 ]]; then
+    aborted=$((aborted+1))
+    continue
+  fi
   pyenv shell $v
+  if [[ $? > 0 ]]; then
+    aborted=$((aborted+1))
+    continue
+  fi
   python ./setup.py develop >/dev/null
+  if [[ $? > 0 ]]; then
+    aborted=$((aborted+1))
+    continue
+  fi
   echo "Installing requirements"
   pip install -r tests/test_requirements.txt >/dev/null
+  if [[ $? > 0 ]]; then
+    aborted=$((aborted+1))
+    continue
+  fi
   pip install pandas numpy scipy >/dev/null
+  if [[ $? > 0 ]]; then
+    aborted=$((aborted+1))
+    continue
+  fi
   echo "Running test suite"
   python tests/run_tests.py $@
-  code=$!
+  code=$?
   counter=$((counter+1))
   codes=$((codes+code))
   python tests/pandas_run.py $@
-  code=$!
+  code=$?
   counter=$((counter+1))
   codes=$((codes+code))
   echo "Deleteing $v"
   pyenv virtualenv-delete $v
 done
 
-echo "All tests complete, please review the outputs manually."
+echo "Completed pandas tests."
+echo ""
+echo "All tests complete."
+echo "Ran $counter, aborted $aborted, total exit code: $codes"
+echo ""
+echo "Please review the outputs manually."
 exit $codes
