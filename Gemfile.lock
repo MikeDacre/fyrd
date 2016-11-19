@@ -143,6 +143,7 @@ DEPENDENCIES
   github-pages (= 104)
   jekyll-cayman-theme
   jekyll-github-metadata
+  jekyll-sitemap
 
 BUNDLED WITH
    1.13.6

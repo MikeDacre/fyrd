@@ -2,7 +2,7 @@
 title:        Fyrd
 tagline:      "A Python Cluster: Submit functions and shell scripts to torque, slurm, or local machines using easy python syntax."
 version:      "0.6.1-beta.6"
-baseurl:      "https://fyrd.science/"
+baseurl:      "https://fyrd.science"
 # baseurl:      "/fyrd"
 csshighlight: default
 
@@ -13,7 +13,7 @@ license:
 
 # About/contact
 author:
-  name:     Michael Dacre
+  name:     Mike Dacre
   url:      https://www.michaeldacre.com
 
 # GitHub
@@ -25,12 +25,12 @@ github:
 # Gems
 gems:
   - kramdown
-  - jekyll-cayman-theme
   - jekyll-github-metadata
+  # - jekyll-cayman-theme
+  # - jekyll-sitemap
 
 #Others
 markdown: kramdown
-# theme: jekyll-cayman-theme
 highlighter: rouge
 
 kramdown:
