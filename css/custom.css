@@ -20,6 +20,10 @@ footer {
   text-indent: 20px;
 }
 
+.news {
+  padding: 20px 0px;
+}
+
 /* Header Styling */
 .project-name a {
   color: #fff;

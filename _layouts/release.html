@@ -3,8 +3,9 @@ layout: default
 ---
 <div itemscope itemtype="http://schema.org/Article">
   <h2 itemprop="headline">Version {{ page.version }} Released</h2>
-  <p itemprop="datePublished" class="meta">
-    <time datetime="{{ page.date | date_to_xmlschema }}">{{ page.date | date_to_string }}</time>
+  <p class="meta">
+    <span>Date Released: </span>
+    <time itemprop="datePublished" datetime="{{ page.date | date_to_xmlschema }}">{{ page.date | date_to_string }}</time>
   </p>
 
   <div class="release-info">
