@@ -25,7 +25,11 @@ fi
 
 
 # Versions to test
-versions=('2.7.10' '2.7.11' '2.7.12' '3.3.0' '3.4.0' '3.5.2' '3.6-dev' '3.7-dev')
+if [[ $1 == '--limited' ]]; then
+  versions=('2.7.10' '3.3.0' '3.5.2')
+else
+  versions=('2.7.10' '2.7.11' '2.7.12' '3.3.0' '3.4.0' '3.5.2' '3.6-dev' '3.7-dev')
+fi
 anaconda_versions=(anaconda2-4.1.1, anaconda3-4.1.1)
 build_string="fyrd_$(cat /dev/urandom | LC_ALL=C tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)"
 
@@ -35,12 +39,12 @@ function on_exit() {
   for i in ${versions[@]}; do
     v="${build_string}_${i}"
     echo "Deleting ${v}"
-    pyenv virtualenv-delete $v >/dev/null 2>/dev/null
+    pyenv virtualenv-delete --force $v >/dev/null 2>/dev/null
   done
   for i in ${anaconda_versions[@]}; do
     v="${build_string}_${i}"
     echo "Deleting ${v}"
-    pyenv virtualenv-delete $v >/dev/null 2>/dev/null
+    pyenv virtualenv-delete --force $v >/dev/null 2>/dev/null
   done
 }
 trap on_exit EXIT
