@@ -19,6 +19,7 @@ author:
 github:
   repository_url:  "https://github.com/MikeDacre/fyrd"
   url:             "/fyrd"
+  api_url:         "https://api.github.com"
  
 # Gems
 gems:
@@ -29,7 +30,7 @@ gems:
 
 #Others
 markdown: kramdown
-theme: cayman
+theme: jekyll-cayman-theme
 # highlighter: rouge
 
 # kramdown:
