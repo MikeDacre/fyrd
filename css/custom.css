@@ -1,16 +1,44 @@
-.logo {
+/* Misc Formatting Changes */
+.main-content h1, .main-content h2, .main-content h3, .main-content h4, .main-content h5, .main-content h6 {
+  color: #f15442;
+}
+
+footer {
   text-align: center;
 }
 
-.project-name a {
-  color: #fff; 
+#scrollUp {
+  bottom: 20px;
+  right: 20px;
+  padding: 10px 20px;
+  background-color: #555;
+  color: #fff;
 }
 
+/* Custom Sections */
 .downloads {
   text-indent: 20px;
 }
 
-footer {
+/* Header Styling */
+.project-name a {
+  color: #fff;
+}
+
+.project-tagline {
+  text-shadow: 1px 1px #383737;
+  opacity: 1;
+}
+
+.page-header {
+  background-image: url(https://upload.wikimedia.org/wikipedia/commons/2/24/Bayeux_Tapestry_4.jpg);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% auto;
+  background-color: #e8be6b;
+}
+
+.logo {
   text-align: center;
 }
 
@@ -19,10 +47,21 @@ footer {
   width: 200px;
 }
 
+
+/* Dynamic Header Changes */
+@media screen and (max-width: 718px) {
+  .page-header {
+    background-size: auto 100%;
+  }
+}
+
 @media screen and (min-width: 80em) {
   .logo img {
     height: 300px;
     width: 300px;
+  }
+  .page-header {
+    height: 650px;
   }
 }
 @media screen and (min-width: 70em) and (max-width: 80em) {
@@ -30,11 +69,17 @@ footer {
     height: 275px;
     width: 275px;
   }
+  .page-header {
+    height: 625px;
+  }
 }
 @media screen and (min-width: 62em) and (max-width: 70em) {
   .logo img {
     height: 250px;
     width: 250px;
+  }
+  .page-header {
+    height: 600px;
   }
 }
 @media screen and (min-width: 52em) and (max-width: 62em) {
@@ -42,29 +87,23 @@ footer {
     height: 200px;
     width: 200px;
   }
+  .page-header {
+    height: 550px;
+  }
 }
 @media screen and (min-width: 42em) and (max-width: 52em) {
   .logo img {
     height: 175px;
     width: 175px;
   }
+  .page-header {
+    height: 525px;
+  }
 }
 @media screen and (max-width: 42em) {
   .logo img {
     height: 150px;
     width: 150px;
-  }
-}
-.page-header {
-  background-image: url(https://upload.wikimedia.org/wikipedia/commons/2/24/Bayeux_Tapestry_4.jpg);
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 100% auto;
-  background-color: #e8be6b;
-}
-@media screen and (max-width: 718px) {
-  .page-header {
-    background-size: auto 100%;
   }
 }
 
@@ -74,15 +113,7 @@ footer {
   }
 }
 
-.project-tagline {
-  text-shadow: 1px 1px #383737;
-  opacity: 1;
-}
-
-.main-content h1, .main-content h2, .main-content h3, .main-content h4, .main-content h5, .main-content h6 {
-  color: #f15442;
-}
-
+/* Menu */
 .btn {
   background-color: rgba(225,225,225,0.8) !important;
   color: #f15442;
@@ -95,10 +126,26 @@ footer {
   border-color: #e1e1e1;
 }
 
-#scrollUp {
-  bottom: 20px;
-  right: 20px;
-  padding: 10px 20px;
-  background-color: #555;
-  color: #fff;
+/* Responsive Mobile Menu */
+#menu-button {
+  display: none;
+}
+
+.menu.item {
+  display: block;
+}
+
+@media screen and (max-width: 42em) {
+  #menu-button {
+    display: block;
+  }
+  nav #menulist {
+    display: none;
+  }
+  nav #menulist.menulist.open {
+    display: block;
+  }
+  .page-header.open {
+    height: 703px !important;
+  }
 }

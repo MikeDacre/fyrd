@@ -5,7 +5,10 @@ layout: default
 <p class="meta">{{ page.date | date_to_string }}</p>
 
 <div class="release-info">
-  <span>GitHub Release Page: <a href="{{ site.github.releases_url }}/tag/{{ page.version }}">{{ page.version }}</a></span><br>
+  <span>GitHub Release: <a href="{{ site.github.releases_url }}/tag/{{ page.version }}">{{ page.version }}</a></span><br>
+</div>
+<div class="documentation">
+  <span>Documentation: <a href="http://fyrd.readthedocs.io/en/{{ page.version }}/"</a>Read The Docs Manual {{ page.version }}</a></span></br>
 </div>
 
 {{ content }}

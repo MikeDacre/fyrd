@@ -5,14 +5,22 @@ title: "{{ site.name }} —  News"
 
 <div id="home">
   <h1>Releases</h1>
+  <span>Addition information is available at the <a href="{{ site.github.releases_url }}">GitHub releases page</a>.</span>
   {% for post in site.categories.releases %}
   <h2><a href="{{ site.github.url }}{{ post.url }}">{{ post.version }}</a></h2>
     <p>{{ post.date | date_to_string }}</p>
+    <span>GitHub Release: <a href="{{ site.github.releases_url }}/tag/{{ post.version }}">{{ post.version }}</a></span><br>
+    <span>Documentation: <a href="http://fyrd.readthedocs.io/en/{{ post.version }}/"</a>Read The Docs Manual {{ page.version }}</a></span></br>
     <p>
       {{ post.content | split:'<!--break-->' | first }}
       {% if post.content contains '<!--break-->' %}
           <a href="{{ post.url }}">read more</a>
       {% endif %}
     </p>
+    <h3>Downloads</h3>
+    <div class="downloads">
+      <p><a href="{{ site.github.repository_url }}/archive/{{ post.version }}.zip"><span style="font-weight: bold">Source code</span> (zip)</a></p>
+      <p><a href="{{ site.github.repository_url }}/archive/{{ post.version }}.tar.gz"><span style="font-weight: bold">Source code</span> (tar.gz)</a></p>
+    </div>
   {% endfor %}
 </div>
