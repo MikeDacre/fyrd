@@ -49,11 +49,17 @@ footer {
 
 
 /* Dynamic Header Changes */
-@media screen and (max-width: 718px) {
+@media screen and (max-width: 1024px) {
   .page-header {
-    background-size: auto 100%;
+    background-size: 1024px 768px;
   }
 }
+@media screen and (min-width: 1024px) {
+  .page-header {
+    background-size: 100% auto;
+  }
+}
+ 
 
 @media screen and (min-width: 80em) {
   .logo img {
