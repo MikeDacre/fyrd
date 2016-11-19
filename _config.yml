@@ -1,11 +1,11 @@
 # Setup
-title:       Fyrd
-tagline:     "A Python Cluster: Submit functions and shell scripts to torque, slurm, or local machines using easy python syntax."
-baseurl:     "/fyrd"
-favicon:     "/fyrd/assets/logo/favicon"
-github:      "https://github.com/MikeDacre/fyrd"
-version:     "0.6.1-beta.6"
-highlighter: "colorful"
+title:        Fyrd
+tagline:      "A Python Cluster: Submit functions and shell scripts to torque, slurm, or local machines using easy python syntax."
+# baseurl:      "/fyrd"
+baseurl:      "/"
+favicon:      "/assets/logo/favicon"
+version:      "0.6.1-beta.6"
+csshighlight: "colorful"
 
 # License
 license:
@@ -17,15 +17,21 @@ author:
   name:     Michael Dacre
   url:      https://www.michaeldacre.com
 
+# GitHub
+github:
+  repository_url:  "https://github.com/MikeDacre/fyrd"
+ 
 # Gems
 gems:
   - rouge
   - kramdown
+  - jekyll-coffeescript
+  - jekyll-paginate
 
 #Others
 markdown: kramdown
-# highlighter: rouge
+highlighter: rouge
 
 kramdown:
   input: GFM
-  syntax_highlighter: rouge
+  syntax-highlighter: rouge

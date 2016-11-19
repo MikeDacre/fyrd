@@ -5,13 +5,13 @@ layout: default
 <p class="meta">{{ page.date | date_to_string }}</p>
 
 <div class="release-info">
-  <span>GitHub Release Page: <a href="{{ site.github }}/releases/tag/{{ page.version }}">{{ page.version }}</a></span><br>
+  <span>GitHub Release Page: <a href="{{ site.github.releases_url }}/tag/{{ page.version }}">{{ page.version }}</a></span><br>
 </div>
 
 {{ content }}
 
 <h3>Downloads</h3>
 <div class="downloads">
-  <p><a href="{{ site.github }}/archive/{{ page.version }}.zip"><span style="font-weight: bold">Source code</span> (zip)</a></p>
-  <p><a href="{{ site.github }}/archive/{{ page.version }}.tar.gz"><span style="font-weight: bold">Source code</span> (tar.gz)</a></p>
+  <p><a href="{{ site.github.repository_url }}/archive/{{ page.version }}.zip"><span style="font-weight: bold">Source code</span> (zip)</a></p>
+  <p><a href="{{ site.github.repository_url }}/archive/{{ page.version }}.tar.gz"><span style="font-weight: bold">Source code</span> (tar.gz)</a></p>
 </div>

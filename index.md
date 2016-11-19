@@ -5,7 +5,7 @@ title: {{ site.name }}
 
 ### What is *Fyrd*?
 
-*Fyrd* is a library for Python 2.7+ that allows easy multiprocessing-style parallelization using a batch system backend. Right now it supports [torque](http://www.adaptivecomputing.com/products/open-source/torque/) and [slurm](https://slurm.schedmd.com/), but because it is written in a modular way, any batch system can be added. To request your batch system be added, please email requests@fyrd.science or [submit and issue on the github page]({{ site.github }}/issues).
+*Fyrd* is a library for Python 2.7+ that allows easy multiprocessing-style parallelization using a batch system backend. Right now it supports [torque](http://www.adaptivecomputing.com/products/open-source/torque/) and [slurm](https://slurm.schedmd.com/), but because it is written in a modular way, any batch system can be added. To request your batch system be added, please email requests@fyrd.science or [submit and issue on the github page]({{ site.github.repository_url }}/issues).
 
 To allow code porting, *fyrd* also has a fallback local mode, that is a wrapper around Python's own multiprocessing module that allows fyrd syntax to submit multiprocessing jobs.
 
@@ -82,14 +82,14 @@ fyrd.Job(long_function, profile='long').submit().get()
 ### Installation
 
 ```bash
-pip install {{ site.github }}/archive/{{ site.version }}.tar.gz --user
+pip install {{ site.github.repository_url }}/archive/{{ site.version }}.tar.gz --user
 fyrd conf init
 ```
 
 To get the latest version:
 
 ```bash
-pip install {{ site.github }}/tarball/master --user
+pip install {{ site.github.repository_url }}/tarball/master --user
 fyrd conf init
 ```
 
@@ -101,7 +101,7 @@ Fyrd has very comprehensive documentation on [Read the Docs](https://fyrd.readth
 
 ### Issues and Contributing
 
-If you have any trouble with this software add an issue on [the issues page]({{ site.github }}/issues)
+If you have any trouble with this software add an issue on [the issues page]({{ site.github.repository_url }}/issues)
 
 I am always looking for help testing the software and implementing new keyword arguments. I would also very must like to add new batch system environments, but I need access to those clusters in order to test the new keyword arguments and implement queue parsing. If you would like to help with that or give me access to your cluster (for development of this package only), please email me a mike@fyrd.science.
 
