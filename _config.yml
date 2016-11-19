@@ -1,8 +1,6 @@
 # Setup
 title:        Fyrd
 tagline:      "A Python Cluster: Submit functions and shell scripts to torque, slurm, or local machines using easy python syntax."
-# baseurl:      "/fyrd"
-baseurl:      "/"
 favicon:      "/assets/logo/favicon"
 version:      "0.6.1-beta.6"
 csshighlight: "colorful"
@@ -20,6 +18,7 @@ author:
 # GitHub
 github:
   repository_url:  "https://github.com/MikeDacre/fyrd"
+  url:             "/fyrd"
  
 # Gems
 gems:
