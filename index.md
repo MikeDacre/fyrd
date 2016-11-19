@@ -1,6 +1,6 @@
 ---
 layout: default
-title: {{ site.name }}
+title:  Fyrd
 ---
 
 ### What is *Fyrd*?
