@@ -13,3 +13,92 @@
 footer {
   text-align: center;
 }
+
+.logo img {
+  height: 200px;
+  width: 200px;
+}
+
+@media screen and (min-width: 80em) {
+  .logo img {
+    height: 300px;
+    width: 300px;
+  }
+}
+@media screen and (min-width: 70em) and (max-width: 80em) {
+  .logo img {
+    height: 275px;
+    width: 275px;
+  }
+}
+@media screen and (min-width: 62em) and (max-width: 70em) {
+  .logo img {
+    height: 250px;
+    width: 250px;
+  }
+}
+@media screen and (min-width: 52em) and (max-width: 62em) {
+  .logo img {
+    height: 200px;
+    width: 200px;
+  }
+}
+@media screen and (min-width: 42em) and (max-width: 52em) {
+  .logo img {
+    height: 175px;
+    width: 175px;
+  }
+}
+@media screen and (max-width: 42em) {
+  .logo img {
+    height: 150px;
+    width: 150px;
+  }
+}
+.page-header {
+  background-image: url(https://upload.wikimedia.org/wikipedia/commons/2/24/Bayeux_Tapestry_4.jpg);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% auto;
+  background-color: #e8be6b;
+}
+@media screen and (max-width: 718px) {
+  .page-header {
+    background-size: auto 100%;
+  }
+}
+
+@media screen and (min-width: 64em) {
+  .page-header {
+    padding: 3rem 7rem;
+  }
+}
+
+.project-tagline {
+  text-shadow: 1px 1px #383737;
+  opacity: 1;
+}
+
+.main-content h1, .main-content h2, .main-content h3, .main-content h4, .main-content h5, .main-content h6 {
+  color: #f15442;
+}
+
+.btn {
+  background-color: rgba(225,225,225,0.8) !important;
+  color: #f15442;
+  border-color: #f15442;
+}
+
+.btn:hover {
+  background-color: rgba(241,84,66,0.8) !important;
+  color: #e1e1e1;
+  border-color: #e1e1e1;
+}
+
+#scrollUp {
+  bottom: 20px;
+  right: 20px;
+  padding: 10px 20px;
+  background-color: #555;
+  color: #fff;
+}

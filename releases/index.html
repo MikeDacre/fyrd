@@ -4,9 +4,9 @@ title: "{{ site.name }} —  News"
 ---
 
 <div id="home">
-  <h1>News</h1>
+  <h1>Releases</h1>
   {% for post in site.categories.releases %}
-  <h2><a href="{{ site.github.url }}{{ post.url }}">{{ post.title }}</a></h2>
+  <h2><a href="{{ site.github.url }}{{ post.url }}">{{ post.version }}</a></h2>
     <p>{{ post.date | date_to_string }}</p>
     <p>
       {{ post.content | split:'<!--break-->' | first }}

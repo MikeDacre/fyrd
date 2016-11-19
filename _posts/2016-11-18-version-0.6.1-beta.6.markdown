@@ -13,6 +13,8 @@ of as separate scripts.
 The scripts in bin/ have thus all been converted to shell scripts that
 are simple aliases of the relevant fyrd subcommands.
 
+<!--break-->
+
 I made a logo of a Saxon shield of the kind used in fyrds and
 superimposed a cluster tree.
 
