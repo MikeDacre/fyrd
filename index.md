@@ -7,7 +7,7 @@ title:  Fyrd
 [![image](https://travis-ci.org/MikeDacre/fyrd.svg?branch=master)](https://travis-ci.org/MikeDacre/python-cluster)
 [![image](https://api.codacy.com/project/badge/Grade/c163cff81a1941a18b2c5455901695a3)](https://www.codacy.com/app/mike-dacre/fyrd?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=MikeDacre/fyrd&amp;utm_campaign=Badge_Grade)
 ![image](https://img.shields.io/badge/python%20versions-2.7%203.4%203.5%203.6-brightgreen.svg)
-[![image](https://requires.io/github/MikeDacre/fyrd/requirements.svg?branch=master%0A%20%20)](https://requires.io/github/MikeDacre/fyrd/requirements/?branch=master%0A%20%20:alt:%20Requirements%20Status)
+[![image](https://requires.io/github/MikeDacre/fyrd/requirements.svg?branch=master)](https://requires.io/github/MikeDacre/fyrd/requirements/?branch=master%0A%20%20:alt:%20Requirements%20Status)
 
 ### What is *Fyrd*?
 
