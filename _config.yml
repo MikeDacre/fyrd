@@ -2,6 +2,7 @@
 title:        Fyrd
 tagline:      "A Python Cluster: Submit functions and shell scripts to torque, slurm, or local machines using easy python syntax."
 version:      "0.6.1-beta.6"
+baseurl:      "https://fyrd.science"
 csshighlight: default
 
 # License
@@ -17,7 +18,7 @@ author:
 # GitHub
 github:
   repository_url:  "https://github.com/MikeDacre/fyrd"
-  url:             "/fyrd"
+  url:             "https://fyrd.science"
   api_url:         "https://api.github.com"
  
 # Gems
