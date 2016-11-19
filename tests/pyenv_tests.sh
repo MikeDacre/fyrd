@@ -13,22 +13,48 @@
 PYENV_HOME=$HOME/.pyenv
 PATH=$PYENV_HOME/bin:$PATH
 eval "$(pyenv init -)"
+if [[ $? > 0 ]]; then
+  echo "Cannot load pyenv"
+  exit 5
+fi
 eval "$(pyenv virtualenv-init -)"
+if [[ $? > 0 ]]; then
+  echo "Cannot load pyenv virtualenv"
+  exit 50
+fi
 
+
+# Versions to test
 versions=('2.7.10' '2.7.11' '2.7.12' '3.3.0' '3.4.0' '3.5.2' '3.6-dev' '3.7-dev')
+anaconda_versions=(anaconda2-4.1.1, anaconda3-4.1.1)
+build_string="fyrd_$(cat /dev/urandom | LC_ALL=C tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)"
+
+# Delete
+function on_exit() {
+  for i in ${versions[@]}; do
+    v="${build_string}_${i}"
+    pyenv virtualenv-delete $v >/dev/null 2>/dev/null
+  done
+  for i in ${anaconda_versions[@]}; do
+    v="${build_string}_${i}"
+    pyenv virtualenv-delete $v >/dev/null 2>/dev/null
+  done
+}
+trap on_exit EXIT
 
 counter=0
 aborted=0
 codes=0
 for i in ${versions[@]}; do
   echo "Testing in $i"
-  v="fyrd_$i"
+  v="${build_string}_${i}"
   pyenv install -s $i
   if [[ $? > 0 ]]; then
     aborted=$((aborted+1))
     continue
   fi
   echo "Creating virtualenv $v"
+  pyenv virtualenv-delete $v >/dev/null 2>/dev/null
   pyenv virtualenv --force $i $v
   if [[ $? > 0 ]]; then
     aborted=$((aborted+1))
@@ -60,16 +86,16 @@ echo "Completed main tests."
 echo ""
 
 echo "Running pandas tests in anaconda"
-anaconda_versions=(anaconda2-4.1.1, anaconda3-4.1.1)
 for i in ${version[@]}; do
   echo "Testing in $i"
-  v="fyrd_$i"
   pyenv install -s $i
   if [[ $? > 0 ]]; then
     aborted=$((aborted+1))
     continue
   fi
+  v="${build_string}_${i}"
   echo "Creating virtualenv $v"
+  pyenv virtualenv-delete $v >/dev/null 2>/dev/null
   pyenv virtualenv --force $i $v
   if [[ $? > 0 ]]; then
     aborted=$((aborted+1))
