@@ -31,12 +31,15 @@ build_string="fyrd_$(cat /dev/urandom | LC_ALL=C tr -dc 'a-zA-Z0-9' | fold -w 8 
 
 # Delete
 function on_exit() {
+  echo "Making sure virtual envs are gone"
   for i in ${versions[@]}; do
     v="${build_string}_${i}"
+    echo "Deleting ${v}"
     pyenv virtualenv-delete $v >/dev/null 2>/dev/null
   done
   for i in ${anaconda_versions[@]}; do
     v="${build_string}_${i}"
+    echo "Deleting ${v}"
     pyenv virtualenv-delete $v >/dev/null 2>/dev/null
   done
 }
