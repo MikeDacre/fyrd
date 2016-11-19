@@ -142,6 +142,7 @@ PLATFORMS
 DEPENDENCIES
   github-pages (= 104)
   jekyll-cayman-theme
+  jekyll-github-metadata
 
 BUNDLED WITH
    1.13.6

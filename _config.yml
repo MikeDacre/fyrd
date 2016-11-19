@@ -3,7 +3,7 @@ title:        Fyrd
 tagline:      "A Python Cluster: Submit functions and shell scripts to torque, slurm, or local machines using easy python syntax."
 favicon:      "/assets/logo/favicon"
 version:      "0.6.1-beta.6"
-csshighlight: "github-light"
+csshighlight: default
 
 # License
 license:
@@ -23,16 +23,15 @@ github:
  
 # Gems
 gems:
-  - rouge
   - kramdown
-  - jekyll-coffeescript
-  - jekyll-paginate
+  - jekyll-cayman-theme
+  - jekyll-github-metadata
 
 #Others
 markdown: kramdown
 theme: jekyll-cayman-theme
-# highlighter: rouge
+highlighter: rouge
 
-# kramdown:
-  # input: GFM
-  # syntax-highlighter: rouge
+kramdown:
+  input: GFM
+  syntax-highlighter: rouge
