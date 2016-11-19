@@ -28,9 +28,9 @@ gems:
   - jekyll-paginate
 
 #Others
-markdown: kramdown
-highlighter: rouge
+# markdown: kramdown
+# highlighter: rouge
 
-kramdown:
-  input: GFM
-  syntax-highlighter: rouge
+# kramdown:
+  # input: GFM
+  # syntax-highlighter: rouge
