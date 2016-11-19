@@ -1,7 +1,13 @@
 ---
 layout: default
 ---
-<h2>{{ page.title }}</h2>
-<p class="meta">{{ page.date | date_to_string }}</p>
+<div itemscope itemtype="http://schema.org/Article">
+  <h2 itemprop="headline">{{ page.title }}</h2>
+  <p itemprop="datePublished" class="meta">
+    <time datetime="{{ page.date | date_to_xmlschema }}">{{ page.date | date_to_string }}</time>
+  </p>
 
-{{ content }}
+  <div class="news" itemprop="articleBody">
+    {{ content }}
+  </div>
+</div>

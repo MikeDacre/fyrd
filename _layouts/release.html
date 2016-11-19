@@ -1,20 +1,26 @@
 ---
 layout: default
 ---
-<h2>Version {{ page.version }} Released</h2>
-<p class="meta">{{ page.date | date_to_string }}</p>
+<div itemscope itemtype="http://schema.org/Article">
+  <h2 itemprop="headline">Version {{ page.version }} Released</h2>
+  <p itemprop="datePublished" class="meta">
+    <time datetime="{{ page.date | date_to_xmlschema }}">{{ page.date | date_to_string }}</time>
+  </p>
 
-<div class="release-info">
-  <span>GitHub Release: <a href="{{ site.github.releases_url }}/tag/{{ page.version }}">{{ page.version }}</a></span><br>
-</div>
-<div class="documentation">
-  <span>Documentation: <a href="http://fyrd.readthedocs.io/en/{{ page.version }}/"</a>Read The Docs Manual {{ page.version }}</a></span></br>
-</div>
+  <div class="release-info">
+    <span>GitHub Release: <a href="{{ site.github.releases_url }}/tag/{{ page.version }}">{{ page.version }}</a></span><br>
+  </div>
+  <div class="documentation">
+    <span>Documentation: <a href="http://fyrd.readthedocs.io/en/{{ page.version }}/"</a>Read The Docs Manual {{ page.version }}</a></span></br>
+  </div>
 
-{{ content }}
+  <div class="news" itemprop="articleBody">
+    {{ content }}
+  </div>
 
-<h3>Downloads</h3>
-<div class="downloads">
-  <p><a href="{{ site.github.repository_url }}/archive/{{ page.version }}.zip"><span style="font-weight: bold">Source code</span> (zip)</a></p>
-  <p><a href="{{ site.github.repository_url }}/archive/{{ page.version }}.tar.gz"><span style="font-weight: bold">Source code</span> (tar.gz)</a></p>
+  <h3>Downloads</h3>
+  <div class="downloads">
+    <p><a itemprop="downloadUrl" href="{{ site.github.repository_url }}/archive/{{ page.version }}.zip"><span style="font-weight: bold">Source code</span> (zip)</a></p>
+    <p><a itemprop="downloadUrl" href="{{ site.github.repository_url }}/archive/{{ page.version }}.tar.gz"><span style="font-weight: bold">Source code</span> (tar.gz)</a></p>
+  </div>
 </div>
