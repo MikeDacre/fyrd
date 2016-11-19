@@ -28,7 +28,8 @@ gems:
   - jekyll-paginate
 
 #Others
-# markdown: kramdown
+markdown: kramdown
+theme: cayman
 # highlighter: rouge
 
 # kramdown:

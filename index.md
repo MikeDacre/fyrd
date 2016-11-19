@@ -13,7 +13,7 @@ To allow code porting, *fyrd* also has a fallback local mode, that is a wrapper 
 
 Say you have some piece of code that you got from somewhere, lets call it `really_slow_algorithm`, and you want to run it on 200 files and then work on then examine the results of `STDOUT`, but you need to parse the results first to get just the first two columns. Here is how you would do that:
 
-{% highlight python %}
+```python
 import os
 import math
 import fyrd
@@ -44,7 +44,7 @@ filtered = []
 for i in func_jobs:
     # Wait for job to complete and then get the function output
     filtered.append(job.get())
-{% endhighlight %}
+```
 
 ### Dependency tracking
 

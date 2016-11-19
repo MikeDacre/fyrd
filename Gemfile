@@ -1,8 +1,2 @@
 source 'https://rubygems.org'
-gemspec
-
-gem 'jekyll'
-gem 'jekyll-paginate'
-gem 'jekyll-coffeescript'
-gem 'kramdown'
-gem 'rouge'
+gem 'github-pages', group: :jekyll_plugins
