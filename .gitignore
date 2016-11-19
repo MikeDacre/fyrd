@@ -1,0 +1,7 @@
+.cache
+build
+dist
+docs
+fyrd.egg-info
+fyrd
+tests
