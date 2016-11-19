@@ -24,6 +24,10 @@ footer {
   padding: 20px 0px;
 }
 
+.badges {
+  text-align: center;
+}
+
 /* Header Styling */
 .project-name a {
   color: #fff;
