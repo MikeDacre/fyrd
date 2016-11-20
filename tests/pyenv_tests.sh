@@ -23,17 +23,29 @@ if [[ $? > 0 ]]; then
   exit 50
 fi
 
+# Command line argument parsing
+limited=0
+loc=''
+for i in $@; do
+  case $i in
+    '--limited' ) limited=1;;
+    '-l'        ) loc='--local';;
+    '--local'   ) loc='--local';;
+  esac
+done
 
 # Versions to test
-if [[ $1 == '--limited' ]]; then
+if [[ $limited == 1 ]]; then
   versions=('2.7.10' '3.3.0' '3.5.2')
 else
   versions=('2.7.10' '2.7.11' '2.7.12' '3.3.0' '3.4.0' '3.5.2' '3.6-dev' '3.7-dev')
 fi
 anaconda_versions=(anaconda2-4.1.1, anaconda3-4.1.1)
+
+# Starting string for virtualenvs
 build_string="fyrd_$(cat /dev/urandom | LC_ALL=C tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)"
 
-# Delete
+# Delete virtualenvs on exit
 function on_exit() {
   echo "Making sure virtual envs are gone"
   for i in ${versions[@]}; do
@@ -80,8 +92,9 @@ for i in ${versions[@]}; do
     aborted=$((aborted+1))
     continue
   fi
+  # Actually run tests here
   echo "Running test suite"
-  python tests/run_tests.py $@
+  python tests/run_tests.py $loc
   code=$?
   counter=$((counter+1))
   codes=$((codes+code))
@@ -129,12 +142,13 @@ for i in ${version[@]}; do
     aborted=$((aborted+1))
     continue
   fi
+  # Actually run tests here
   echo "Running test suite"
-  python tests/run_tests.py $@
+  python tests/run_tests.py $loc
   code=$?
   counter=$((counter+1))
   codes=$((codes+code))
-  python tests/pandas_run.py $@
+  python tests/pandas_run.py $loc
   code=$?
   counter=$((counter+1))
   codes=$((codes+code))
