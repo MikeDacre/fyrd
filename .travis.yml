@@ -10,9 +10,15 @@ python:
   - "nightly"
 
 # command to install dependencies
-install: "pip install -r requirements.txt"
+install: "pip install -r tests/test_requirements.txt"
 
 # Run py.test and also a separate local queue test
 script:
-  - py.test
-  - python tests/local_queue.py
+  - coverage run --source=fyrd tests/run_tests.py
+  - coverage xml
+  - python-codacy-coverage -r coverage.xml
+
+# Code Climate
+addons:
+  code_climate:
+    repo_token: b3a6260dfcca35803c0df8bb5dbb89eeb88fd288853d164979c6b352438d26f8
