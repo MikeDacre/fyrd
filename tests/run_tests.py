@@ -7,7 +7,7 @@ Run all applicable tests.
 
         AUTHOR: Michael D Dacre, mike.dacre@gmail.com
        CREATED: 2016-54-22 15:06
- Last modified: 2016-11-20 19:27
+ Last modified: 2016-11-21 12:17
 
    DESCRIPTION: Run multiple kinds of tests, provide options to skip some.
 
@@ -19,11 +19,18 @@ import sys
 import argparse
 from subprocess import call
 
-try:
-    import pytest
-except ImportError:
-    print('Cannot run tests without py.test installed')
-    sys.exit(1)
+
+def run_pyenv(local=False):
+    """Run pyenv tests"""
+    print('Running py.test tests')
+    if local:
+        print('Skipping remote queue tests')
+        outcode = call(['py.test', 'tests/test_options.py',
+                        'tests/test_queue.py', 'tests/test_local.py',
+                        'tests/test_config.py'])
+    else:
+        outcode = call(['py.test'])
+    return outcode
 
 
 def main(argv=None):
@@ -49,15 +56,9 @@ def main(argv=None):
         os.chdir('..')
 
     # Run the tests
-    print('Running py.test tests')
-    if args.local:
-        print('Skipping remote queue tests')
-        outcode = pytest.main(['tests/test_options.py', 'tests/test_queue.py',
-                               'tests/test_local.py', 'tests/test_config.py'])
-    else:
-        outcode = pytest.main()
-
+    outcode = run_pyenv(args.local)
     print('py.test tests complete, running local queue test.')
+
     local_args = [sys.executable, 'tests/local_queue.py']
     if args.verbose:
         local_args.append('-v')
@@ -66,7 +67,7 @@ def main(argv=None):
     print('local test complete.')
     if args.pandas:
         print('running pandas tests')
-        a = ['tests/pandas_run.py']
+        a = [sys.executable, 'tests/pandas_run.py']
         if args.local:
             a.append('-l')
         if args.verbose:

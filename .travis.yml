@@ -14,9 +14,7 @@ install: "pip install -r tests/test_requirements.txt"
 
 # Run py.test and also a separate local queue test
 script:
-  - coverage run --source=fyrd tests/run_tests.py
-  - coverage xml
-  - python-codacy-coverage -r coverage.xml
+  - tests/run_tests.py
 
 # Code Climate
 addons:
