@@ -7,7 +7,7 @@ Run all applicable tests.
 
         AUTHOR: Michael D Dacre, mike.dacre@gmail.com
        CREATED: 2016-54-22 15:06
- Last modified: 2016-11-02 13:41
+ Last modified: 2016-11-20 19:27
 
    DESCRIPTION: Run multiple kinds of tests, provide options to skip some.
 
@@ -17,7 +17,7 @@ from __future__ import print_function
 import os
 import sys
 import argparse
-from subprocess import check_call
+from subprocess import call
 
 try:
     import pytest
@@ -37,6 +37,8 @@ def main(argv=None):
 
     parser.add_argument('-l', '--local', action="store_true",
                         help="Skip remote tests")
+    parser.add_argument('-p', '--pandas', action="store_true",
+                        help="Also run pandas tests")
     parser.add_argument('-v', '--verbose', action="store_true",
                         help="Verbose")
 
@@ -50,16 +52,27 @@ def main(argv=None):
     print('Running py.test tests')
     if args.local:
         print('Skipping remote queue tests')
-        pytest.main(['tests/test_options.py', 'tests/test_queue.py',
-                     'tests/test_local.py', 'tests/test_config.py'])
+        outcode = pytest.main(['tests/test_options.py', 'tests/test_queue.py',
+                               'tests/test_local.py', 'tests/test_config.py'])
     else:
-        pytest.main()
+        outcode = pytest.main()
 
     print('py.test tests complete, running local queue test.')
     local_args = [sys.executable, 'tests/local_queue.py']
     if args.verbose:
         local_args.append('-v')
-    check_call(local_args)
+    outcode += call(local_args)
+
+    print('local test complete.')
+    if args.pandas:
+        print('running pandas tests')
+        a = ['tests/pandas_run.py']
+        if args.local:
+            a.append('-l')
+        if args.verbose:
+            a.append('-v')
+        outcode += call(a)
+    return outcode
 
 if __name__ == '__main__' and '__file__' in globals():
     sys.exit(main())
