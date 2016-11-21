@@ -7,7 +7,7 @@ Run all applicable tests.
 
         AUTHOR: Michael D Dacre, mike.dacre@gmail.com
        CREATED: 2016-54-22 15:06
- Last modified: 2016-11-21 12:17
+ Last modified: 2016-11-21 15:04
 
    DESCRIPTION: Run multiple kinds of tests, provide options to skip some.
 
@@ -18,19 +18,6 @@ import os
 import sys
 import argparse
 from subprocess import call
-
-
-def run_pyenv(local=False):
-    """Run pyenv tests"""
-    print('Running py.test tests')
-    if local:
-        print('Skipping remote queue tests')
-        outcode = call(['py.test', 'tests/test_options.py',
-                        'tests/test_queue.py', 'tests/test_local.py',
-                        'tests/test_config.py'])
-    else:
-        outcode = call(['py.test'])
-    return outcode
 
 
 def main(argv=None):
@@ -46,6 +33,8 @@ def main(argv=None):
                         help="Skip remote tests")
     parser.add_argument('-p', '--pandas', action="store_true",
                         help="Also run pandas tests")
+    parser.add_argument('-c', '--coverage', action="store_true",
+                        help="Generate coverage")
     parser.add_argument('-v', '--verbose', action="store_true",
                         help="Verbose")
 
@@ -55,11 +44,24 @@ def main(argv=None):
     if os.path.basename(os.path.abspath('.')) == 'tests':
         os.chdir('..')
 
+    if args.coverage:
+        if os.path.exists('.coverage'):
+            os.remove('.coverage')
+        cmnd = ['coverage', 'run', '-a', '--source', 'fyrd']
+        pytt = ['py.test', '--cov=fyrd']
+    else:
+        cmnd = [sys.executable]
+        pytt = ['py.test']
+
     # Run the tests
-    outcode = run_pyenv(args.local)
+    if args.local:
+        print('Skipping remote queue tests')
+        pytt += ['tests/test_options.py', 'tests/test_queue.py',
+                 'tests/test_local.py', 'tests/test_config.py']
+    outcode = call(pytt)
     print('py.test tests complete, running local queue test.')
 
-    local_args = [sys.executable, 'tests/local_queue.py']
+    local_args = cmnd + ['tests/local_queue.py']
     if args.verbose:
         local_args.append('-v')
     outcode += call(local_args)
@@ -67,7 +69,7 @@ def main(argv=None):
     print('local test complete.')
     if args.pandas:
         print('running pandas tests')
-        a = [sys.executable, 'tests/pandas_run.py']
+        a = cmnd + ['tests/pandas_run.py']
         if args.local:
             a.append('-l')
         if args.verbose:
