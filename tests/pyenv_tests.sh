@@ -73,7 +73,7 @@ for i in ${versions[@]}; do
     continue
   fi
   echo "Creating virtualenv $v"
-  pyenv virtualenv-delete $v >/dev/null 2>/dev/null
+  pyenv virtualenv-delete --force $v >/dev/null 2>/dev/null
   pyenv virtualenv --force $i $v
   if [[ $? > 0 ]]; then
     aborted=$((aborted+1))
@@ -115,7 +115,7 @@ for i in ${version[@]}; do
   fi
   v="${build_string}_${i}"
   echo "Creating virtualenv $v"
-  pyenv virtualenv-delete $v >/dev/null 2>/dev/null
+  pyenv virtualenv-delete --force $v >/dev/null 2>/dev/null
   pyenv virtualenv --force $i $v
   if [[ $? > 0 ]]; then
     aborted=$((aborted+1))
@@ -153,7 +153,7 @@ for i in ${version[@]}; do
   counter=$((counter+1))
   codes=$((codes+code))
   echo "Deleteing $v"
-  pyenv virtualenv-delete $v
+  pyenv virtualenv-delete --force $v
 done
 
 echo "Completed pandas tests."
