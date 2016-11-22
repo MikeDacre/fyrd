@@ -4,7 +4,6 @@ python:
   - "3.3"
   - "3.4"
   - "3.5"
-  - "3.6.0b2"
   - "3.6-dev"
   - "3.7-dev"
   - "nightly"
@@ -15,8 +14,3 @@ install: "pip install -r tests/test_requirements.txt"
 # Run py.test and also a separate local queue test
 script:
   - tests/run_tests.py
-
-# Code Climate
-addons:
-  code_climate:
-    repo_token: b3a6260dfcca35803c0df8bb5dbb89eeb88fd288853d164979c6b352438d26f8
