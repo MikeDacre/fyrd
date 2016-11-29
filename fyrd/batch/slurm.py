@@ -138,3 +138,18 @@ def queue_parser(user=None, partition=None):
 
         yield (sid, sname, suser, spartition, sstate, snodelist,
                snodes, scpus, scode)
+
+
+def submit_args(kwds=None, dependencies=None):
+    """Format dependency args."""
+    if dependencies:
+        args = '--dependency=afterok:{}'.format(
+            ':'.join(dependencies))
+    else:
+        args = ''
+    return args
+
+
+def id_from_stdout(stdout):
+    """Parse the job ID from the output of qsub."""
+    return int(stdout.split(' ')[0])

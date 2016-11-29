@@ -1,7 +1,7 @@
 """
 Fallback local multiprocessing mode.
 """
-
+from . import local as _local
 
 ###############################################################################
 #                                    Queue                                    #
@@ -25,3 +25,14 @@ def queue_parser(user=None, partition=None):
         tuple: job_id, name, userid, partition, state, nodelist, numnodes,
                ntpernode, exit_code
     """
+
+
+def format_script(kwds):
+    # Create the pool
+    if not _local.JQUEUE or not _local.JQUEUE.runner.is_alive():
+        threads = kwds['threads'] if 'threads' in kwds \
+                else _local.THREADS
+        _local.JQUEUE = _local.JobQueue(cores=threads)
+    script  = '#!/bin/bash\n'
+    script += options.options_to_string(kwds)
+    return script

@@ -66,6 +66,26 @@ def listify(iterable):
     return list(iter(iterable))
 
 
+def get_path(name, dflt, path, kwds):
+    """Search kewywords for a file, and set its path.
+
+    Args:
+        name (str):  The name of the file in the keywords
+        dflt (str):  A default name for the file if not in keywords
+        path (str):  A default path in case one is not set
+        kwds (dict): A dictionary of keyword arguments.
+
+    Returns:
+        str: A writable absolute path to a file
+    """
+    file_name = kwds[name] if name in kwds else dflt
+    pth, fl = _os.path.split(file_name)
+    pth = pth if pth else path
+    if not _os.path.isdir(pth):
+        _os.makedirs(pth)
+    return _os.path.abspath(_os.path.join(pth, fl))
+
+
 def merge_lists(lists):
     """Turn a list of lists into a single list."""
     outlist = []

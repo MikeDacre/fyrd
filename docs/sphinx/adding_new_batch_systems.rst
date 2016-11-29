@@ -1,32 +1,53 @@
 Adding New Batch Systems
 ========================
 
-To add a new batch system, a script describing that system must be added to the `/batch` package, and keyword
-options must be added to the `options.py` dictionaries. The new batch system must have entries for every
-record in the `CLUSTER_CORE` and `CLUSTER_OPTS` dictionaries. Additionally, it is possible to add options to
-additional dictionaries in that file, but as much as possible all options should be added to just those two
-dictionaries.
+To add a new batch system, a script describing that system must be added to the
+`/batch` package, and keyword options must be added to the `options.py`
+dictionaries. The new batch system must have entries for every record in the
+`CLUSTER_CORE` and `CLUSTER_OPTS` dictionaries. Additionally, it is possible to
+add options to additional dictionaries in that file, but as much as possible
+all options should be added to just those two dictionaries.
 
 Batch Queue Script
 ------------------
 
-Every new batch system must have a script in `/batch` that contains the following features.
+Every new batch system must have a script in `/batch` with a name that matches
+an entry in `fyrd.batch.CLUSTERS`. This script must define the following constant:
+
+- QUEUE_OUTPUT: A sample output of the queue command (e.g. `qstat`) to use for
+                testing and documentation. It should contain just a few jobs
+                with output representative of multiple job types (e.g. running,
+                queued, cancelled, array jobs and simple jobs).
+
+This script must also define a `BatchSystem` class that inherits from
+`fyrd.batch.BatchSystem`. This class should define the following features (some
+are optional, these are noted where appropriate).
 
 Required Attributes
 ...................
 
-- SUBMISSION_CMND:     A command that is used to submit scripts, such as `qsub` or `sbatch`
-- PREFIX:              A string to add before options in the script file, such as `#SBATCH` for slurm or `#PBS` for torque
-- IDENTIFYING_SCRIPTS: A list of scripts that, when present on the PATH, identify this queue. All must be present.
-- QUEUE_OUTPUT:        A sample output of the queue command (e.g. `qstat`) to use for testing and documentation. It should
-                       contain just a few jobs with output representative of multiple job types (e.g. running, queued,
-                       cancelled, array jobs and simple jobs).
+- name:                Must match the name of the script and the name in `CLUSTERS`
+- submit_cmnd:         A command that is used to submit scrpts, such as `qsub`
+                       or `sbatch`
+- arg_prefix:          A string to add before options in the script file, such as `#SBATCH` for slurm or `#PBS` for torque
+- identifying_scripts: A list of scripts that, when present on the PATH, identify this queue. All must be present.
 
-Required Functions
-..................
+Optional Attributes
+...................
+
+- suffix:              A string to add in the suffix of written submit script
+                       files (e.g. 'slurm'). Defaults to the name.
+
+Required Methods
+................
 
 queue_parser(user=None, partition=None)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Args::
+
+  user (str):      Filter by user ID
+  partition (str): Filter by partition
 
 This function should be an iterator and should yield a tuple of exactly 9 items:
 
@@ -78,22 +99,59 @@ Uncertain states (delay for a period to see if job resolves, otherwise mark as b
 - suspended
 - preempted
 
+id_from_stdout(stdout)
+~~~~~~~~~~~~~~~~~~~~~~
+
+This method will be called once per submitted job on the `STDOUT` returned by
+the submission script. It must parse the output of the submission script and
+return a job ID, preferably as an int, but a string is also fine.
+
+Example:
+
+.. code:: python
+
+   def id_from_stdout(stdout):
+       return int(stdout.split('.')[0])
+
+Optional Methods
+................
+
 format_script(kwds)
 ~~~~~~~~~~~~~~~~~~~
 
-This function must return a string containing a submitable script minus any
-call to `module` or `cd` and minus the command to run itself, these will be
-added later.
+This method must return a string containing a submitable script minus any call
+to `module` or `cd` and minus the command to run itself, these will be added
+later.
 
 To build it, build a script by manually parsing any keyword arguments from kwds
 that cannot be handled by the `options.options_to_string()` function and then
-passing the remaining keywords to `options.options_to_string()`.
+passing the remaining keywords to `options.options_to_string()`. The
+`options_to_string()` command should definitely be included somewhere in the
+function, this function is what adds the `#QUEUE <command>` type arguments to
+the batch file.
 
-In the simplest case this function could look like this:
+The default method (used if not defined here) is:
 
 .. code:: python
 
    def format_script(kwds):
-       script  = '#!/bin/bash'
+       script  = '#!/bin/bash\n'
        script += options.options_to_string(kwds)
        return script
+
+To control where commands to module are added, add a '{modules}' string to the
+script, otherwise modules will be added immediately following the script, prior
+to the execution command.
+
+Note: `cd <rundir>` will be added automatically before the command also.
+
+submit_args(kwds=None, dependencies=None)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This function allows you to alter the command used for submission, if present it
+can be used to add additional arguments to the submit command.
+
+It must return a string of command line arguments that will be added between the
+`SUBMIT_CMND` and the submit script (note that the submit script does not have to
+be written, if it isn't written it will be passed as STDIN, in which case there will
+be nothing after the args returned by this function).

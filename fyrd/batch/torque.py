@@ -98,3 +98,19 @@ def queue_parser(user=None, partition=None):
                 continue
             yield (job_id, array_id, job_name, job_owner, job_queue, job_state,
                    nodes, job_threads, 1, exitcode)
+
+
+def submit_args(kwds=None, dependencies=None):
+    """Format dependency args."""
+    if dependencies:
+        args = '-W depend={}'.format(
+            ','.join(['afterok:' + d for d in dependencies]))
+        args = ['qsub', depends, self.submission.file_name]
+    else:
+        args = ''
+    return args
+
+
+def id_from_stdout(stdout):
+    """Parse the job ID from the output of qsub."""
+    return int(stdout.split('.')[0])

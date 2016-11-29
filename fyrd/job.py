@@ -9,7 +9,6 @@ from time import sleep as _sleep
 from datetime import datetime as _dt
 from subprocess import CalledProcessError as _CalledProcessError
 
-# Try to use dill, revert to pickle if not found
 import dill as _pickle
 from six import reraise as _reraise
 
@@ -22,6 +21,7 @@ from . import conf    as _conf
 from . import queue   as _queue
 from . import logme   as _logme
 from . import local   as _local
+from . import batch   as _batch
 from . import options as _options
 from . import script_runners as _scrpts
 from . import ClusterError   as _ClusterError
@@ -100,10 +100,11 @@ class Job(object):
     pool_job      = None
 
     # Scripts
+    script_files  = None
     submission    = None
-    exec_script   = None
     function      = None
     imports       = None
+    syspaths      = None
 
     # Dependencies
     dependencies  = None
@@ -162,23 +163,10 @@ class Job(object):
         ########################
         #  Sanitize arguments  #
         ########################
+
         _logme.log('Args pre-check: {}'.format(kwds), 'debug')
         kwds = _options.check_arguments(kwds)
         _logme.log('Args post-check: {}'.format(kwds), 'debug')
-
-        # Override autoclean state (set in config file)
-        if 'clean_files' in kwds:
-            self.clean_files = kwds.pop('clean_files')
-        if 'clean_outputs' in kwds:
-            self.clean_outputs = kwds.pop('clean_outputs')
-
-        # Path handling
-        [kwds, self.runpath,
-         self.outpath, self.scriptpath] = _conf.get_job_paths(kwds)
-
-        # Save command
-        self.command = command
-        self.args    = args
 
         # Merge in profile, this includes all args from the DEFAULT profile
         # as well, ensuring that those are always set at a minumum.
@@ -199,16 +187,38 @@ class Job(object):
                            .format(opt, opt, arg), 'debug')
                 kwds[opt] = arg
 
-        # Get environment
-        if not _queue.MODE:
-            _queue.MODE = _queue.get_cluster_environment()
-        self.qtype = qtype if qtype else _queue.MODE
-        self.queue = _queue.Queue(user='self', qtype=self.qtype)
-        self.state = 'Not_Submitted'
+        # In case cores are passed as None
+        if not kwds['nodes']:
+            kwds['nodes'] = default_args['nodes']
+        if not kwds['cores']:
+            kwds['cores'] = default_args['cores']
+        self.nodes = kwds['nodes']
+        self.cores = kwds['cores']
+
+        # Make sure args are a tuple or dictionary
+        kwargs = kwargs if kwargs else {}
+        if args:
+            if isinstance(args, dict):
+                kwargs.update(args)
+                args = None
+            else:
+                args = tuple(_run.listify(args))
+
+        # Determine if we are a function or a script
+        self.kind = 'function' if callable(command) else 'script'
+
+        # Save command
+        self.command = command
+        self.args    = args
+        self.kwargs  = kwargs
+
+        ############################
+        #  Name and Path Handling  #
+        ############################
 
         # Set name
         if not name:
-            if callable(command):
+            if self.kind == 'function':
                 strcmd = str(command).strip('<>')
                 parts = strcmd.split(' ')
                 if parts[0] == 'bound':
@@ -223,197 +233,182 @@ class Job(object):
             else:
                 name = command.split(' ')[0].split('/')[-1]
 
-        # Make sure name not in queue
+        # Make name unique
         self.uuid = str(_uuid()).split('-')[0]
-        names     = [i.name.split('.')[0] for i in self.queue]
-        namecnt   = len([i for i in names if i == name])
-        name      = '{}.{}.{}'.format(name, namecnt, self.uuid)
-        self.name = name
+        self.name = '{}.{}'.format(self.name, self.uuid)
+
+        # Path handling
+        [kwds,
+         self.runpath,
+         self.outpath,
+         self.scriptpath
+        ] = _conf.get_job_paths(kwds)
+
+        # Set output file names
+        if 'suffix' in kwds:
+            self.suffix = kwds.pop('suffix')
+        else:
+            self.suffix = _conf.get_option('jobs', 'suffix')
+
+        prefix = '{}.{}'.format(self.name, self.suffix)
+
+        self.outfile = _run.get_path(
+            'outfile', '{}.{}'.format(prefix, 'out'), self.outpath, kwds
+        )
+        self.errfile = _run.get_path(
+            'errfile', '{}.{}'.format(prefix, 'err'), self.outpath, kwds
+        )
+        kwds['outfile'] = self.outfile
+        kwds['errfile'] = self.errfile
+
+        if self.kind == 'function':
+            self.poutfile = self.outfile + '.func.pickle'
+
+        #################################
+        #  Non-script keyword recovery  #
+        #################################
+
+        # Get imports
+        self.imports = kwds.pop('imports') if 'imports' in kwds else None
+
+        # Get syspaths
+        self.syspaths = kwds.pop('syspaths') if 'syspaths' in kwds else None
+
+        # Override autoclean state (set in config file)
+        if 'clean_files' in kwds:
+            self.clean_files = kwds.pop('clean_files')
+        if 'clean_outputs' in kwds:
+            self.clean_outputs = kwds.pop('clean_outputs')
 
         # Set modules
         self.modules = kwds.pop('modules') if 'modules' in kwds else None
         if self.modules:
             self.modules = _run.opt_split(self.modules, (',', ';'))
 
-        # Make sure args are a tuple or dictionary
-        if args:
-            if isinstance(args, str):
-                args = tuple(args)
-            if not isinstance(args, (tuple, dict)):
-                try:
-                    args = tuple(args)
-                except TypeError:
-                    args = (args,)
+        #################################
+        #  Set Initial Dependency List  #
+        #################################
 
-        # In case cores are passed as None
-        if 'nodes' not in kwds:
-            kwds['nodes'] = default_args['nodes']
-        if 'cores' not in kwds:
-            kwds['cores'] = default_args['cores']
-        self.nodes = kwds['nodes']
-        self.cores = kwds['cores']
-
-        # Set output files
-        suffix = kwds.pop('suffix') if 'suffix' in kwds \
-                 else _conf.get_option('jobs', 'suffix')
-        if 'outfile' in kwds:
-            pth, fle = _os.path.split(kwds['outfile'])
-            if not pth:
-                pth = self.outpath
-            kwds['outfile'] = _os.path.join(pth, fle)
-        else:
-            kwds['outfile'] = _os.path.join(
-                self.outpath, '.'.join([name, suffix, 'out']))
-        if 'errfile' in kwds:
-            pth, fle = _os.path.split(kwds['errfile'])
-            if not pth:
-                pth = self.outpath
-            kwds['errfile'] = _os.path.join(pth, fle)
-        else:
-            kwds['errfile'] = _os.path.join(
-                self.outpath, '.'.join([name, suffix, 'err']))
-        self.outfile = kwds['outfile']
-        self.errfile = kwds['errfile']
-
-        # Check and set dependencies
         if 'depends' in kwds:
-            dependencies = kwds.pop('depends')
+            dependencies = _run.listify(kwds.pop('depends'))
             self.dependencies = []
-            if isinstance(dependencies, 'str'):
-                if not dependencies.isdigit():
-                    raise _ClusterError('Dependencies must be number or list')
-                else:
-                    dependencies = [int(dependencies)]
-            elif isinstance(dependencies, (int, Job)):
-                dependencies = [dependencies]
-            else:
-                try:
-                    dependencies = list(dependencies)
-                except TypeError:
-                    raise _ClusterError('Dependencies must be number or list')
             for dependency in dependencies:
-                if isinstance(dependency, str):
+                if isinstance(dependency, str) and dependency.isdigit():
                     dependency  = int(dependency)
-                if not isinstance(dependency, (int, Job)):
-                    raise _ClusterError('Dependencies must be number or list')
+                if not isinstance(dependency, (int, str, Job)):
+                    raise _ClusterError(
+                        'Dependencies must be an int, str, or Job'
+                    )
                 self.dependencies.append(dependency)
 
-        ######################################
-        #  Command and Function Preparation  #
-        ######################################
+        # Save submittable keywords to self
+        self.kwds = kwds
 
-        # Get imports
-        imports = kwds.pop('imports') if 'imports' in kwds else None
+        #########################################
+        #  Get Batch Environment and Set State  #
+        #########################################
 
-        # Get syspaths
-        syspaths = kwds.pop('syspaths') if 'syspaths' in kwds else None
+        if not _queue.MODE:
+            _queue.MODE = _queue.get_cluster_environment()
+        self.qtype = qtype if qtype else _queue.MODE
+        self.queue = _queue.Queue(user='self', qtype=self.qtype)
+        self.state = 'Not_Submitted'
 
-        # Split out sys.paths from imports and set imports in self
-        if imports:
-            self.imports = []
-            syspaths = syspaths if syspaths else []
-            for i in imports:
-                if i.startswith('sys.path.append')\
-                        or i.startswith('sys.path.insert'):
-                    syspaths.append(i)
-                else:
-                    self.imports.append(i)
+        # Initialize the first build
+        self.build_script()
 
-        # Function specific initialization
-        if callable(command):
-            self.kind = 'function'
-            script_file = _os.path.join(
-                self.scriptpath, '{}_func.{}.py'.format(name, suffix)
-                )
-            self.poutfile = self.outfile + '.func.pickle'
-            self.function = _Function(
-                file_name=script_file, function=command, args=args,
-                kwargs=kwargs, imports=self.imports, syspaths=syspaths,
-                outfile=self.poutfile
-            )
-            # Collapse the _command into a python call to the function script
-            executable = '#!/usr/bin/env python{}'.format(
-                _sys.version_info.major) if _conf.get_option(
-                    'jobs', 'generic_python') else _sys.executable
-
-            command = '{} {}'.format(executable, self.function.file_name)
-            args = None
-        else:
-            self.kind = 'script'
-            self.poutfile = None
-
-        # Collapse args into command
-        command = command + ' '.join(args) if args else command
-
-        #####################
-        #  Script Creation  #
-        #####################
-
-        # Build execution wrapper with modules
-        precmd  = ''
-        if self.modules:
-            for module in self.modules:
-                precmd += 'module load {}\n'.format(module)
-
-        # Create queue-dependent scripts
-        sub_script = ''
-        if self.qtype == 'slurm':
-            scrpt = _os.path.join(
-                self.scriptpath, '{}.{}.sbatch'.format(name, suffix)
-            )
-
-            # We use a separate script and a single srun command to avoid
-            # issues with multiple threads running at once
-            exec_script  = _os.path.join(self.scriptpath,
-                                         '{}.{}.script'.format(name, suffix))
-            exe_script   = _scrpts.CMND_RUNNER_TRACK.format(
-                precmd=precmd, usedir=self.runpath, name=name, command=command)
-            # Create the exec_script Script object
-            self.exec_script = _Script(script=exe_script,
-                                       file_name=exec_script)
-
-            # Add all of the keyword arguments at once
-            precmd += _options.options_to_string(kwds, self.qtype)
-
-            ecmnd = 'srun bash {}'.format(exec_script)
-            sub_script = _scrpts.SCRP_RUNNER.format(precmd=precmd,
-                                                    script=exec_script,
-                                                    command=ecmnd)
-
-        elif self.qtype == 'torque':
-            scrpt = _os.path.join(self.scriptpath,
-                                  '{}.cluster.qsub'.format(name))
-
-            # Add all of the keyword arguments at once
-            precmd += _options.options_to_string(kwds, self.qtype)
-
-            sub_script = _scrpts.CMND_RUNNER_TRACK.format(
-                precmd=precmd, usedir=self.runpath, name=name, command=command)
-
-        elif self.qtype == 'local':
-            # Create the pool
-            if not _local.JQUEUE or not _local.JQUEUE.runner.is_alive():
-                threads = kwds['threads'] if 'threads' in kwds \
-                        else _local.THREADS
-                _local.JQUEUE = _local.JobQueue(cores=threads)
-
-            scrpt = _os.path.join(self.scriptpath, '{}.cluster'.format(name))
-            sub_script = _scrpts.CMND_RUNNER_TRACK.format(
-                precmd=precmd, usedir=self.runpath, name=name, command=command)
-
-        else:
-            raise _ClusterError('Invalid queue type')
-
-        # Create the submission Script object
-        self.submission = _Script(script=sub_script,
-                                  file_name=scrpt)
-
-        # Save the keyword arguments for posterity
-        self.kwargs = kwds
 
     ####################
     #  Public Methods  #
     ####################
+
+    def build_script(self):
+        """Create the script used for submission of this job."""
+        # Detect our batch environment
+        self.batch = _batch.get_batch(self.qtype)
+
+        # Reset script files
+        self.script_files = []
+
+        # Split out sys.paths from imports and set imports in self
+        if self.imports:
+            imports = []
+            syspaths = self.syspaths if self.syspaths else []
+            for impt in self.imports:
+                if impt.startswith('sys.path.append')\
+                        or impt.startswith('sys.path.insert'):
+                    syspaths.append(impt)
+                else:
+                    imports.append(impt)
+            self.imports  = imports
+            self.syspaths = syspaths
+
+        # Function specific initialization
+        if self.kind == 'function':
+            func_script_file = _os.path.join(
+                self.scriptpath,
+                '{}_func.{}.py'.format(self.name, self.suffix)
+            )
+            self.function = _Function(
+                file_name=func_script_file,
+                function=self.command,
+                args=self.args,
+                kwargs=self.kwargs,
+                imports=self.imports,
+                syspaths=syspaths,
+                outfile=self.poutfile
+            )
+            self.script_files.append(self.function)
+
+            # Collapse the _command into a python call to the function script
+            if _conf.get_option('jobs', 'generic_python'):
+                executable = '/usr/bin/env python{}'.format(
+                    _sys.version_info.major
+                )
+            else:
+                executable = _sys.executable
+
+            command = '{} {}'.format(executable, self.function.file_name)
+            args = None
+        else:
+            command = self.command
+            args    = self.args
+
+        # Collapse args into command
+        command = command + ' '.join(args) if args else command
+
+        # Get batch specific script
+        script = self.batch.format_script(self.kwds)
+
+        # Add modules if necessary
+        modules  = ''
+        if self.modules:
+            for module in self.modules:
+                modules += 'module load {}\n'.format(module)
+
+        if '{modules}' not in script:
+            script += '\n{modules}'
+        script = script.format(modules=modules)
+
+        # Create queue-dependent scripts
+        script_file = _os.path.join(
+            self.scriptpath,
+            '{}.{}.{}'.format(self.name, self.suffix, self.batch.suffix)
+        )
+
+        # Create the submission Script object
+        self.submission = _Script(
+            script = _scrpts.CMND_RUNNER_TRACK.format(
+                precmd=script,
+                usedir=self.runpath,
+                name=self.name,
+                command=command
+            ),
+            file_name=script_file
+        )
+        self.script_files.append(self.submission)
+
+        return self.update()
 
     def write(self, overwrite=True):
         """Write all scripts.
@@ -422,12 +417,10 @@ class Job(object):
             overwrite (bool): Overwrite existing files, defaults to True.
         """
         _logme.log('Writing files, overwrite={}'.format(overwrite), 'debug')
-        self.submission.write(overwrite)
-        if self.exec_script:
-            self.exec_script.write(overwrite)
-        if self.function:
-            self.function.write(overwrite)
+        for script_file in self.script_files:
+            script_file.write(overwrite)
         self.written = True
+        return self.update()
 
     def clean(self, delete_outputs=None, get_outputs=True):
         """Delete all scripts created by this module, if they were written.
@@ -440,12 +433,12 @@ class Job(object):
         """
         _logme.log('Cleaning outputs, delete_outputs={}'
                    .format(delete_outputs), 'debug')
+        # Sanitize arguments
         if delete_outputs is None:
             delete_outputs = self.clean_outputs
         assert isinstance(delete_outputs, bool)
-        for jobfile in [self.submission, self.exec_script, self.function]:
-            if jobfile:
-                jobfile.clean()
+        for script_file in self.script_files:
+            script_file.clean()
         if delete_outputs:
             _logme.log('Deleting output files.', 'debug')
             if get_outputs:
@@ -454,6 +447,8 @@ class Job(object):
                 if _os.path.isfile(f):
                     _logme.log('Deleteing {}'.format(f), 'debug')
                     _os.remove(f)
+        self.written = False
+        return self.update()
 
     def submit(self, wait_on_max_queue=True):
         """Submit this job.
@@ -478,16 +473,22 @@ class Job(object):
 
         dependencies = []
         if self.dependencies:
-            for depend in self.dependencies:
-                if isinstance(depend, Job):
-                    dependencies.append(int(depend.id))
-                else:
-                    dependencies.append(int(depend))
-
-        self.update()
+            for dependency in self.dependencies:
+                try:
+                    dep = dependency.id
+                except AttributeError:
+                    dep = dependency
+                finally:
+                    if isinstance(dep, str) and dep.isdigit():
+                        dependencies.append(int(dep))
 
         if wait_on_max_queue:
+            self.update()
             self.queue.wait_to_submit()
+
+        command = self.batch.submit_cmnd
+        args    = self.batch.submit_args(kwds=self.kwds, dependencies=dependencies)
+        command = '{} {}'.format(command, args)
 
         if self.qtype == 'local':
             # Normal mode dependency tracking uses only integer job numbers
@@ -503,73 +504,40 @@ class Job(object):
                                         kwargs=fileargs,
                                         dependencies=dependencies,
                                         cores=self.cores)
-            self.submitted = True
-            self.state = 'submitted'
 
-        elif self.qtype == 'slurm':
-            _logme.log('Submitting to slurm', 'debug')
-            if self.dependencies:
-                depends = '--dependency=afterok:{}'.format(
-                    ':'.join(dependencies))
-                args = ['sbatch', depends, self.submission.file_name]
-            else:
-                args = ['sbatch', self.submission.file_name]
-
-            # Try to submit job 5 times
-            code, stdout, stderr = _run.cmd(args, tries=5)
-            if code == 0:
-                self.id = int(stdout.split(' ')[-1])
-            else:
-                _logme.log('sbatch failed with code {}\n'.format(code),
-                           'stdout: {}\nstderr: {}'.format(stdout, stderr),
-                           'critical')
-                raise _CalledProcessError(code, args, stdout, stderr)
-            self.submitted = True
-            self.state = 'submitted'
-
-        elif self.qtype == 'torque':
-            _logme.log('Submitting to torque', 'debug')
-            if self.dependencies:
-                depends = '-W depend={}'.format(
-                    ','.join(['afterok:' + d for d in dependencies]))
-                args = ['qsub', depends, self.submission.file_name]
-            else:
-                args = ['qsub', self.submission.file_name]
-
-            # Try to submit job 5 times
-            code, stdout, stderr = _run.cmd(args, tries=5)
-            if code == 0:
-                self.id = int(stdout.split('.')[0])
-            else:
-                if stderr.startswith('qsub: submit error ('):
-                    raise _ClusterError('qsub submission failed with error: ' +
-                                        '{}, command: {}'.format(stderr, args))
-                else:
-                    _logme.log(
-                        'qsub failed with code {}\nstdout: {}\nstderr: {}'
-                        .format(code, stdout, stderr), 'critical'
-                    )
-                    raise _CalledProcessError(code, args, stdout, stderr)
-            self.submitted = True
-            self.state = 'submitted'
         else:
-            raise _ClusterError("Invalid queue type {}".format(self.qtype))
+            _logme.log('Submitting to {}'.format(self.qtype), 'debug')
 
-        if not self.submitted:
-            raise _ClusterError('Submission appears to have failed, this '
-                                "shouldn't happen")
+            # Try to submit job 5 times
+            code, stdout, stderr = _run.cmd(args, tries=5)
+            if code == 0:
+                self.id = self.batch.id_from_stdout(stdout)
+            else:
+                _logme.log(
+                    '{} failed with code {}\nstdout: {}\nstderr: {}'
+                    .format(command, code, stdout, stderr), 'critical'
+                )
+                raise _CalledProcessError(code, command, stdout, stderr)
 
-        return self
+        self.submitted = True
+        self.state = 'submitted'
+
+        return self.update()
 
     def resubmit(self):
         """Attempt to auto resubmit, deletes prior files."""
         self.clean(delete_outputs=True)
-        self.state = 'Not_Submitted'
+        self.submitted = False
+        self.state     = 'Not_Submitted'
         self.write()
         return self.submit()
 
     def wait(self):
-        """Block until job completes."""
+        """Block until job completes.
+
+        Returns:
+            bool: True on success, False on failure
+        """
         if not self.submitted:
             if _conf.get_option('jobs', 'auto_submit'):
                 _logme.log('Auto-submitting as not submitted yet', 'debug')
@@ -981,32 +949,6 @@ class Job(object):
                        .format(self.name, code), 'error')
         return code
 
-    def update(self, fetch_info=True):
-        """Update status from the queue.
-
-        Args:
-            fetch_info (bool): Fetch basic job info if complete.
-        """
-        if not self._updating:
-            self._update(fetch_info)
-        else:
-            _logme.log('Already updating, aborting.', 'debug')
-
-    def update_queue_info(self):
-        """Set queue_info from the queue even if done."""
-        _logme.log('Updating queue_info', 'debug')
-        queue_info1 = self.queue[self.id]
-        self.queue.update()
-        queue_info2 = self.queue[self.id]
-        if queue_info2:
-            self.queue_info = queue_info2
-        elif queue_info1:
-            self.queue_info = queue_info1
-        elif self.queue_info is None and self.submitted:
-            _logme.log('Cannot find self in the queue and queue_info is empty',
-                       'warn')
-        return self.queue_info
-
     def fetch_outputs(self, save=True, delete_files=None):
         """Save all outputs in their current state. No return value.
 
@@ -1032,15 +974,46 @@ class Job(object):
             self.get_stdout(save=True, delete_file=delete_files, update=False)
             self.get_stderr(save=True, delete_file=delete_files, update=False)
 
+    def update(self, fetch_info=True):
+        """Update status from the queue.
+
+        Args:
+            fetch_info (bool): Fetch basic job info if complete.
+        """
+        if not self._updating:
+            return self._update(fetch_info)
+        else:
+            _logme.log('Already updating, aborting.', 'debug')
+            return self
+
+    ######################
+    #  Property Methods  #
+    ######################
+
+    @property
+    def outfiles(self):
+        """A list of all outfiles associated with this Job."""
+        outfiles = [self.outfile, self.errfile]
+        if self.poutfile:
+            outfiles.append(self.poutfile)
+        return outfiles
+
+    @property
+    def incomplete_outfiles(self):
+        """A list of all outfiles that haven't already been fetched."""
+        outfiles = []
+        if self.outfile and not self._got_stdout:
+            outfiles.append(self.outfile)
+        if self.errfile and not self._got_stderr:
+            outfiles.append(self.errfile)
+        if self.poutfile and not self._got_out:
+            outfiles.append(self.poutfile)
+        return outfiles
+
     @property
     def files(self):
         """Build a list of files associated with this class."""
-        files = [self.submission]
-        if self.kind == 'script':
-            files.append(self.exec_script)
-        if self.kind == 'function':
-            files.append(self.function)
-        return files
+        return self.script_files + self.outfiles
 
     @property
     def runtime(self):
@@ -1099,26 +1072,7 @@ class Job(object):
                         if not self._got_times:
                             self.get_times(update=False)
         self._updating = False
-
-    @property
-    def outfiles(self):
-        """A list of all outfiles associated with this Job."""
-        outfiles = [self.outfile, self.errfile]
-        if self.poutfile:
-            outfiles.append(self.poutfile)
-        return outfiles
-
-    @property
-    def incomplete_outfiles(self):
-        """A list of all outfiles that haven't already been fetched."""
-        outfiles = []
-        if self.outfile and not self._got_stdout:
-            outfiles.append(self.outfile)
-        if self.errfile and not self._got_stderr:
-            outfiles.append(self.errfile)
-        if self.poutfile and not self._got_out:
-            outfiles.append(self.poutfile)
-        return outfiles
+        return self
 
     def __getattr__(self, key):
         """Dynamically get out, stdout, stderr, and exitcode."""
