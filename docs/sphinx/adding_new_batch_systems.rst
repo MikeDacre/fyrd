@@ -1,13 +1,29 @@
 Adding New Batch Systems
 ========================
 
-Required Attributes
--------------------
+To add a new batch system, a script describing that system must be added to the `/batch` package, and keyword
+options must be added to the `options.py` dictionaries. The new batch system must have entries for every
+record in the `CLUSTER_CORE` and `CLUSTER_OPTS` dictionaries. Additionally, it is possible to add options to
+additional dictionaries in that file, but as much as possible all options should be added to just those two
+dictionaries.
 
+Batch Queue Script
+------------------
+
+Every new batch system must have a script in `/batch` that contains the following features.
+
+Required Attributes
+...................
+
+- SUBMISSION_CMND:     A command that is used to submit scripts, such as `qsub` or `sbatch`
+- PREFIX:              A string to add before options in the script file, such as `#SBATCH` for slurm or `#PBS` for torque
 - IDENTIFYING_SCRIPTS: A list of scripts that, when present on the PATH, identify this queue. All must be present.
+- QUEUE_OUTPUT:        A sample output of the queue command (e.g. `qstat`) to use for testing and documentation. It should
+                       contain just a few jobs with output representative of multiple job types (e.g. running, queued,
+                       cancelled, array jobs and simple jobs).
 
 Required Functions
-------------------
+..................
 
 queue_parser(user=None, partition=None)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -61,3 +77,23 @@ Uncertain states (delay for a period to see if job resolves, otherwise mark as b
 - stopped
 - suspended
 - preempted
+
+format_script(kwds)
+~~~~~~~~~~~~~~~~~~~
+
+This function must return a string containing a submitable script minus any
+call to `module` or `cd` and minus the command to run itself, these will be
+added later.
+
+To build it, build a script by manually parsing any keyword arguments from kwds
+that cannot be handled by the `options.options_to_string()` function and then
+passing the remaining keywords to `options.options_to_string()`.
+
+In the simplest case this function could look like this:
+
+.. code:: python
+
+   def format_script(kwds):
+       script  = '#!/bin/bash'
+       script += options.options_to_string(kwds)
+       return script
