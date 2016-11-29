@@ -33,5 +33,5 @@ pip install -r tests/test_requirements.txt >/dev/null
 pip install pandas numpy scipy >/dev/null
 # Actually run tests here
 echo "Running test suite"
-python tests/run_tests.py --pandas --coverage
+python tests/run_tests.py --coverage
 pyenv virtualenv-delete -f $v >/dev/null 2>/dev/null

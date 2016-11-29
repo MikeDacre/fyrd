@@ -47,7 +47,7 @@ build_string="fyrd_$(cat /dev/urandom | LC_ALL=C tr -dc 'a-zA-Z0-9' | fold -w 8 
 
 # Delete virtualenvs on exit
 function on_exit() {
-  echo "Making sure virtual envs are gone"
+  echo "Making sure virtualenvs are gone"
   for i in ${versions[@]}; do
     v="${build_string}_${i}"
     echo "Deleting ${v}"
@@ -98,7 +98,7 @@ for i in ${versions[@]}; do
   code=$?
   counter=$((counter+1))
   codes=$((codes+code))
-  echo "Deleteing $v"
+  echo "Deleting $v"
   pyenv virtualenv-delete -f $v
 done
 
@@ -148,11 +148,7 @@ for i in ${version[@]}; do
   code=$?
   counter=$((counter+1))
   codes=$((codes+code))
-  python tests/pandas_run.py $loc
-  code=$?
-  counter=$((counter+1))
-  codes=$((codes+code))
-  echo "Deleteing $v"
+  echo "Deleting $v"
   pyenv virtualenv-delete --force $v
 done
 

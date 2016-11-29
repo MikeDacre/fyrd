@@ -62,6 +62,9 @@ COMMON  = OrderedDict([
     ('imports',
      {'help': 'Imports to be used in function calls (e.g. sys, os)',
       'default': None, 'type': list}),
+    ('syspaths',
+     {'help': 'Paths to add to sys.path for submitted functions',
+      'default': None, 'type': list}),
     ('scriptpath',
      {'help': 'Folder to write cluster script files to, must be accessible ' +
               'to the compute nodes.',
@@ -175,6 +178,8 @@ SYNONYMS = OrderedDict([
     ('filepath',       'scriptpath'),
     ('dir',            'runpath'),
     ('path',           'runpath'),
+    ('paths',          'syspaths'),
+    ('syspath',        'syspaths'),
     ('scriptdir',      'scriptpath'),
     ('cleanfiles',     'clean_files'),
     ('delfiles',       'clean_files'),
@@ -233,6 +238,18 @@ class OptionsError(ClusterError):
 ###############################################################################
 #                          Option Handling Functions                          #
 ###############################################################################
+
+
+def sanitize_arguments(kwds):
+    """Run check_arguments, but return unmatched keywords as is."""
+    new_kwds = dict()
+    for opt, arg in kwds.items():
+        try:
+            o, a = list(check_arguments({opt: arg}).items())[0]
+            new_kwds[o] = a
+        except OptionsError:
+            new_kwds[opt] = arg
+    return new_kwds
 
 
 def split_keywords(kwargs):
@@ -417,8 +434,7 @@ def option_to_string(option, value=None, qtype=None):
     prefix = '#SBATCH' if qtype == 'slurm' else '#PBS'
     if '{}' in kwds[option][qtype]:
         if value is None:
-            raise OptionsError('Cannot use None as an argument for option {}'
-                               .format(option))
+            return ''
         return '{prefix} {optarg}'.format(
             prefix=prefix, optarg=kwds[option][qtype].format(value))
     else:

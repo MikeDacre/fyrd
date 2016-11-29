@@ -173,6 +173,8 @@ managed using a simple string format.
 
 .. autofunction:: fyrd.options.option_help
 
+.. autofunction:: fyrd.options.sanitize_arguments
+
 .. autofunction:: fyrd.options.split_keywords
 
 .. autofunction:: fyrd.options.check_arguments
@@ -274,7 +276,7 @@ provide simple job submission and management, while the functions in
 
 .. autofunction:: fyrd.helpers.parapply_summary
 
-.. autofunction:: fyrd.helpers.split_file
+.. autofunction:: fyrd.helpers.splitrun
 
 fyrd.basic
 ----------
@@ -352,29 +354,9 @@ fyrd.local.job_runner
 fyrd.run
 --------
 
-Some other wrapper functions are defined in `run.py`, these are just little
-useful knick-knacks that make function submission and queue management possible
-on both python 2 and python 3.
-
-.. autofunction:: fyrd.run.cmd
-
-.. autofunction:: fyrd.run.which
-
-.. autofunction:: fyrd.run.check_pid
-
-.. autofunction:: fyrd.run.get_input
-
-.. autofunction:: fyrd.run.indent
-
-.. autofunction:: fyrd.run.open_zipped
-
-.. autofunction:: fyrd.run.is_exe
-
-.. autofunction:: fyrd.run.file_type
-
-.. autofunction:: fyrd.run.is_file_type
-
-.. autofunction:: fyrd.run.write_iterable
+.. automodule:: fyrd.local.run
+   :members:
+   "show-inheritance:
 
 fyrd.logme
 ----------

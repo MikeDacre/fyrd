@@ -7,7 +7,7 @@ Run all applicable tests.
 
         AUTHOR: Michael D Dacre, mike.dacre@gmail.com
        CREATED: 2016-54-22 15:06
- Last modified: 2016-11-21 15:04
+ Last modified: 2016-11-28 16:53
 
    DESCRIPTION: Run multiple kinds of tests, provide options to skip some.
 
@@ -31,8 +31,6 @@ def main(argv=None):
 
     parser.add_argument('-l', '--local', action="store_true",
                         help="Skip remote tests")
-    parser.add_argument('-p', '--pandas', action="store_true",
-                        help="Also run pandas tests")
     parser.add_argument('-c', '--coverage', action="store_true",
                         help="Generate coverage")
     parser.add_argument('-v', '--verbose', action="store_true",
@@ -59,22 +57,17 @@ def main(argv=None):
         pytt += ['tests/test_options.py', 'tests/test_queue.py',
                  'tests/test_local.py', 'tests/test_config.py']
     outcode = call(pytt)
-    print('py.test tests complete, running local queue test.')
+    print('py.test tests complete with code {}, running local queue test.'
+          .format(outcode))
 
     local_args = cmnd + ['tests/local_queue.py']
     if args.verbose:
         local_args.append('-v')
     outcode += call(local_args)
 
-    print('local test complete.')
-    if args.pandas:
-        print('running pandas tests')
-        a = cmnd + ['tests/pandas_run.py']
-        if args.local:
-            a.append('-l')
-        if args.verbose:
-            a.append('-v')
-        outcode += call(a)
+    print('local test complete with outcode {}.'
+          .format(outcode))
+
     return outcode
 
 if __name__ == '__main__' and '__file__' in globals():

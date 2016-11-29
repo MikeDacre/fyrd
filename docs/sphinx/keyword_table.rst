@@ -15,6 +15,8 @@ Common: Used in every mode
 +---------------+-----------------------------------------------------------------------------------+--------+-----------+
 | modules       | Modules to load with the `module load` command                                    | list   | None      |
 +---------------+-----------------------------------------------------------------------------------+--------+-----------+
+| syspaths      | Paths to add to sys.path for submitted functions                                  | list   | None      |
++---------------+-----------------------------------------------------------------------------------+--------+-----------+
 | scriptpath    | Folder to write cluster script files to, must be accessible to the compute nodes. | str    | .         |
 +---------------+-----------------------------------------------------------------------------------+--------+-----------+
 | outpath       | Folder to write cluster output files to, must be accessible to the compute nodes. | str    | .         |
@@ -116,6 +118,10 @@ Synonyms
 | dir            | runpath       |
 +----------------+---------------+
 | path           | runpath       |
++----------------+---------------+
+| paths          | syspaths      |
++----------------+---------------+
+| syspath        | syspaths      |
 +----------------+---------------+
 | scriptdir      | scriptpath    |
 +----------------+---------------+

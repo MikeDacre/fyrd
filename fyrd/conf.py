@@ -521,6 +521,46 @@ def create_config(cnf=None, def_queue=None):
 
 
 ###############################################################################
+#                           Config Helper Fuctions                            #
+###############################################################################
+
+
+def get_job_paths(kwds):
+    """Parse keyword arguments to get important paths.
+
+    Args:
+        kwds (dict): Keyword arguments accepted by fyrd.job.Job
+
+    Returns:
+        tuple: kwds, runpath, outpath, scriptpath.
+    """
+    runpath = _os.path.abspath(kwds['dir'] if 'dir' in kwds else '.')
+    kwds['dir'] = runpath
+
+    # Set the output path
+    cpath = get_option('jobs', 'outpath')
+    if 'outpath' in kwds:
+        outpath = kwds['outpath']
+    elif cpath:
+        outpath = cpath
+    else:
+        outpath = runpath
+    outpath = _os.path.abspath(outpath)
+
+    # Set the script path
+    cpath = get_option('jobs', 'scriptpath')
+    if 'scriptpath' in kwds:
+        scriptpath = kwds['scriptpath']
+    elif cpath:
+        scriptpath = cpath
+    else:
+        scriptpath = outpath
+    scriptpath = _os.path.abspath(scriptpath)
+
+    return kwds, runpath, outpath, scriptpath
+
+
+###############################################################################
 #                                  Profiles                                   #
 ###############################################################################
 
@@ -580,34 +620,61 @@ class Profile(object):
         )
 
 
-def get_profile(profile=None):
+def get_profile(profile=None, allow_none=True):
     """Return a profile if it exists, if None, return all profiles.
 
     Will return None if profile is supplied but does not exist.
 
     Args:
-        profile (str): The name of a profile to search for.
+        profile (str):     The name of a profile to search for.
+        allow_none (bool): If True, return None if no profile matches,
+                           otherwise raise a ValueError.
 
     Returns:
-        Profile
+        fyrd.conf.Profile: The requested profile.
     """
     load_profiles()
     # Allow lowercase default profile
     if profile and profile.lower() == 'default':
         profile = 'DEFAULT'
-    if profile:
-        if profile in _sections(profiles):
-            return Profile(profile, _section_to_dict(profiles.items(profile)))
-        else:
-            if profile.lower() == 'default':
-                _logme.log('default profile missing, recreating. You can '
-                           'override the defaults by editing {}'
-                           .format(CONFIG_FILE), 'warn')
-                prof = Profile('default', DEFAULT_PROFILES['default'])
-                prof.write()
-                return prof
-            return None
+    if profile in _sections(profiles):
+        return Profile(profile, _section_to_dict(profiles.items(profile)))
     else:
+        if profile.lower() == 'default':
+            _logme.log('default profile missing, recreating. You can '
+                       'override the defaults by editing {}'
+                       .format(CONFIG_FILE), 'warn')
+            prof = Profile('default', DEFAULT_PROFILES['default'])
+            prof.write()
+            return prof
+        if allow_none:
+            return None
+        else:
+            raise ValueError('Requested profile ({}) does not exist'
+                             .format(profile))
+
+
+def get_profiles(profiles=None, allow_none=True):
+    """Return a dictionary of profiles from profiles.
+
+    Returns all profiles if profiles argument is None.
+
+    Args:
+        profiles (list):   A list of profiles to get.
+        allow_none (bool): If True, return None if no profile matches,
+                           otherwise raise a ValueError.
+
+    Returns:
+        dict: A ditionary of profile: fyrd.conf.Profile
+    """
+    if profiles:
+        profiles = _run.listify(profiles)
+        pfls = {}
+        for profile in profiles:
+            pfls[profile] = get_profile(profile, allow_none)
+    else:
+        if not allow_none:
+            raise ValueError('Profile required')
         pfls = {
             'DEFAULT': Profile(
                 'DEFAULT', _section_to_dict(profiles.items('DEFAULT'))

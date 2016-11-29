@@ -86,7 +86,7 @@ setup(
 
     keywords='slurm torque multiprocessing cluster job_management',
 
-    install_requires=['dill', 'tabulate'],
+    install_requires=['dill', 'tabulate', 'six', 'tblib'],
     tests_require=['pytest'],
     packages=['fyrd'],
     cmdclass={'test': TestRunner},
