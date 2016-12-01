@@ -121,7 +121,8 @@ def test_job_params():
     """Run a job with some explicit parameters set."""
     job = fyrd.Job('echo ho', profile='default', clean_files=True,
                    clean_outputs=True, cores=2, mem=2000, time='00:02:00')
-    out = job.submit().get()
+    job.submit()
+    out = job.get()
     assert out == 'ho\n'
     assert job.stdout == 'ho\n'
     assert job.stderr == ''
