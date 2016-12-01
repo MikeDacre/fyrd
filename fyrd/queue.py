@@ -34,9 +34,6 @@ from datetime import datetime as _dt
 from time import time, sleep
 from subprocess import check_output, CalledProcessError
 
-# For parsing torque queues
-import xml.etree.ElementTree as ET
-
 ###############################################################################
 #                                Our functions                                #
 ###############################################################################
@@ -62,17 +59,6 @@ _defaults = conf.get_option('queue')
 # This is set in the get_cluster_environment() function.
 MODE = ''
 
-# Define torque-to-slurm mappings
-TORQUE_SLURM_STATES = {
-    'C': 'completed',
-    'E': 'completing',
-    'H': 'held',  # Not a SLURM state
-    'Q': 'pending',
-    'R': 'running',
-    'T': 'suspended',
-    'W': 'running',
-    'S': 'suspended',
-}
 
 # Define job states
 GOOD_STATES      = ['complete', 'completed', 'special_exit']
@@ -633,72 +619,6 @@ def queue_parser(qtype=None, user=None, partition=None):
         raise ClusterError("Invalid qtype type {}, must be 'torque' or 'slurm'"
                            .format(qtype))
 
-
-
-###############################################################################
-#                       Detect the Cluster Environment                        #
-###############################################################################
-
-
-def get_cluster_environment():
-    """Detect the local cluster environment and set MODE globally.
-
-    Checks all clusters in the CLUSTERS dictionary in batch/__init__.py in
-    order
-
-    Returns:
-        str: MODE variable
-    """
-    global MODE
-    conf_queue = conf.get_option('queue', 'queue_type', 'auto')
-    if conf_queue not in ['torque', 'slurm', 'local', 'auto']:
-        logme.log('queue_type in the config file is {}, '.format(conf_queue) +
-                  'but it should be one of torque, slurm, local, or auto. ' +
-                  'Resetting it to auto', 'warn')
-        conf.set_option('queue', 'queue_type', 'auto')
-        conf_queue = 'auto'
-    if conf_queue == 'auto':
-        if run.which('sbatch'):
-            MODE = 'slurm'
-        elif run.which('qsub'):
-            MODE = 'torque'
-        else:
-            MODE = 'local'
-    else:
-        MODE = conf_queue
-    if MODE == 'slurm' or MODE == 'torque':
-        logme.log('{} detected, using for cluster submissions'.format(MODE),
-                  'debug')
-    else:
-        logme.log('No cluster environment detected, using multiprocessing',
-                  'debug')
-    return MODE
-
-
-##############################
-#  Check if queue is usable  #
-##############################
-
-
-def check_queue(qtype=None):
-    """Raise exception if MODE is incorrect."""
-    if 'MODE' not in globals():
-        global MODE
-        MODE = get_cluster_environment()
-    if not MODE:
-        MODE = get_cluster_environment()
-    if qtype:
-        if qtype not in batch.CLUSTERS:
-            raise ClusterError('qtype value {} is not recognized, '
-                               .format(qtype) +
-                               'should be: local, torque, or slurm')
-        else:
-            if MODE not in batch.CLUSTERS:
-                MODE = qtype
-            return True
-    elif MODE not in batch.CLUSTERS:
-        raise ClusterError('MODE value {} is not recognized, '.format(MODE) +
-                           'should be: local, torque, or slurm')
 
 
 ######################################################################

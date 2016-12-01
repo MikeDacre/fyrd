@@ -1,5 +1,5 @@
 """
-Functions and attributes to allow torque queue functionality.
+Functions and attributes to allow slurm queue functionality.
 """
 
 IDENTIFYING_SCRIPTS = ['squeue', 'sbatch']

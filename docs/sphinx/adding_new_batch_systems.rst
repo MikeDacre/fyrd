@@ -18,6 +18,7 @@ an entry in `fyrd.batch.CLUSTERS`. This script must define the following constan
                 testing and documentation. It should contain just a few jobs
                 with output representative of multiple job types (e.g. running,
                 queued, cancelled, array jobs and simple jobs).
+- STATUS_DICT:  
 
 This script must also define a `BatchSystem` class that inherits from
 `fyrd.batch.BatchSystem`. This class should define the following features (some
@@ -27,16 +28,21 @@ Required Attributes
 ...................
 
 - name:                Must match the name of the script and the name in `CLUSTERS`
-- submit_cmnd:         A command that is used to submit scrpts, such as `qsub`
+- submit_cmnd:         A command that is used to submit scripts, such as `qsub`
                        or `sbatch`
-- arg_prefix:          A string to add before options in the script file, such as `#SBATCH` for slurm or `#PBS` for torque
-- identifying_scripts: A list of scripts that, when present on the PATH, identify this queue. All must be present.
+- queue_cmnd:          A command that is used to get queue output
+- arg_prefix:          A string to add before options in the script file, such
+                       as `#SBATCH` for slurm or `#PBS` for torque
+- identifying_scripts: A list of scripts that, when present on the PATH,
+                       identify this queue. All must be present.
 
 Optional Attributes
 ...................
 
-- suffix:              A string to add in the suffix of written submit script
-                       files (e.g. 'slurm'). Defaults to the name.
+- status_dict: A dictionary mapping all possible outputs of the queue command
+               to the accepted states outlined below.
+- suffix:      A string to add in the suffix of written submit script
+               files (e.g. 'slurm'). Defaults to the name.
 
 Required Methods
 ................
@@ -46,8 +52,11 @@ queue_parser(user=None, partition=None)
 
 Args::
 
-  user (str):      Filter by user ID
-  partition (str): Filter by partition
+  user (list):      Filter by user ID
+  partition (list): Filter by partition
+ 
+Use fyrd.run.listify() on both user and partition to allow folks to submit
+either as a string also.
 
 This function should be an iterator and should yield a tuple of exactly 9 items:
 
@@ -57,6 +66,8 @@ This function should be an iterator and should yield a tuple of exactly 9 items:
 | job_id      | int/str   | An integer or string representation of the job ID                                               |
 +-------------+-----------+-------------------------------------------------------------------------------------------------+
 | array_index | int/None  | An array job index, no required but if present should be an int                                 |
++-------------+-----------+-------------------------------------------------------------------------------------------------+
+| name        | str       | The complete name of the job from the queue                                                     |
 +-------------+-----------+-------------------------------------------------------------------------------------------------+
 | userid      | str       | The job owners user ID as a string, not an ID number                                            |
 +-------------+-----------+-------------------------------------------------------------------------------------------------+
@@ -72,6 +83,11 @@ This function should be an iterator and should yield a tuple of exactly 9 items:
 +-------------+-----------+-------------------------------------------------------------------------------------------------+
 | exitcode    | int/None  | The exitcode of the job on completion                                                           |
 +-------------+-----------+-------------------------------------------------------------------------------------------------+
+
+You can safely get the queue output by calling the self.fetch_queue attribute,
+it will return the contents of the queue.
+
+Note: if your batch system allows array jobs, you should try to support them.
 
 The allowed states are:
 

@@ -41,7 +41,6 @@ fi
 """
 
 CMND_RUNNER = """\
-#!/bin/bash
 {precmd}
 mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
 cd {usedir}
@@ -54,7 +53,6 @@ exit $exitcode
 """
 
 CMND_RUNNER_TRACK = """\
-#!/bin/bash
 {precmd}
 mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
 cd {usedir}
