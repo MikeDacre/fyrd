@@ -1,4 +1,5 @@
 ---
+layout:      post
 categories:  news
 date:        2016-11-30 18:45:07
 description: "Ongoing issues with the local fallback mode"
