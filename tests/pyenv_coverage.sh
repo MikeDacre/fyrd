@@ -34,4 +34,6 @@ pip install pandas numpy scipy >/dev/null
 # Actually run tests here
 echo "Running test suite"
 python tests/run_tests.py --coverage
+code=$?
 pyenv virtualenv-delete -f $v >/dev/null 2>/dev/null
+exit $code
