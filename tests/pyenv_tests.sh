@@ -148,7 +148,7 @@ for i in ${version[@]}; do
   code=$?
   counter=$((counter+1))
   codes=$((codes+code))
-  echo "Deleting $v"
+  echo "Deleteing $v"
   pyenv virtualenv-delete --force $v
 done
 
