@@ -17,6 +17,7 @@ fi
  
 # Starting string for virtualenvs
 v="fyrd_$(cat /dev/urandom | LC_ALL=C tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)_conda"
+echo "Pyenv Shell: $v"
 
 # Delete virtualenvs on exit
 function on_exit() {
@@ -29,8 +30,8 @@ pyenv virtualenv --force anaconda3-4.1.1 $v
 pyenv shell $v
 python ./setup.py develop >/dev/null
 echo "Installing requirements"
-pip install -r tests/test_requirements.txt >/dev/null
-pip install pandas numpy scipy >/dev/null
+pip install --force-reinstall -r tests/test_requirements.txt
+pip install --force-reinstall pandas numpy scipy
 # Actually run tests here
 echo "Running test suite"
 python tests/run_tests.py --coverage
