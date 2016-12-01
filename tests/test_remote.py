@@ -117,6 +117,18 @@ def test_job_execution():
 
 @pytest.mark.skipif(env == 'local',
                     reason="Fails in local mode")
+def test_job_params():
+    """Run a job with some explicit parameters set."""
+    job = fyrd.Job('echo ho', profile='default', clean_files=True,
+                   clean_outputs=True, cores=2, mem=2000, time='00:02:00')
+    out = job.submit().get()
+    assert out == 'ho\n'
+    assert job.stdout == 'ho\n'
+    assert job.stderr == ''
+
+
+@pytest.mark.skipif(env == 'local',
+                    reason="Fails in local mode")
 def test_job_cleaning():
     """Delete intermediate files without autoclean."""
     job = fyrd.Job('echo hi', profile='default', clean_files=False,
