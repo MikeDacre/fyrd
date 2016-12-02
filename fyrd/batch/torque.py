@@ -14,6 +14,7 @@ class BatchSystem(_Batch):
 
     name        = 'torque'
     submit_cmnd = 'qsub'
+    queue_cmnd  = 'qstat -x'
     arg_prefix  = '#PBS'
 
     identifying_scripts = ['qsub', 'qstat']
@@ -127,27 +128,48 @@ class BatchSystem(_Batch):
                 yield (job_id, array_id, job_name, job_owner, job_queue,
                        job_state, nodes, job_threads, 1, exitcode)
 
-        def id_from_stdout(self, stdout):
-            """Extract a torque job ID from the STDOUT of self.queue_cmnd."""
-            return int(stdout.split('.')[0])
+    def id_from_stdout(self, stdout):
+        """Extract a torque job ID from the STDOUT of self.queue_cmnd."""
+        return int(stdout.split('.')[0])
 
-        def submit_args(_=None, dependencies=None):
-            """Use kwds and dependencies to create args for qsub.
+    def submit_args(_=None, dependencies=None):
+        """Use kwds and dependencies to create args for qsub.
 
-            Args:
-                dependencies (list): A list of job IDs to wait for
+        Args:
+            dependencies (list): A list of job IDs to wait for
 
-            Returns:
-                str: A string of submission arguments to be appended to the
-                     call to qsub
-            """
-            if dependencies:
-                args = '-W depend={}'.format(
-                    ','.join(['afterok:' + d for d in dependencies]))
-                args = ['qsub', depends, self.submission.file_name]
-            else:
-                args = ''
-            return args
+        Returns:
+            str: A string of submission arguments to be appended to the
+                    call to qsub
+        """
+        if dependencies:
+            args = '-W depend={}'.format(
+                ','.join(['afterok:' + str(d) for d in dependencies]))
+            args = ['qsub', depends, self.submission.file_name]
+        else:
+            args = ''
+        return args
+
+    def format_script(self, kwds):
+        """Create a submission script for qsub.
+
+        Args:
+            kwds (dict): Allowable keyword arguments for a fyrd Job
+
+        Returns:
+            str: A formatted submission script
+        """
+        outstr = '#!/bin/bash'
+        # Torque requires special handling of nodes and cores
+        nodes   = int(option_dict.pop('nodes')) if 'nodes' in option_dict else 1
+        cores   = int(option_dict.pop('cores')) if 'cores' in option_dict else 1
+        outstr += '#PBS -l nodes={}:ppn={}'.format(nodes, cores)
+        # Features parsing, must be on same line as node request
+        features = kwds.pop('features') if 'features' in kwds else None
+        if features
+            outstr += ':' + ':'.join(
+                run.opt_split(option_dict.pop('features'), (',', ':')))
+        return outstr + '\n' + _options.options_to_string(kwds)
 
 
 ###############################################################################

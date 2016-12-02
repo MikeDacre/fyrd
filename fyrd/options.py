@@ -55,6 +55,7 @@ COMMON  = OrderedDict([
       'default': None, 'type': bool}),
     ('cores',
      {'help': 'Number of cores to use for the job',
+      'slurm': '--ntasks {}',   # Torque handled separately
       'default': 1, 'type': int}),
     ('modules',
      {'help': 'Modules to load with the `module load` command',
@@ -101,10 +102,11 @@ NORMAL  = OrderedDict([
 CLUSTER_CORE = OrderedDict([
     ('nodes',
      {'help': 'Number of nodes to request',
+      'slurm': '--cpus-per-task {}',   # Torque handled separately
       'default': 1, 'type': int}),
     ('features',
      {'help': 'A comma-separated list of node features to require',
-      'slurm': '--constraint={}',  # Torque in options_to_string()
+      'slurm': '--constraint={}',  # Torque handled separately
       'default': None, 'type': list, 'sjoin': '&'}),
     ('time',
      {'help': 'Walltime in HH:MM:SS',
@@ -460,18 +462,10 @@ def options_to_string(option_dict, qtype=None):
     if not isinstance(option_dict, dict):
         raise TypeError('option_dict must be dict is {}'.format(
             type(option_dict)))
-
     option_dict = check_arguments(option_dict.copy())
 
     qtype = qtype if qtype else queue.MODE
-
     queue.check_queue(qtype)
-
-    outlist = []
-
-    # Handle cores separately
-    nodes = int(option_dict.pop('nodes')) if 'nodes' in option_dict else 1
-    cores = int(option_dict.pop('cores')) if 'cores' in option_dict else 1
 
     # Set path if required
     if 'filepath' in option_dict:
@@ -483,17 +477,8 @@ def options_to_string(option_dict, qtype=None):
             option_dict['errfile'] = os.path.join(
                 filepath, os.path.basename(option_dict['errfile']))
 
-    if qtype == 'slurm':
-        outlist.append('#SBATCH --ntasks {}'.format(nodes))
-        outlist.append('#SBATCH --cpus-per-task {}'.format(cores))
-    elif qtype == 'torque':
-        outstring = '#PBS -l nodes={}:ppn={}'.format(nodes, cores)
-        if 'features' in option_dict:
-            outstring += ':' + ':'.join(
-                run.opt_split(option_dict.pop('features'), (',', ':')))
-        outlist.append(outstring)
-
     # Loop through all options
+    outlist = []
     for option, value in option_dict.items():
         outlist.append(option_to_string(option, value, qtype))
 

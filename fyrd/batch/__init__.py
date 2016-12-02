@@ -112,7 +112,7 @@ class Batch(object):
     @property
     def fetch_queue():
         """Get the current output of self.queue_cmnd."""
-        return _run.cmd(self.queue_cmnd)
+        return _run.cmd(self.queue_cmnd)[1]
 
     def _check_self(self):
         """Sanity check self."""

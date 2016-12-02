@@ -471,23 +471,28 @@ class Job(object):
         if not self.written:
             self.write()
 
+        # Check dependencies
         dependencies = []
         if self.dependencies:
             for dependency in self.dependencies:
-                try:
+                if isinstance(dependency, Job):
                     dep = dependency.id
-                except AttributeError:
+                elif isinstance(dependency, str) and dependency.isdigit():
+                    dep = int(dependency)
+                else:
                     dep = dependency
-                finally:
-                    if isinstance(dep, str) and dep.isdigit():
-                        dependencies.append(int(dep))
+                if not isinstance(dep, (str, int, Job)):
+                    raise _ClusterError('Dependency must be a str, int, or ' +
+                                        'Job, is {}'.format(type(dep)))
+                dependencies.append(dep)
 
         if wait_on_max_queue:
             self.update()
             self.queue.wait_to_submit()
 
         command = self.batch.submit_cmnd
-        args    = self.batch.submit_args(kwds=self.kwds, dependencies=dependencies)
+        args    = self.batch.submit_args(kwds=self.kwds,
+                                         dependencies=dependencies)
         command = '{} {}'.format(command, args)
 
         if self.qtype == 'local':
