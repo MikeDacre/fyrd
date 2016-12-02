@@ -28,13 +28,13 @@ trap on_exit EXIT
 pyenv virtualenv-delete -f $v >/dev/null 2>/dev/null
 pyenv virtualenv --force anaconda3-4.1.1 $v
 pyenv shell $v
-python ./setup.py develop >/dev/null
+python -I ./setup.py develop >/dev/null
 echo "Installing requirements"
-pip install --force-reinstall -r tests/test_requirements.txt
-pip install --force-reinstall pandas numpy scipy
+pip install --isolated --force-reinstall -r tests/test_requirements.txt
+pip install --isolated --force-reinstall pandas numpy scipy
 # Actually run tests here
 echo "Running test suite"
-python tests/run_tests.py --coverage
+python -I tests/run_tests.py --coverage
 code=$?
 pyenv virtualenv-delete -f $v >/dev/null 2>/dev/null
 exit $code

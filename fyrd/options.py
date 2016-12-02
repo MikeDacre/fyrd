@@ -17,12 +17,14 @@ All of these fields are required except in the case that:
     2. The option is in NORMAL, TORQUE, or SLURM dictionaries, in which case
        flags used by other queue systems can be skipped.
 """
-import os
-import sys
+import os  as _os
+import re  as _re
+import sys as _sys
 from textwrap import wrap as _wrap
-from itertools import groupby
-from collections import OrderedDict
+from itertools import groupby as _groupby
+from collections import OrderedDict as _OD
 
+from six import reraise as _raise
 from tabulate import tabulate as _tabulate
 
 from . import run
@@ -43,7 +45,7 @@ __all__ = ['option_help']
 #      help: Info for the user on the option
 
 # Options available in all modes
-COMMON  = OrderedDict([
+COMMON  = _OD([
     ('depends',
      {'help': 'A job or list of jobs to depend on',
       'default': None, 'type': list}),
@@ -63,7 +65,7 @@ COMMON  = OrderedDict([
      {'help': 'Imports to be used in function calls (e.g. sys, os)',
       'default': None, 'type': list}),
     ('syspaths',
-     {'help': 'Paths to add to sys.path for submitted functions',
+     {'help': 'Paths to add to _sys.path for submitted functions',
       'default': None, 'type': list}),
     ('scriptpath',
      {'help': 'Folder to write cluster script files to, must be accessible ' +
@@ -91,14 +93,14 @@ COMMON  = OrderedDict([
 ])
 
 # Options used in only local runs
-NORMAL  = OrderedDict([
+NORMAL  = _OD([
     ('threads',
      {'help': 'Number of threads to use on the local machine',
       'default': 4, 'type': int}),
 ])
 
 # Options used in both torque and slurm
-CLUSTER_CORE = OrderedDict([
+CLUSTER_CORE = _OD([
     ('nodes',
      {'help': 'Number of nodes to request',
       'default': 1, 'type': int}),
@@ -127,7 +129,7 @@ CLUSTER_CORE = OrderedDict([
 #       unique to one.
 
 # Additional options shared between systems
-CLUSTER_OPTS = OrderedDict([
+CLUSTER_OPTS = _OD([
     ('account',
      {'help': 'Account to be charged', 'default': None, 'type': str,
       'slurm': '--account={}', 'torque': '-A {}'}),
@@ -142,14 +144,14 @@ CLUSTER_OPTS = OrderedDict([
 #  from: adaptivecomputing.com/torque/4-0-2/Content/topics/commands/qsub.htm  #
 ###############################################################################
 
-TORQUE = OrderedDict()
+TORQUE = _OD()
 
 #####################################################
 #                   SLURM Options                   #
 #  from: http://slurm.schedmd.com/pdfs/summary.pdf  #
 #####################################################
 
-SLURM  = OrderedDict([
+SLURM  = _OD([
     ('begin',
      {'help': 'Start after this much time',
       'slurm': '--begin={}', 'type': str,
@@ -162,7 +164,7 @@ SLURM  = OrderedDict([
 ################################################################
 
 
-SYNONYMS = OrderedDict([
+SYNONYMS = _OD([
     ('depend',         'depends'),
     ('dependency',     'depends'),
     ('dependencies',   'depends'),
@@ -219,7 +221,7 @@ ALL_KWDS = CLUSTER_KWDS.copy()
 ALL_KWDS.update(NORMAL_KWDS)
 
 # Will be 'name' -> type
-ALLOWED_KWDS = OrderedDict()
+ALLOWED_KWDS = _OD()
 for name, info in ALL_KWDS.items():
     ALLOWED_KWDS[name] = info['type'] if 'type' in info else None
 
@@ -330,6 +332,12 @@ def check_arguments(kwargs):
                     hours = mins = 0
                     secs = time[0]
                 hours = (int(day)*24) + hours
+                if secs > 60:
+                    mins += 1
+                    secs = secs%60
+                if mins > 60:
+                    hours += 1
+                    mins = mins%60
                 opt = '{}:{}:{}'.format(str(hours).rjust(2, '0'),
                                         str(mins).rjust(2, '0'),
                                         str(secs).rjust(2, '0'))
@@ -345,14 +353,21 @@ def check_arguments(kwargs):
                 opt = int(opt)
             else:
                 # Try to guess unit by suffix
+                memerror = ('mem is malformatted, should be a number '
+                            'of MB or a string like 24MB or 10GB, '
+                            'it is: {}'.format(opt))
+                groups = _groupby(opt, key=str.isdigit)
                 try:
-                    groups = groupby(opt, key=str.isdigit)
+                    svalk, svalg = next(groups)
+                    sval  = int(''.join(svalg))
+                    sunitk, sunitg = next(groups)
+                    sunit = ''.join(sunitg).lower()
                 except ValueError:
-                    raise ValueError('mem is malformatted, should be a number '
-                                     'of MB or a string like 24MB or 10GB, '
-                                     'it is: {}'.format(opt))
-                sval  = int(''.join(next(groups)[1]))
-                sunit = ''.join(next(groups)[1]).lower()
+                    err = list(_sys.exc_info())
+                    err[1] = ValueError(memerror)
+                    _raise(*err)
+                if len(list(groups)) != 0 or not svalk or sunitk:
+                    raise ValueError(memerror)
                 if sunit == 'b':
                     opt = int(float(sval)/float(1024)/float(1024))
                 elif sunit == 'kb' or sunit == 'k':
@@ -475,13 +490,13 @@ def options_to_string(option_dict, qtype=None):
 
     # Set path if required
     if 'filepath' in option_dict:
-        filepath = os.path.abspath(option_dict.pop('filepath'))
+        filepath = _os.path.abspath(option_dict.pop('filepath'))
         if 'outfile' in option_dict:
-            option_dict['outfile'] = os.path.join(
-                filepath, os.path.basename(option_dict['outfile']))
+            option_dict['outfile'] = _os.path.join(
+                filepath, _os.path.basename(option_dict['outfile']))
         if 'errfile' in option_dict:
-            option_dict['errfile'] = os.path.join(
-                filepath, os.path.basename(option_dict['errfile']))
+            option_dict['errfile'] = _os.path.join(
+                filepath, _os.path.basename(option_dict['errfile']))
 
     if qtype == 'slurm':
         outlist.append('#SBATCH --ntasks {}'.format(nodes))
@@ -497,7 +512,7 @@ def options_to_string(option_dict, qtype=None):
     for option, value in option_dict.items():
         outlist.append(option_to_string(option, value, qtype))
 
-    return '\n'.join(outlist)
+    return _re.sub(r'[\n]+', '\n', '\n'.join(outlist))
 
 
 def option_help(mode='string', qtype=None, tablefmt='simple'):
@@ -519,7 +534,7 @@ def option_help(mode='string', qtype=None, tablefmt='simple'):
         str: A formatted string
     """
 
-    hlp = OrderedDict()
+    hlp = _OD()
 
     # Explicitly get the function call help out of core to treat separately
     common = COMMON.copy()
@@ -532,7 +547,7 @@ def option_help(mode='string', qtype=None, tablefmt='simple'):
 
     hlp['func'] = {
         'summary': 'Used for function calls',
-        'help': OrderedDict([('imports', impts)]),
+        'help': _OD([('imports', impts)]),
     }
 
     hlp['local'] = {
@@ -596,12 +611,12 @@ def option_help(mode='string', qtype=None, tablefmt='simple'):
         outstr = outstr.rstrip() + '\n'
 
         if mode == 'print':
-            sys.stdout.write(outstr)
+            _sys.stdout.write(outstr)
         else:
             return outstr
 
     elif mode == 'table':
-        tables = OrderedDict()
+        tables = _OD()
         for sect, ddct in hlp.items():
             summary = '{}: {}'.format(sect.title(), ddct['summary'])
             outtable = [['Option', 'Description', 'Type', 'Default']]
