@@ -277,25 +277,16 @@ class Job(object):
 
         # Check and set dependencies
         if 'depends' in kwds:
-            dependencies = kwds.pop('depends')
+            dependencies = _run.listify(kwds.pop('depends'))
             self.dependencies = []
-            if isinstance(dependencies, 'str'):
-                if not dependencies.isdigit():
-                    raise _ClusterError('Dependencies must be number or list')
-                else:
-                    dependencies = [int(dependencies)]
-            elif isinstance(dependencies, (int, Job)):
-                dependencies = [dependencies]
-            else:
-                try:
-                    dependencies = list(dependencies)
-                except TypeError:
-                    raise _ClusterError('Dependencies must be number or list')
+            errmsg = 'Dependencies must be number or list'
             for dependency in dependencies:
                 if isinstance(dependency, str):
+                    if not dependency.isdigit():
+                        raise _ClusterError(errmsg)
                     dependency  = int(dependency)
                 if not isinstance(dependency, (int, Job)):
-                    raise _ClusterError('Dependencies must be number or list')
+                    raise _ClusterError(errmsg)
                 self.dependencies.append(dependency)
 
         ######################################
@@ -459,8 +450,8 @@ class Job(object):
         """Submit this job.
 
         Args:
-            wait_on_max_queue (str): Block until queue limit is below the
-                                     maximum before submitting.
+            wait_on_max_queue (bool): Block until queue limit is below the
+                                      maximum before submitting.
 
         To disable max_queue_len, set it to 0. None will allow override by
         the default settings in the config file, and any positive integer will
@@ -476,18 +467,63 @@ class Job(object):
         if not self.written:
             self.write()
 
+        # Check dependencies
         dependencies = []
         if self.dependencies:
             for depend in self.dependencies:
                 if isinstance(depend, Job):
+                    if not depend.id:
+                        _logme.log(
+                            'Cannot submit job as dependency {} '
+                            .format(depend) + 'has not been submitted',
+                            'error'
+                        )
+                        return self
                     dependencies.append(int(depend.id))
                 else:
                     dependencies.append(int(depend))
 
-        self.update()
-
+        # Wait on the queue if necessary
         if wait_on_max_queue:
+            self.update()
             self.queue.wait_to_submit()
+
+        # Only include queued or running dependencies
+        self.queue._update()  # Force update
+        depends = []
+        for depend in dependencies:
+            dep_check = self.queue.check_dependencies(depend)
+            if dep_check == 'absent':
+                _logme.log(
+                    'Cannot submit job as dependency {} '
+                    .format(depend) + 'is not in the queue',
+                    'error'
+                )
+                return self
+            elif dep_check == 'good':
+                _logme.log(
+                    'Dependency {} is complete, skipping'
+                    .format(depend), 'debug'
+                )
+            elif dep_check == 'bad':
+                _logme.log(
+                    'Cannot submit job as dependency {} '
+                    .format(depend) + 'has failed',
+                    'error'
+                )
+                return self
+            elif dep_check == 'active':
+                if self.queue.jobs[depend].state == 'completeing':
+                    continue
+                _logme.log('Dependency {} is {}, adding to deps'
+                           .format(depend, self.queue.jobs[depend].state),
+                           'debug')
+                depends.append(depend)
+            else:
+                # This shouldn't happen ever
+                raise _ClusterError('fyrd.queue.Queue.check_dependencies() ' +
+                                    'returned an unrecognized value {}'
+                                    .format(dep_check))
 
         if self.qtype == 'local':
             # Normal mode dependency tracking uses only integer job numbers
@@ -501,17 +537,17 @@ class Job(object):
                 _local.JQUEUE = _local.JobQueue(cores=_local.THREADS)
             self.id = _local.JQUEUE.add(_run.cmd, args=(command,),
                                         kwargs=fileargs,
-                                        dependencies=dependencies,
+                                        dependencies=depends,
                                         cores=self.cores)
             self.submitted = True
             self.state = 'submitted'
 
         elif self.qtype == 'slurm':
             _logme.log('Submitting to slurm', 'debug')
-            if self.dependencies:
-                depends = '--dependency=afterok:{}'.format(
-                    ':'.join(dependencies))
-                args = ['sbatch', depends, self.submission.file_name]
+            if self.depends:
+                deps = '--dependency=afterok:{}'.format(
+                    ':'.join([str(d) for d in depends]))
+                args = ['sbatch', deps, self.submission.file_name]
             else:
                 args = ['sbatch', self.submission.file_name]
 
@@ -520,7 +556,7 @@ class Job(object):
             if code == 0:
                 self.id = int(stdout.split(' ')[-1])
             else:
-                _logme.log('sbatch failed with code {}\n'.format(code),
+                _logme.log('sbatch failed with code {}\n'.format(code) +
                            'stdout: {}\nstderr: {}'.format(stdout, stderr),
                            'critical')
                 raise _CalledProcessError(code, args, stdout, stderr)
@@ -529,10 +565,10 @@ class Job(object):
 
         elif self.qtype == 'torque':
             _logme.log('Submitting to torque', 'debug')
-            if self.dependencies:
-                depends = '-W depend={}'.format(
-                    ','.join(['afterok:' + d for d in dependencies]))
-                args = ['qsub', depends, self.submission.file_name]
+            if self.depends:
+                deps = '-W depend={}'.format(
+                    ','.join(['afterok:' + str(d) for d in depends]))
+                args = ['qsub', deps, self.submission.file_name]
             else:
                 args = ['qsub', self.submission.file_name]
 

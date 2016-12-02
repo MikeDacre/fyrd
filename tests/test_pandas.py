@@ -82,6 +82,8 @@ def test_concat(delete=True):
     assert len(df) == 101
 
 
+@pytest.mark.skipif(env == 'local',
+                    reason="Occasionally hangs in local mode")
 @pytest.mark.skipif(canrun is not True,
                     reason="Need pandas and numpy installed")
 def test_parapply(delete=True):
@@ -96,6 +98,8 @@ def test_parapply(delete=True):
     assert new_df.equals(df_comp)
 
 
+@pytest.mark.skipif(env == 'local',
+                    reason="Occasionally hangs in local mode")
 @pytest.mark.skipif(canrun is not True,
                     reason="Need pandas and numpy installed")
 def test_parapply_summary(delete=True):

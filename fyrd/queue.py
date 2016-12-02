@@ -170,9 +170,32 @@ class Queue(object):
 
         self._update()
 
-    ########################################
-    #  Public functions: update(), wait()  #
-    ########################################
+    ####################
+    #  Public Methods  #
+    ####################
+
+    def check_dependencies(self, dependencies):
+        """Check if dependencies are running.
+
+        Args:
+            dependencies (list): List of job IDs
+
+        Returns:
+            str: 'active' if dependencies are running or queued, 'good' if
+                 completed, 'bad' if failed, cancelled, or suspended, 'absent'
+                 otherwise.
+        """
+        for dep in run.listify(dependencies):
+            dep = int(dep)
+            if dep not in self.jobs:
+                return 'absent'
+            state = self.jobs[dep].state
+            if state in ACTIVE_STATES:
+                return 'active'
+            elif state in GOOD_STATES:
+                return 'good'
+            elif state in BAD_STATES or state in UNCERTAIN_STATES:
+                return 'bad'
 
     def wait(self, jobs):
         """Block until all jobs in jobs are complete.
@@ -681,7 +704,22 @@ def torque_queue_parser(user=None, partition=None):
     # Create QueueJob objects for all entries that match user
     if xmlqueue is not None:
         for xmljob in xmlqueue:
-            job_id    = int(xmljob.find('Job_Id').text.split('.')[0])
+            job_id = xmljob.find('Job_Id').text.split('.')[0]
+            if '[' in job_id:
+                job_id, array_id = job_id.split('[')
+                array_id = array_id.strip('[]')
+                if array_id:
+                    array_id = int(array_id)
+                else:
+                    array_id = 0
+            else:
+                array_id = None
+            try:
+                job_id = int(job_id)
+            except ValueError:
+                # Allow string job IDs
+                pass
+
             job_owner = xmljob.find('Job_Owner').text.split('@')[0]
             if user and job_owner != user:
                 continue
@@ -736,12 +774,12 @@ def slurm_queue_parser(user=None, partition=None):
     """
     nodequery = re.compile(r'([^\[,]+)(\[[^\[]+\])?')
     qargs = ['squeue', '-h', '-O',
-             'jobid:400,name:400,userid:400,partition:400,state:400,' +
-             'nodelist:400,numnodes:400,numcpus:400,exit_code:400']
+             'jobid:400,arraytaskid:400,name:400,userid:400,partition:400,' +
+             'state:400,nodelist:400,numnodes:400,numcpus:400,exit_code:400']
     # Parse queue info by length
     squeue = [
         tuple(
-            [k[i:i+200].rstrip() for i in range(0, 3600, 400)]
+            [k[i:i+200].rstrip() for i in range(0, 4000, 400)]
         ) for k in run.cmd(qargs)[1].split('\n')
     ]
     # SLURM sometimes clears the queue extremely fast, so we use sacct
@@ -779,6 +817,12 @@ def slurm_queue_parser(user=None, partition=None):
             try:
                 [sid, sname, suser, spartition, sstate,
                  snodelist, snodes, scpus, scode] = sinfo
+                if '_' in sid:
+                    sid, sarr = sid.split('_')
+                    sif = '{}_{}'.format(sid, sarr)
+                else:
+                    sarr = None
+                    sif = '{}'.format(sid)
             except ValueError as err:
                 logme.log('sacct parsing failed with error {} '.format(err) +
                           'due to an incorrect number of entries.\n' +
@@ -790,28 +834,33 @@ def slurm_queue_parser(user=None, partition=None):
                 raise
             # Skip jobs that were already in squeue
             if sid in jobids:
-                logme.log('{} still in squeue output'.format(sid), 'verbose')
+                logme.log('{} still in squeue output'.format(sid),
+                          'verbose')
                 continue
             scode = int(scode.split(':')[-1])
-            squeue.append((sid, sname, suser, spartition, sstate,
+            squeue.append((sid, sarr, sname, suser, spartition, sstate,
                            snodelist, snodes, scpus, scode))
     else:
         logme.log('No job info in sacct', 'debug')
 
     # Sanitize data
     for sinfo in squeue:
-        if len(sinfo) == 9:
-            [sid, sname, suser, spartition, sstate, sndlst,
+        if len(sinfo) == 10:
+            [sid, sarr, sname, suser, spartition, sstate, sndlst,
              snodes, scpus, scode] = sinfo
         else:
             sys.stderr.write('{}'.format(repr(sinfo)))
-            raise ClusterError('Queue parsing error, expected 8 or 9 items '
+            raise ClusterError('Queue parsing error, expected 10 items '
                                'in output of squeue and sacct, got {}\n'
                                .format(len(sinfo)))
         if partition and spartition != partition:
             continue
         if not isinstance(sid, int):
             sid = int(sid) if sid else None
+        if isinstance(sarr, str) and sarr.isdigit():
+            sarr = int(sarr)
+        else:
+            sarr = None
         if not isinstance(snodes, int):
             snodes = int(snodes) if snodes else None
         if not isinstance(scpus, int):
