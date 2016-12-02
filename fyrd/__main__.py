@@ -248,7 +248,7 @@ def profile(args):
 
 def list_profiles(_=None):
     """List all profiles."""
-    profiles = fyrd.conf.get_profile()
+    profiles = fyrd.conf.get_profiles()
     print(profiles.pop('DEFAULT'))
     for prof in profiles.values():
         print(prof)

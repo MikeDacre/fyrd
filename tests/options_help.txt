@@ -9,6 +9,8 @@ cores:         Number of cores to use for the job
                Type: int; Default: 1
 modules:       Modules to load with the `module load` command
                Type: list; Default: None
+syspaths:      Paths to add to sys.path for submitted functions
+               Type: list; Default: None
 scriptpath:    Folder to write cluster script files to, must be accessible to the
                compute nodes.
                Type: str; Default: .

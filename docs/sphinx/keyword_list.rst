@@ -3,6 +3,7 @@
     clean_outputs
     cores
     modules
+    syspaths
     scriptpath
     outpath
     runpath

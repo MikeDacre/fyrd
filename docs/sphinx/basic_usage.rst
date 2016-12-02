@@ -68,6 +68,11 @@ large python classes, to make this kind of work easier, a number of simple
 functions are provided in `the helpers module </advanced_usage.html#helpers>`_,
 to learn more about that, review the Advanced Usage section of this documentation.
 
+Function submission works equally well for submitting methods, however the original
+class object will not be updated, the method return value will be accurate, but any
+changes the method makes to `self` will not be returned from the cluster and will be
+lost.
+
 Possible Infinate Recursion Error
 .................................
 

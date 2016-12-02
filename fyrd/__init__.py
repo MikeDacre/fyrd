@@ -8,7 +8,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
         LICENSE: MIT License, property of Stanford, use as you wish
         VERSION: 0.6.1-beta.6
         CREATED: 2015-12-11 22:19
-  Last modified: 2016-11-14 14:46
+  Last modified: 2016-11-28 14:06
  =============== ===================================================
 
 Allows simple job submission with *dependency tracking and queue waiting* with
@@ -82,7 +82,7 @@ For example::
 
 To see all profiles run::
 
-    conf.get_profile()
+    conf.get_profiles()
 
 Other options are defined in the config file, including the maximum number of
 jobs in the queue, the time to sleep between submissions, and other options. To
@@ -189,12 +189,13 @@ from .basic import clean_dir
 
 from .conf import set_profile
 from .conf import get_profile
+from .conf import get_profiles
 
 from .options import option_help
 
 __all__ = ['Job', 'Queue', 'wait', 'submit', 'submit_file', 'make_job_file',
            'clean', 'clean_dir', 'check_queue', 'option_help', 'set_profile',
-           'get_profile', 'helpers']
+           'get_profile', 'get_profiles', 'helpers']
 
 ##########################
 #  Set the cluster type  #

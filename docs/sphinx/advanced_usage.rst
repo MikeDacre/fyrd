@@ -127,6 +127,9 @@ The helpers are all high level functions that are not required for the library
 but make difficult jobs easy to assist in the goal of trivially easy cluster
 submission.
 
+Pandas
+......
+
 The most important function in `fyrd.helpers` is `parapply()`, which allows the
 user to submit a `pandas.DataFrame.apply` method to the cluster in parallel by
 splitting the DataFrame, submitting jobs, and then recombining the DataFrame at
@@ -152,6 +155,51 @@ resulting DataFrame also, allowing all dfs to be merged. e.g.:
 This will return just the mean of all the numeric columns, `parapply` would return a
 DataFrame with duplicates for every submitted job.
 
+Running on a split file
+.......................
+
+The `splitrun <https://fyrd.readthedocs.io/en/latest/api.html#fyrd.helpers.splitrun>`_
+function behaves similarly to the `parapply()` function, with the exception
+that it works on a filesystem file instead, which it splits into pieces. It
+then runs your job on all of the pieces and attempts to recombine them,
+deleting the intermediate files as it goes.
+
+If you specify an output file, the outputs are merged and places into that
+file, otherwise, if the outputs are a string (always true for scripts), the
+function returns a merged string. If the outputs are not strings, then the
+function just returns a list out outputs that you will have to combine
+yourself.
+
+The key to this function is that if the job is a script, it must at a minimum
+contain '{file}' where the file argument goes, and if the job is a function it
+must contain and argument or keyword argument that matches '<file>'.
+
+If you expect the job to have and output, you must provide the `outfile=`
+argument too, and be sure that '{outfile}' is present in the script, if a
+script, or '<outfile>' is in either args or kwargs if a function.
+
+In addition, you should pass `inheader=True` if the input file has a header
+line, and `outheader=True` if the same is true for the outfile. It is very
+important to pass these arguments, because they both will strip the top line
+from a file if True. Importantly, if `inheader` is `True` on a file without a
+header, the top line will appear at the top of every broken up file.
+
+Examples:
+
+.. code:: python
+
+   script = """my_long_script --in {file} --out {outfile}"""
+   outfile = fyrd.helpers.splitrun(
+       100, 'huge_file.txt', script, name='my_job', profile='long',
+       outfile='output.txt', inheader=True, outheader=True
+   )
+
+.. code:: python
+
+   output = fyrd.helpers.splitrun(
+       100, 'huge_file.txt', function, args=('<file>',), name='my_job',
+       profile='long', outfile='output.txt', inheader=True, outheader=True
+   )
 
 Queue Management
 ----------------

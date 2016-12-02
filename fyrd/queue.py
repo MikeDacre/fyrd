@@ -88,6 +88,7 @@ BAD_STATES       = ['boot_fail', 'cancelled', 'failed',
 UNCERTAIN_STATES = ['hold', 'preempted', 'stopped',
                     'suspended']
 ALL_STATES = GOOD_STATES + ACTIVE_STATES + BAD_STATES + UNCERTAIN_STATES
+DONE_STATES = GOOD_STATES + BAD_STATES
 
 ###############################################################################
 #                               The Queue Class                               #
@@ -475,7 +476,10 @@ class Queue(object):
                 job.nodes = job_nodelist
 
                 # Threads is number of nodes * jobs per node
-                job.threads = int(job_nodecount) * int(job_cpus)
+                if job_nodecount and job_cpus:
+                    job.threads = int(job_nodecount) * int(job_cpus)
+                else:
+                    job.threads = None
                 if job.state == 'completed' or job.state == 'failed':
                     job.exitcode = job_exitcode
 
