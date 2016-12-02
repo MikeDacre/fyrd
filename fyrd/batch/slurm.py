@@ -38,7 +38,7 @@ class BatchSystem(_Batch):
         # Parse queue info by length
         squeue = [
             tuple(
-                [k[i:i+200].rstrip() for i in range(0, 3600, 400)]
+                [k[i:i+200].rstrip() for i in range(0, 4000, 400)]
             ) for k in self.fetch_queue.split('\n')
         ]
         # SLURM sometimes clears the queue extremely fast, so we use sacct
@@ -64,7 +64,7 @@ class BatchSystem(_Batch):
                         '9 columns, aborting.', 'critical')
                 raise ValueError('sacct output does not have 9 columns. Has:' +
                                 '{}: {}'.format(len(sacct[0]), sacct[0]))
-            jobids = [i[0] for i in squeue]
+            jobids = [(i[0], i[1]) for i in squeue]
             for sinfo in sacct:
                 # Skip job steps, only index whole jobs
                 if '.' in sinfo[0]:
@@ -78,19 +78,21 @@ class BatchSystem(_Batch):
                     snodelist, snodes, scpus, scode] = sinfo
                     if '_' in sid:
                         sid, sarr = sid.split('_')
+                        sif = '{}_{}'.format(sid, sarr)
                     else:
-                        sarr = None
+                        sarr = 'N/A'
+                        sif = '{}'.format(sid)
                 except ValueError as err:
                     logme.log('sacct parsing failed with error {} '.format(err) +
                               'due to an incorrect number of entries.\n' +
                               'Contents of sinfo:\n{}\n'.format(sinfo) +
-                              'Expected 10 values\n:' +
+                              'Expected 9 values\n:' +
                               '[sid, sname, suser, spartition, sstate, ' +
                               'snodelist, snodes, scpus, scode]',
                               'critical')
                     raise
                 # Skip jobs that were already in squeue
-                if sid in jobids:
+                if (sid, sarr) in jobids:
                     logme.log('{} still in squeue output'.format(sid),
                               'verbose')
                     continue
@@ -107,9 +109,9 @@ class BatchSystem(_Batch):
                  snodes, scpus, scode] = sinfo
             else:
                 sys.stderr.write('{}'.format(repr(sinfo)))
-                raise ClusterError('Queue parsing error, expected 8 or 9 items '
-                                'in output of squeue and sacct, got {}\n'
-                                .format(len(sinfo)))
+                raise ClusterError('Queue parsing error, expected 10 items '
+                                   'in output of squeue and sacct, got {}\n'
+                                   .format(len(sinfo)))
             if partition and spartition != partition:
                 continue
             if not isinstance(sid, int):
