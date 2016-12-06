@@ -439,7 +439,7 @@ class Queue(object):
                 jobs.append(job_id)
 
         else:
-            for [job_id, job_name, job_user, job_partition,
+            for [job_id, job_array, job_name, job_user, job_partition,
                  job_state, job_nodelist, job_nodecount,
                  job_cpus, job_exitcode] in queue_parser(self.qtype,
                                                          self.user,
@@ -450,6 +450,7 @@ class Queue(object):
                     job = self.jobs[job_id]
                 jobs.append(job_id)
                 job.id    = job_id
+                job.array = job_array
                 job.name  = job_name
                 job.owner = job_user
                 job.queue = job_partition
@@ -533,7 +534,8 @@ class Queue(object):
         Only used for torque and slurm queues.
 
         Attributes:
-            id (int):           Job ID
+            id (int/str):       Job ID
+            array (int):        Job Array ID
             name (str):         Job name
             owner (str):        User who owns the job
             threads (int):      Number of cores used by the job
@@ -546,6 +548,7 @@ class Queue(object):
         """
 
         id          = None
+        array       = None
         name        = None
         owner       = None
         threads     = None
