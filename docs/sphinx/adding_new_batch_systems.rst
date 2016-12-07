@@ -8,6 +8,13 @@ dictionaries. The new batch system must have entries for every record in the
 add options to additional dictionaries in that file, but as much as possible
 all options should be added to just those two dictionaries.
 
+If your batch system uses a different and non-compatible system for job submission
+such the updating `options.py` is impossible, it is also fine to not alter `options.py` 
+at all. `options.py` is called by the `format_script()` method of the `BatchSystem`
+class you create anyway, you can just skip that. However, if it is possible to
+use the `options.py` dictionaries, please do so. I will refuse pull requests that
+do not use the `options.py` system if doing so would be possible.
+
 Batch Queue Script
 ------------------
 
