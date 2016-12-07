@@ -405,8 +405,6 @@ class Queue(object):
         # Set the update time I don't care about microseconds
         self.last_update = int(time())
 
-        jobs = []  # list of jobs created this session
-
         # Mode specific initialization
         if self.qtype == 'local':
             if not local.JQUEUE or not local.JQUEUE.runner.is_alive():
@@ -436,20 +434,22 @@ class Queue(object):
 
                 # Assign the job to self.
                 self.jobs[job_id] = job
-                jobs.append(job_id)
 
         else:
-            for [job_id, job_name, job_user, job_partition,
+            for [job_id, job_arr, job_name, job_user, job_partition,
                  job_state, job_nodelist, job_nodecount,
                  job_cpus, job_exitcode] in queue_parser(self.qtype,
                                                          self.user,
                                                          self.partition):
-                if job_id not in self.jobs:
+                job_sid = (str(job_id) if job_arr is None
+                           else '{}_{}'.format(job_id, job_arr))
+                if job_sid not in self.jobs:
                     job = self.QueueJob()
                 else:
-                    job = self.jobs[job_id]
-                jobs.append(job_id)
+                    job = self.jobs[job_sid]
                 job.id    = job_id
+                job.arr   = job_arr
+                job.sid   = job_sid
                 job.name  = job_name
                 job.owner = job_user
                 job.queue = job_partition
@@ -466,7 +466,6 @@ class Queue(object):
 
                 # Assign the job to self.
                 self.jobs[job_id] = job
-                jobs.append(job_id)
 
         # We assume that if a job just disappeared it completed
         if self.jobs:
@@ -486,6 +485,8 @@ class Queue(object):
             key = 'pending'
         if key in ALL_STATES:
             return self.get_jobs(key)
+        if str(key) in [str(i.id) for i in self.jobs]:
+            return self.jobs[str(key)]
 
     def __getitem__(self, key):
         """Allow direct accessing of jobs by job id."""
@@ -533,7 +534,9 @@ class Queue(object):
         Only used for torque and slurm queues.
 
         Attributes:
-            id (int):           Job ID
+            id (int/str):       Job ID can be integer or string
+            arr (int):          Job Array ID
+            sid (str):          String representation of job and array ids
             name (str):         Job name
             owner (str):        User who owns the job
             threads (int):      Number of cores used by the job
@@ -546,6 +549,8 @@ class Queue(object):
         """
 
         id          = None
+        arr         = None
+        sid         = None
         name        = None
         owner       = None
         threads     = None
@@ -564,7 +569,7 @@ class Queue(object):
             outstr = ("Queue.QueueJob<{id}:{state}({name},owner:{owner}," +
                       "queue:{queue},nodes:{nodes},threads:{threads}," +
                       "exitcode:{code})").format(
-                          id=self.id, name=self.name, owner=self.owner,
+                          id=self.sid, name=self.name, owner=self.owner,
                           queue=self.queue, nodes=self.nodes,
                           code=self.exitcode, threads=self.threads,
                           state=self.state)

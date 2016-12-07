@@ -144,9 +144,13 @@ class BatchSystem(_Batch):
                             for reg in rge.strip('[]').split(','):
                                 # Node range
                                 if '-' in reg:
-                                    start, end = [int(i) for i in reg.split('-')]
+                                    start, end = [
+                                        int(i) for i in reg.split('-')
+                                    ]
                                     for i in range(start, end):
-                                        snodelist.append('{}{}'.format(node, i))
+                                        snodelist.append(
+                                            '{}{}'.format(node, i)
+                                        )
                                 else:
                                     snodelist.append('{}{}'.format(node, reg))
                 else:
