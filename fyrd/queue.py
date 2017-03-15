@@ -920,8 +920,10 @@ def get_cluster_environment():
         conf.set_option('queue', 'queue_type', 'auto')
         conf_queue = 'auto'
     if conf_queue == 'auto':
-        sbatch_cmnd = conf.get_option('queue', 'sbatch', 'sbatch')
-        qsub_cmnd   = conf.get_option('queue', 'qsub', 'qsub')
+        sbatch_cmnd = conf.get_option('queue', 'sbatch')
+        qsub_cmnd   = conf.get_option('queue', 'qsub')
+        sbatch_cmnd = sbatch_cmnd if sbatch_cmnd else 'sbatch'
+        qsub_cmnd   = qsub_cmnd if qsub_cmnd else 'qsub'
         if run.which(sbatch_cmnd):
             MODE = 'slurm'
         elif run.which(qsub_cmnd):
