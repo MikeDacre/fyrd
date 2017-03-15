@@ -622,7 +622,7 @@ class Job(object):
             if self.queue.wait(self) is not True:
                 return False
             self.update()
-        if self.exitcode != 0:
+        if self.get_exitcode(update=False) != 0:
             _logme.log('Job failed with exitcode {}'.format(self.exitcode),
                        'debug')
             return False
@@ -688,7 +688,8 @@ class Job(object):
                 _logme.log('Job completed but files have not appeared for ' +
                            '>{} seconds'.format(btme), lvl)
                 return False
-            if runtime > 2 and self.exitcode != 0:
+            self.update()
+            if runtime > 2 and self.get_exitcode(update=False) != 0:
                 _logme.log('Job failed with exit code {}.'
                            .format(self.exitcode) + ' Cannot find files.',
                            'error')
