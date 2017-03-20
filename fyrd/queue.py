@@ -151,9 +151,32 @@ class Queue(object):
 
         self._update()
 
-    ########################################
-    #  Public functions: update(), wait()  #
-    ########################################
+    ####################
+    #  Public Methods  #
+    ####################
+
+    def check_dependencies(self, dependencies):
+        """Check if dependencies are running.
+
+        Args:
+            dependencies (list): List of job IDs
+
+        Returns:
+            str: 'active' if dependencies are running or queued, 'good' if
+                 completed, 'bad' if failed, cancelled, or suspended, 'absent'
+                 otherwise.
+        """
+        for dep in run.listify(dependencies):
+            dep = int(dep)
+            if dep not in self.jobs:
+                return 'absent'
+            state = self.jobs[dep].state
+            if state in ACTIVE_STATES:
+                return 'active'
+            elif state in GOOD_STATES:
+                return 'good'
+            elif state in BAD_STATES or state in UNCERTAIN_STATES:
+                return 'bad'
 
     def wait(self, jobs):
         """Block until all jobs in jobs are complete.

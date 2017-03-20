@@ -117,6 +117,76 @@ def test_job_execution():
 
 @pytest.mark.skipif(env == 'local',
                     reason="Fails in local mode")
+def test_job_params():
+    """Run a job with some explicit parameters set."""
+    job = fyrd.Job('echo ho', profile='default', clean_files=True,
+                   clean_outputs=True, cores=2, mem=2000, time='00:02:00')
+    job.submit()
+    out = job.get()
+    assert out == 'ho\n'
+    assert job.stdout == 'ho\n'
+    assert job.stderr == ''
+
+
+@pytest.mark.skipif(env == 'local',
+                    reason="Fails in local mode")
+def test_outfiles():
+    """Run a job with outfile and errfile overriden parameters set."""
+    job = fyrd.Job('echo ho', profile='default', clean_files=True,
+                   clean_outputs=True, outfile='joe', errfile='john')
+    job.submit()
+    out = job.get()
+    assert out == 'ho\n'
+    assert job.stdout == 'ho\n'
+    assert job.stderr == ''
+
+
+@pytest.mark.skipif(env == 'local',
+                    reason="Fails in local mode")
+def test_depends():
+    """Run some jobs with dependencies."""
+    job = fyrd.Job('sleep 3', profile='default', clean_files=True,
+                   clean_outputs=True)
+    job.submit()
+    job.submit()  # Test submission abort
+    with pytest.raises(fyrd.ClusterError):
+        job2 = fyrd.Job('echo eggs', profile='default', clean_files=True,
+                        clean_outputs=True, depends='job').submit()
+    job2 = fyrd.Job('echo eggs', profile='default', clean_files=True,
+                    clean_outputs=True, depends=job).submit()
+    out = job2.get()
+    assert out == 'eggs\n'
+    assert job2.stdout == 'eggs\n'
+    assert job2.stderr == ''
+    job3 = fyrd.Job('echo cheese', profile='default', clean_files=True,
+                    clean_outputs=True, depends=job2.id).submit()
+    out = job3.get()
+    assert out == 'cheese\n'
+    assert job3.stdout == 'cheese\n'
+    assert job3.stderr == ''
+
+
+@pytest.mark.skipif(env == 'local',
+                    reason="Fails in local mode")
+def test_resubmit():
+    """Alter a job and resubmit."""
+    job = fyrd.Job('echo ho', profile='default', clean_files=True,
+                   clean_outputs=True, cores=2, mem=2000, time='00:02:00')
+    job.submit()
+    out = job.get()
+    assert out == 'ho\n'
+    assert job.stdout == 'ho\n'
+    assert job.stderr == ''
+    #  job.command = 'echo hi'
+    job.resubmit()
+    out = job.get()
+    assert out == 'ho\n'
+    assert job.stdout == 'ho\n'
+    assert job.err == ''
+
+
+@pytest.mark.skipif(env == 'local',
+                    reason="Fails in local mode")
 def test_job_cleaning():
     """Delete intermediate files without autoclean."""
     job = fyrd.Job('echo hi', profile='default', clean_files=False,

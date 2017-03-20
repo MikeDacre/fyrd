@@ -17,6 +17,8 @@ def test_help():
     else:
         raise Exception('Cannot find options_help.txt file')
     assert fyrd.option_help(mode='string') == open(ofile).read()
+    fyrd.option_help(mode='table')
+    fyrd.option_help(mode='merged_table')
 
 
 def test_dict_types():
@@ -69,16 +71,43 @@ def test_sane_keywords():
     # Should fail
     with pytest.raises(TypeError):
         fyrd.options.check_arguments({'nodes': 'bob'})
-    with pytest.raises(ValueError):
-        fyrd.options.check_arguments({'mem': 'bob'})
     # Should succeed
     fyrd.options.check_arguments({'nodes': '14'})
-    # Check mem
-    i = fyrd.options.check_arguments({'mem': '4GB'})
-    assert i == {'mem': 4096}
-    # Check time
-    j = fyrd.options.check_arguments({'time': '01-00:00:00'})
-    assert j == {'time': '24:00:00'}
+
+
+def test_memory_formatting():
+    """Format memory several different ways."""
+    assert fyrd.options.check_arguments({'mem': '4000b'}) == {'mem': 5}
+    assert fyrd.options.check_arguments({'mem': '40000KB'}) == {'mem': 39}
+    assert fyrd.options.check_arguments({'mem': '4000mB'}) == {'mem': 4000}
+    assert fyrd.options.check_arguments({'mem': '4GB'}) == {'mem': 4096}
+    assert fyrd.options.check_arguments({'mem': '4TB'}) == {'mem': 4194304}
+    assert fyrd.options.check_arguments({'memory': 4000}) == {'mem': 4000}
+    with pytest.raises(ValueError):
+        fyrd.options.check_arguments({'mem': 'bob'})
+    with pytest.raises(ValueError):
+        fyrd.options.check_arguments({'mem': '4000zb'})
+    with pytest.raises(ValueError):
+        fyrd.options.check_arguments({'mem': '4000tb0'})
+    with pytest.raises(ValueError):
+        fyrd.options.check_arguments({'mem': 'tb0'})
+    with pytest.raises(ValueError):
+        fyrd.options.check_arguments({'mem': 'tb'})
+
+
+def test_time_formatting():
+    """Format time several different ways."""
+    assert fyrd.options.check_arguments(
+        {'time': '01-00:00:00'}
+    ) == {'time': '24:00:00'}
+    assert fyrd.options.check_arguments(
+        {'walltime': '03'}
+    ) == {'time': '00:00:03'}
+    assert fyrd.options.check_arguments(
+        {'time': '99:99'}
+    ) == {'time': '01:40:39'}
+    with pytest.raises(fyrd.options.OptionsError):
+        fyrd.options.check_arguments({'time': '00:00:00:03'})
 
 
 def test_split():
@@ -92,17 +121,52 @@ def test_split():
 
 def test_string_formatting():
     """Test options_to_string."""
-    fyrd.queue.MODE = 'torque'
-    outstr = fyrd.options.options_to_string({'nodes': '2', 'cores': 5})
-    assert outstr == '#PBS -l nodes=2:ppn=5'
-    fyrd.queue.MODE = 'slurm'
-    outstr = fyrd.options.options_to_string({'nodes': '2', 'cores': 5})
-    assert outstr == '#SBATCH --ntasks 2\n#SBATCH --cpus-per-task 5'
-    fyrd.queue.MODE = 'local'
-    outstr = fyrd.options.options_to_string({'nodes': '2', 'cores': 5})
-    assert outstr == ''
+    test_options = {
+        'nodes': '2', 'cores': 5, 'account': 'richguy',
+        'features': 'bigmem', 'time': '20', 'mem': 2000,
+        'partition': 'large', 'export': 'PATH', 'outfile': 'joe',
+        'errfile': 'john'
+    }
+    assert sorted(
+        fyrd.options.options_to_string(
+            test_options,
+            qtype='torque'
+        ).split('\n')
+    ) == [
+        '#PBS -A richguy',
+        '#PBS -e john',
+        '#PBS -l mem=2000MB',
+        '#PBS -l nodes=2:ppn=5:bigmem',
+        '#PBS -l walltime=00:00:20',
+        '#PBS -o joe',
+        '#PBS -q large',
+        '#PBS -v PATH'
+    ]
+    assert sorted(
+        fyrd.options.options_to_string(
+            test_options,
+            qtype='slurm'
+        ).split('\n')
+    ) == [
+        '#SBATCH --account=richguy',
+        "#SBATCH --constraint=['bigmem']",
+        '#SBATCH --cpus-per-task 5',
+        '#SBATCH --export=PATH',
+        '#SBATCH --mem=2000',
+        '#SBATCH --ntasks 2',
+        '#SBATCH --time=00:00:20',
+        '#SBATCH -e john',
+        '#SBATCH -o joe',
+        '#SBATCH -p large'
+    ]
+    assert fyrd.options.options_to_string(
+        test_options,
+        qtype='local'
+    ) == '\n'
     with pytest.raises(fyrd.options.OptionsError):
         fyrd.options.option_to_string('nodes', 2)
+    with pytest.raises(ValueError):
+        fyrd.options.option_to_string({'nodes': 2})
 
 
 def test_back_to_normal():

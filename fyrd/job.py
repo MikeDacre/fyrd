@@ -454,8 +454,8 @@ class Job(object):
         """Submit this job.
 
         Args:
-            wait_on_max_queue (str): Block until queue limit is below the
-                                     maximum before submitting.
+            wait_on_max_queue (bool): Block until queue limit is below the
+                                      maximum before submitting.
 
         To disable max_queue_len, set it to 0. None will allow override by
         the default settings in the config file, and any positive integer will
@@ -474,18 +474,20 @@ class Job(object):
         # Check dependencies
         dependencies = []
         if self.dependencies:
-            for dependency in self.dependencies:
-                if isinstance(dependency, Job):
-                    dep = dependency.id
-                elif isinstance(dependency, str) and dependency.isdigit():
-                    dep = int(dependency)
+            for depend in self.dependencies:
+                if isinstance(depend, Job):
+                    if not depend.id:
+                        _logme.log(
+                            'Cannot submit job as dependency {} '
+                            .format(depend) + 'has not been submitted',
+                            'error'
+                        )
+                        return self
+                    dependencies.append(int(depend.id))
                 else:
-                    dep = dependency
-                if not isinstance(dep, (str, int, Job)):
-                    raise _ClusterError('Dependency must be a str, int, or ' +
-                                        'Job, is {}'.format(type(dep)))
-                dependencies.append(dep)
+                    dependencies.append(int(depend))
 
+        # Wait on the queue if necessary
         if wait_on_max_queue:
             self.update()
             self.queue.wait_to_submit()
@@ -507,7 +509,7 @@ class Job(object):
                 _local.JQUEUE = _local.JobQueue(cores=_local.THREADS)
             self.id = _local.JQUEUE.add(_run.cmd, args=(command,),
                                         kwargs=fileargs,
-                                        dependencies=dependencies,
+                                        dependencies=depends,
                                         cores=self.cores)
 
         else:
@@ -559,7 +561,7 @@ class Job(object):
             if self.queue.wait(self) is not True:
                 return False
             self.update()
-        if self.exitcode != 0:
+        if self.get_exitcode(update=False) != 0:
             _logme.log('Job failed with exitcode {}'.format(self.exitcode),
                        'debug')
             return False
@@ -625,7 +627,8 @@ class Job(object):
                 _logme.log('Job completed but files have not appeared for ' +
                            '>{} seconds'.format(btme), lvl)
                 return False
-            if runtime > 2 and self.exitcode != 0:
+            self.update()
+            if runtime > 2 and self.get_exitcode(update=False) != 0:
                 _logme.log('Job failed with exit code {}.'
                            .format(self.exitcode) + ' Cannot find files.',
                            'error')

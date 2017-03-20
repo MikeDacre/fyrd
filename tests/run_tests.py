@@ -7,7 +7,7 @@ Run all applicable tests.
 
         AUTHOR: Michael D Dacre, mike.dacre@gmail.com
        CREATED: 2016-54-22 15:06
- Last modified: 2016-11-28 16:53
+ Last modified: 2016-12-01 18:03
 
    DESCRIPTION: Run multiple kinds of tests, provide options to skip some.
 
@@ -63,6 +63,7 @@ def main(argv=None):
     local_args = cmnd + ['tests/local_queue.py']
     if args.verbose:
         local_args.append('-v')
+
     outcode += call(local_args)
 
     print('local test complete with outcode {}.'

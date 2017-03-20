@@ -81,20 +81,20 @@ for i in ${versions[@]}; do
   fi
   pyenv shell $v
   echo "Installing fyrd"
-  python ./setup.py install >/dev/null
+  python -I ./setup.py install >/dev/null
   if [[ $? > 0 ]]; then
     aborted=$((aborted+1))
     continue
   fi
   echo "Installing requirements"
-  pip install -r tests/test_requirements.txt >/dev/null
+  pip install --isolated -r tests/test_requirements.txt >/dev/null
   if [[ $? > 0 ]]; then
     aborted=$((aborted+1))
     continue
   fi
   # Actually run tests here
   echo "Running test suite"
-  python tests/run_tests.py $loc
+  python -I tests/run_tests.py $loc
   code=$?
   counter=$((counter+1))
   codes=$((codes+code))
@@ -126,29 +126,29 @@ for i in ${version[@]}; do
     aborted=$((aborted+1))
     continue
   fi
-  python ./setup.py develop >/dev/null
+  python -I ./setup.py develop >/dev/null
   if [[ $? > 0 ]]; then
     aborted=$((aborted+1))
     continue
   fi
   echo "Installing requirements"
-  pip install -r tests/test_requirements.txt >/dev/null
+  pip install --isolated -r tests/test_requirements.txt >/dev/null
   if [[ $? > 0 ]]; then
     aborted=$((aborted+1))
     continue
   fi
-  pip install pandas numpy scipy >/dev/null
+  pip install --isolated pandas numpy scipy >/dev/null
   if [[ $? > 0 ]]; then
     aborted=$((aborted+1))
     continue
   fi
   # Actually run tests here
   echo "Running test suite"
-  python tests/run_tests.py $loc
+  python -I tests/run_tests.py $loc
   code=$?
   counter=$((counter+1))
   codes=$((codes+code))
-  echo "Deleting $v"
+  echo "Deleteing $v"
   pyenv virtualenv-delete --force $v
 done
 

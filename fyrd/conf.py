@@ -51,6 +51,8 @@ DEFAULTS = {
         'queue_update': 2,
         'res_time':     2700,
         'queue_type':   'auto',
+        'sbatch':       None, # Path to sbatch command
+        'qsub':         None, # Path to qsub command
         # Not implemented yet
         #  'db':           _os.path.join(CONFIG_PATH, 'db.sql'),
     },
@@ -106,7 +108,11 @@ CONF_HELP = {
             queue_type (str):   the type of queue to use, one of 'torque',
                                 'slurm', 'local', 'auto'. Default is auto to
                                 auto-detect the queue.
-            db_path (str):      where to put the job database
+            sbatch (str):       A path to the sbatch executable, only required
+                                for slurm mode if sbatch is not in the PATH.
+            qsub (str):         A path to the qsub executable, only required
+                                for torque mode if sbatch is not in the PATH.
+            db_path (str):      Where to put the job database (Not implemented)
         """
     ),
     'jobs': _dnt(
