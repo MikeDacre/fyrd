@@ -920,9 +920,11 @@ def get_cluster_environment():
         conf.set_option('queue', 'queue_type', 'auto')
         conf_queue = 'auto'
     if conf_queue == 'auto':
-        if run.which('sbatch'):
+        sbatch_cmnd = conf.get_option('queue', 'sbatch', 'sbatch')
+        qsub_cmnd   = conf.get_option('queue', 'qsub', 'qsub')
+        if run.which(sbatch_cmnd):
             MODE = 'slurm'
-        elif run.which('qsub'):
+        elif run.which(qsub_cmnd):
             MODE = 'torque'
         else:
             MODE = 'local'
