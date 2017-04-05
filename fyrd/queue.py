@@ -272,7 +272,7 @@ class Queue(object):
                         if not_found == 12:
                             logme.log(
                                 '{} not in queue, tried 12 times over 12s'
-                                .format(job)i + '. Job likely completed, ' +
+                                .format(job) + '. Job likely completed, ' +
                                 'assuming completion, stats will be ' +
                                 'unavailable.','warn'
                             )
