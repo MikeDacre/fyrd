@@ -546,7 +546,7 @@ def get_job_paths(kwds):
     # Set the output path
     cpath = get_option('jobs', 'outpath')
     if 'outpath' in kwds:
-        outpath = kwds['outpath']
+        outpath = kwds.pop('outpath')
     elif cpath:
         outpath = cpath
     else:
@@ -556,7 +556,7 @@ def get_job_paths(kwds):
     # Set the script path
     cpath = get_option('jobs', 'scriptpath')
     if 'scriptpath' in kwds:
-        scriptpath = kwds['scriptpath']
+        scriptpath = kwds.pop('scriptpath')
     elif cpath:
         scriptpath = cpath
     else:
