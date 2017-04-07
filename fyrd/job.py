@@ -619,17 +619,28 @@ class Job(object):
         self.update(False)
         if not self.done:
             _logme.log('Waiting for self {}'.format(self.name), 'debug')
-            if self.queue.wait(self) is not True:
+            status = self.queue.wait(self)
+            if status == 'disappeared':
+                self.state = status
+            elif status is not True:
                 return False
-            self.update()
-        if self.get_exitcode(update=False) != 0:
-            _logme.log('Job failed with exitcode {}'.format(self.exitcode),
-                       'debug')
-            return False
+            else:
+                self.update()
+                if self.get_exitcode(update=False) != 0:
+                    _logme.log('Job failed with exitcode {}'
+                               .format(self.exitcode), 'debug')
+                    return False
         if self.wait_for_files(caution_message=False):
             self.update()
+            if status == 'disappeared':
+                _logme.log('Job files found for disappered job, assuming '
+                           'success', 'info')
+                return 'disappeared'
             return True
         else:
+            if status == 'disappeared':
+                _logme.log('Disappeared job has no output files, assuming '
+                           'failure', 'error')
             return False
 
     def wait_for_files(self, btme=None, caution_message=False):
@@ -725,7 +736,20 @@ class Job(object):
                         cleanup, self.clean_files, delete_outfiles
                     ), 'debug')
         # Wait for queue
-        if self.wait() is not True:
+        status = self.wait()
+        if status == 'disappeared':
+            _logme.log('Job disappeared from queue, attempting to get outputs',
+                       'debug')
+            try:
+                self.fetch_outputs(save=save, delete_files=False,
+                                   get_stats=False)
+            except IOError:
+                _logme.log('Job disappeared from the queue and files could not'
+                           ' be found, job must have died and been deleted '
+                           'from the queue', 'critical')
+                raise IOError('Job {} disappeared, output files missing'
+                              .format(self))
+        elif status is not True:
             _logme.log('Wait failed, cannot get outputs, aborting', 'error')
             self.update()
             if _os.path.isfile(self.errfile):
@@ -741,9 +765,10 @@ class Job(object):
                 _logme.log('Pickled out file does not exist, cannot get error',
                            'debug')
             return
-        # Get output
-        _logme.log('Wait complete, fetching outputs', 'debug')
-        self.fetch_outputs(save=save, delete_files=False)
+        else:
+            # Get output
+            _logme.log('Wait complete, fetching outputs', 'debug')
+            self.fetch_outputs(save=save, delete_files=False)
         out = self.out if save else self.get_output(save=save)
         # Cleanup
         if cleanup is None:
@@ -993,6 +1018,9 @@ class Job(object):
         if self.done and self._got_exitcode:
             _logme.log('Getting exitcode from _exitcode', 'debug')
             return self._exitcode
+        if self.status == 'disappeared':
+            _logme.log('Cannot get exitcode for disappeared job', 'debug')
+            return 0
         if update and not self._updating and not self.done:
             self.update()
         if self.done:
@@ -1044,7 +1072,7 @@ class Job(object):
                        'warn')
         return self.queue_info
 
-    def fetch_outputs(self, save=True, delete_files=None):
+    def fetch_outputs(self, save=True, delete_files=None, get_stats=True):
         """Save all outputs in their current state. No return value.
 
         This method does not wait for job completion, but merely gets the
@@ -1054,13 +1082,14 @@ class Job(object):
             save (bool):         Save all outputs to the class also (advised)
             delete_files (bool): Delete the output files when getting, only
                                  used if save is True
+            get_stats (bool):    Try to get exitcode.
         """
         _logme.log('Saving outputs to self, delete_files={}'
                    .format(delete_files), 'debug')
         self.update()
         if delete_files is None:
             delete_files = self.clean_outputs
-        if not self._got_exitcode:
+        if not self._got_exitcode and get_stats:
             self.get_exitcode(update=False)
         if not self._got_times:
             self.get_times(update=False)

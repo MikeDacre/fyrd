@@ -84,7 +84,7 @@ GOOD_STATES      = ['complete', 'completed', 'special_exit']
 ACTIVE_STATES    = ['configuring', 'completing', 'pending',
                     'running']
 BAD_STATES       = ['boot_fail', 'cancelled', 'failed',
-                    'node_fail', 'timeout']
+                    'node_fail', 'timeout', 'disappeared']
 UNCERTAIN_STATES = ['hold', 'preempted', 'stopped',
                     'suspended']
 ALL_STATES = GOOD_STATES + ACTIVE_STATES + BAD_STATES + UNCERTAIN_STATES
@@ -276,7 +276,7 @@ class Queue(object):
                                 'assuming completion, stats will be ' +
                                 'unavailable.','warn'
                             )
-                            break
+                            return 'disappeared'
                         continue
                     ## Actually look for job in running/queued queues
                     lgd      = False
