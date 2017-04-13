@@ -95,6 +95,8 @@ class Job(object):
     id            = None
     submitted     = False
     written       = False
+    found         = False
+    submit_time   = None
 
     # Holds a pool object if we are in local mode
     pool_job      = None
@@ -588,6 +590,7 @@ class Job(object):
                     raise _CalledProcessError(code, args, stdout, stderr)
             self.submitted = True
             self.state = 'submitted'
+            self.submit_time = _dt.now()
         else:
             raise _ClusterError("Invalid queue type {}".format(self.qtype))
 
@@ -619,7 +622,7 @@ class Job(object):
         self.update(False)
         if not self.done:
             _logme.log('Waiting for self {}'.format(self.name), 'debug')
-            status = self.queue.wait(self)
+            status = self.queue.wait(self.id)
             if status == 'disappeared':
                 self.state = status
             elif status is not True:
@@ -632,13 +635,13 @@ class Job(object):
                     return False
         if self.wait_for_files(caution_message=False):
             self.update()
-            if status == 'disappeared':
+            if self.state == 'disappeared':
                 _logme.log('Job files found for disappered job, assuming '
                            'success', 'info')
                 return 'disappeared'
             return True
         else:
-            if status == 'disappeared':
+            if self.state == 'disappeared':
                 _logme.log('Disappeared job has no output files, assuming '
                            'failure', 'error')
             return False
@@ -1152,10 +1155,11 @@ class Job(object):
             self._updating = False
             return
         self.queue.update()
-        if self.id:
+        if self.submitted and self.id:
             queue_info = self.queue[self.id]
             if queue_info:
                 assert self.id == queue_info.id
+                self.found = True
                 self.queue_info = queue_info
                 self.state = self.queue_info.state
                 if self.done and fetch_info:
@@ -1164,6 +1168,21 @@ class Job(object):
                             self.get_exitcode(update=False)
                         if not self._got_times:
                             self.get_times(update=False)
+            elif self.found:
+                _logme.log('Job appears to have disappeared, waiting for '
+                           'reappearance, this may take a while', 'warn')
+                status = self.wait()
+                if status == 'disappeared':
+                    _logme.log('Job disappeared, but the output files are '
+                               'present', 'info')
+                elif not status:
+                    _logme.log('Job appears to have failed and disappeared',
+                               'error')
+            # If job not found after 360 seconds, assume trouble
+            elif (_dt.now()-self.submit_time).seconds > 1000:
+                s = (_dt.now()-self.submit_time).seconds
+                _logme.log('Job not in queue after {} seconds of searching.'
+                           .format(s), 'warn')
         self._updating = False
 
     @property
