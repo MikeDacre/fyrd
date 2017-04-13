@@ -1179,7 +1179,7 @@ class Job(object):
                     _logme.log('Job appears to have failed and disappeared',
                                'error')
             # If job not found after 360 seconds, assume trouble
-            elif (_dt.now()-self.submit_time).seconds > 1000:
+            elif self.submitted and (_dt.now()-self.submit_time).seconds > 1000:
                 s = (_dt.now()-self.submit_time).seconds
                 _logme.log('Job not in queue after {} seconds of searching.'
                            .format(s), 'warn')

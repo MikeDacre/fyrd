@@ -660,23 +660,23 @@ def get_profile(profile=None, allow_none=True):
                              .format(profile))
 
 
-def get_profiles(profiles=None, allow_none=True):
+def get_profiles(profs=None, allow_none=True):
     """Return a dictionary of profiles from profiles.
 
     Returns all profiles if profiles argument is None.
 
     Args:
-        profiles (list):   A list of profiles to get.
+        profs (list):      A list of profiles to get.
         allow_none (bool): If True, return None if no profile matches,
                            otherwise raise a ValueError.
 
     Returns:
         dict: A ditionary of profile: fyrd.conf.Profile
     """
-    if profiles:
-        profiles = _run.listify(profiles)
+    if profs:
+        profs = _run.listify(profs)
         pfls = {}
-        for profile in profiles:
+        for profile in profs:
             pfls[profile] = get_profile(profile, allow_none)
     else:
         if not allow_none:
@@ -690,7 +690,7 @@ def get_profiles(profiles=None, allow_none=True):
             pfls[section] = Profile(
                 section, _section_to_dict(profiles.items(section))
             )
-        return pfls
+    return pfls
 
 
 def set_profile(name, kwds, update=True):
