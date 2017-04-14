@@ -580,6 +580,23 @@ class Job(object):
             code, stdout, stderr = _run.cmd(args, tries=5)
             if code == 0:
                 self.id = int(stdout.split('.')[0])
+            elif code == 17 and 'Unable to open script file' in stderr:
+                _logme.log('qsub submission failed due to an already existing '
+                           'script file, attempting to rename file and try '
+                           'again.\nstderr: {}, stdout: {}, cmnd: {}'
+                           .format(stderr, stdout, args), 'error')
+                new_name = args[1] + '.resub'
+                _os.rename(args[1], new_name)
+                _logme.log('renamed script {} to {}, resubmitting'
+                           .format(args[1], new_name), 'info')
+                args[1] = new_name
+                code, stdout, stderr = _run.cmd(args, tries=5)
+                if code == 0:
+                    self.id = int(stdout.split('.')[0])
+                else:
+                    _logme.log('Resubmission still failed, aborting',
+                               'critical')
+                    raise _CalledProcessError(code, args, stdout, stderr)
             else:
                 if stderr.startswith('qsub: submit error ('):
                     raise _ClusterError('qsub submission failed with error: ' +
