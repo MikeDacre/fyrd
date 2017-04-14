@@ -542,6 +542,7 @@ class Job(object):
                                         dependencies=depends,
                                         cores=self.cores)
             self.submitted = True
+            self.submit_time = _dt.now()
             self.state = 'submitted'
 
         elif self.qtype == 'slurm':
@@ -563,6 +564,7 @@ class Job(object):
                            'critical')
                 raise _CalledProcessError(code, args, stdout, stderr)
             self.submitted = True
+            self.submit_time = _dt.now()
             self.state = 'submitted'
 
         elif self.qtype == 'torque':
@@ -589,8 +591,8 @@ class Job(object):
                     )
                     raise _CalledProcessError(code, args, stdout, stderr)
             self.submitted = True
-            self.state = 'submitted'
             self.submit_time = _dt.now()
+            self.state = 'submitted'
         else:
             raise _ClusterError("Invalid queue type {}".format(self.qtype))
 
