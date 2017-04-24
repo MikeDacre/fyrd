@@ -84,7 +84,7 @@ GOOD_STATES      = ['complete', 'completed', 'special_exit']
 ACTIVE_STATES    = ['configuring', 'completing', 'pending',
                     'running']
 BAD_STATES       = ['boot_fail', 'cancelled', 'failed',
-                    'node_fail', 'timeout']
+                    'node_fail', 'timeout', 'disappeared']
 UNCERTAIN_STATES = ['hold', 'preempted', 'stopped',
                     'suspended']
 ALL_STATES = GOOD_STATES + ACTIVE_STATES + BAD_STATES + UNCERTAIN_STATES
@@ -257,7 +257,7 @@ class Queue(object):
                 while True:
                     self._update()
                     # Allow 12 seconds to elapse before job is found in queue,
-                    # if it is not in the queue by then, raise exception.
+                    # if it is not in the queue by then, assume completion.
                     if job not in self.jobs:
                         if lgd:
                             logme.log('Attempt #{}/12'.format(not_found),
@@ -270,10 +270,13 @@ class Queue(object):
                         sleep(1)
                         not_found += 1
                         if not_found == 12:
-                            raise QueueError(
+                            logme.log(
                                 '{} not in queue, tried 12 times over 12s'
-                                .format(job)
+                                .format(job) + '. Job likely completed, ' +
+                                'assuming completion, stats will be ' +
+                                'unavailable.','warn'
                             )
+                            return 'disappeared'
                         continue
                     ## Actually look for job in running/queued queues
                     lgd      = False
@@ -920,10 +923,10 @@ def get_cluster_environment():
         conf.set_option('queue', 'queue_type', 'auto')
         conf_queue = 'auto'
     if conf_queue == 'auto':
-        sbatch_cmnd = conf.get_option('queue', 'sbatch', 'sbatch')
-        sbatch_cmnd = 'sbatch' if not sbatch_cmnd else sbatch_cmnd
-        qsub_cmnd   = conf.get_option('queue', 'qsub', 'qsub')
-        qsub_cmnd   = 'qsub' if not qsub_cmnd else qsub_cmnd
+        sbatch_cmnd = conf.get_option('queue', 'sbatch')
+        qsub_cmnd   = conf.get_option('queue', 'qsub')
+        sbatch_cmnd = sbatch_cmnd if sbatch_cmnd else 'sbatch'
+        qsub_cmnd   = qsub_cmnd if qsub_cmnd else 'qsub'
         if run.which(sbatch_cmnd):
             MODE = 'slurm'
         elif run.which(qsub_cmnd):
