@@ -476,6 +476,8 @@ class Queue(object):
                 elif job_info.state == 'done':
                     job.state = 'completed'
                     job.exitcode = int(job_info.exitcode)
+                elif job_info.state == 'queued':
+                    job.state = 'pending'
                 else:
                     raise Exception('Unrecognized state')
 
