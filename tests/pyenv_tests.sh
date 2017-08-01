@@ -36,11 +36,11 @@ done
 
 # Versions to test
 if [[ $limited == 1 ]]; then
-  versions=('2.7.10' '3.3.0' '3.5.2')
+  versions=('2.7.10' '3.3.0' '3.6.2')
 else
-  versions=('2.7.10' '2.7.11' '2.7.12' '3.3.0' '3.4.0' '3.5.2' '3.6-dev' '3.7-dev')
+  versions=('2.7.10' '2.7.11' '2.7.12' '3.3.0' '3.4.0' '3.5.2' '3.6.2' '3.7-dev')
 fi
-anaconda_versions=(anaconda2-4.1.1, anaconda3-4.1.1)
+anaconda_versions=(anaconda2-4.4.0, anaconda3-4.4.0)
 
 # Starting string for virtualenvs
 build_string="fyrd_$(cat /dev/urandom | LC_ALL=C tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)"
