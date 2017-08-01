@@ -14,6 +14,7 @@
     threads
     nodes
     features
+    qos
     time
     mem
     partition

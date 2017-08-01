@@ -443,6 +443,51 @@ class Job(object):
         for script_file in self.script_files:
             script_file.clean()
         if delete_outputs:
+
+        # Create the submission Script object
+        self.submission = _Script(
+            script = _scrpts.CMND_RUNNER_TRACK.format(
+                precmd=script,
+                usedir=self.runpath,
+                name=self.name,
+                command=command
+            ),
+            file_name=script_file
+        )
+        self.script_files.append(self.submission)
+
+        return self.update()
+
+    def write(self, overwrite=True):
+        """Write all scripts.
+
+        Args:
+            overwrite (bool): Overwrite existing files, defaults to True.
+        """
+        _logme.log('Writing files, overwrite={}'.format(overwrite), 'debug')
+        for script_file in self.script_files:
+            script_file.write(overwrite)
+        self.written = True
+        return self.update()
+
+    def clean(self, delete_outputs=None, get_outputs=True):
+        """Delete all scripts created by this module, if they were written.
+
+        Args:
+            delete_outputs (bool): also delete all output and err files,
+                                   but get their contents first.
+            get_outputs (bool):    if delete_outputs, save outputs before
+                                   deleting.
+        """
+        _logme.log('Cleaning outputs, delete_outputs={}'
+                   .format(delete_outputs), 'debug')
+        # Sanitize arguments
+        if delete_outputs is None:
+            delete_outputs = self.clean_outputs
+        assert isinstance(delete_outputs, bool)
+        for script_file in self.script_files:
+            script_file.clean()
+        if delete_outputs:
             _logme.log('Deleting output files.', 'debug')
             if get_outputs:
                 self.fetch_outputs(delete_files=True)

@@ -690,7 +690,7 @@ def get_profiles(profs=None, allow_none=True):
             pfls[section] = Profile(
                 section, _section_to_dict(profiles.items(section))
             )
-        return pfls
+    return pfls
 
 
 def set_profile(name, kwds, update=True):
