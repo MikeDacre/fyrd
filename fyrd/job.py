@@ -9,6 +9,7 @@ from time import sleep as _sleep
 from datetime import datetime as _dt
 from subprocess import CalledProcessError as _CalledProcessError
 
+# Try to use dill, revert to pickle if not found
 import dill as _pickle
 from six import reraise as _reraise
 
@@ -95,6 +96,8 @@ class Job(object):
     id            = None
     submitted     = False
     written       = False
+    found         = False
+    submit_time   = None
 
     # Holds a pool object if we are in local mode
     pool_job      = None
@@ -309,7 +312,7 @@ class Job(object):
         #########################################
 
         if not _queue.MODE:
-            _queue.MODE = _queue.get_cluster_environment()
+            _queue.MODE = _batch.get_cluster_environment()
         self.qtype = qtype if qtype else _queue.MODE
         self.queue = _queue.Queue(user='self', qtype=self.qtype)
         self.state = 'Not_Submitted'
@@ -492,6 +495,43 @@ class Job(object):
             self.update()
             self.queue.wait_to_submit()
 
+        # Only include queued or running dependencies
+        self.queue._update()  # Force update
+        depends = []
+        for depend in dependencies:
+            dep_check = self.queue.check_dependencies(depend)
+            if dep_check == 'absent':
+                _logme.log(
+                    'Cannot submit job as dependency {} '
+                    .format(depend) + 'is not in the queue',
+                    'error'
+                )
+                return self
+            elif dep_check == 'good':
+                _logme.log(
+                    'Dependency {} is complete, skipping'
+                    .format(depend), 'debug'
+                )
+            elif dep_check == 'bad':
+                _logme.log(
+                    'Cannot submit job as dependency {} '
+                    .format(depend) + 'has failed',
+                    'error'
+                )
+                return self
+            elif dep_check == 'active':
+                if self.queue.jobs[depend].state == 'completeing':
+                    continue
+                _logme.log('Dependency {} is {}, adding to deps'
+                           .format(depend, self.queue.jobs[depend].state),
+                           'debug')
+                depends.append(depend)
+            else:
+                # This shouldn't happen ever
+                raise _ClusterError('fyrd.queue.Queue.check_dependencies() ' +
+                                    'returned an unrecognized value {}'
+                                    .format(dep_check))
+
         command = self.batch.submit_cmnd
         args    = self.batch.submit_args(kwds=self.kwds,
                                          dependencies=dependencies)
@@ -527,6 +567,7 @@ class Job(object):
                 raise _CalledProcessError(code, command, stdout, stderr)
 
         self.submitted = True
+        self.submit_time = _dt.now()
         self.state = 'submitted'
 
         return self.update()
@@ -540,11 +581,7 @@ class Job(object):
         return self.submit()
 
     def wait(self):
-        """Block until job completes.
-
-        Returns:
-            bool: True on success, False on failure
-        """
+        """Block until job completes."""
         if not self.submitted:
             if _conf.get_option('jobs', 'auto_submit'):
                 _logme.log('Auto-submitting as not submitted yet', 'debug')
@@ -558,17 +595,28 @@ class Job(object):
         self.update(False)
         if not self.done:
             _logme.log('Waiting for self {}'.format(self.name), 'debug')
-            if self.queue.wait(self) is not True:
+            status = self.queue.wait(self.id)
+            if status == 'disappeared':
+                self.state = status
+            elif status is not True:
                 return False
-            self.update()
-        if self.get_exitcode(update=False) != 0:
-            _logme.log('Job failed with exitcode {}'.format(self.exitcode),
-                       'debug')
-            return False
+            else:
+                self.update()
+                if self.get_exitcode(update=False) != 0:
+                    _logme.log('Job failed with exitcode {}'
+                               .format(self.exitcode), 'debug')
+                    return False
         if self.wait_for_files(caution_message=False):
             self.update()
+            if self.state == 'disappeared':
+                _logme.log('Job files found for disappered job, assuming '
+                           'success', 'info')
+                return 'disappeared'
             return True
         else:
+            if self.state == 'disappeared':
+                _logme.log('Disappeared job has no output files, assuming '
+                           'failure', 'error')
             return False
 
     def wait_for_files(self, btme=None, caution_message=False):
@@ -664,7 +712,20 @@ class Job(object):
                         cleanup, self.clean_files, delete_outfiles
                     ), 'debug')
         # Wait for queue
-        if self.wait() is not True:
+        status = self.wait()
+        if status == 'disappeared':
+            _logme.log('Job disappeared from queue, attempting to get outputs',
+                       'debug')
+            try:
+                self.fetch_outputs(save=save, delete_files=False,
+                                   get_stats=False)
+            except IOError:
+                _logme.log('Job disappeared from the queue and files could not'
+                           ' be found, job must have died and been deleted '
+                           'from the queue', 'critical')
+                raise IOError('Job {} disappeared, output files missing'
+                              .format(self))
+        elif status is not True:
             _logme.log('Wait failed, cannot get outputs, aborting', 'error')
             self.update()
             if _os.path.isfile(self.errfile):
@@ -680,9 +741,10 @@ class Job(object):
                 _logme.log('Pickled out file does not exist, cannot get error',
                            'debug')
             return
-        # Get output
-        _logme.log('Wait complete, fetching outputs', 'debug')
-        self.fetch_outputs(save=save, delete_files=False)
+        else:
+            # Get output
+            _logme.log('Wait complete, fetching outputs', 'debug')
+            self.fetch_outputs(save=save, delete_files=False)
         out = self.out if save else self.get_output(save=save)
         # Cleanup
         if cleanup is None:
@@ -932,6 +994,9 @@ class Job(object):
         if self.done and self._got_exitcode:
             _logme.log('Getting exitcode from _exitcode', 'debug')
             return self._exitcode
+        if self.status == 'disappeared':
+            _logme.log('Cannot get exitcode for disappeared job', 'debug')
+            return 0
         if update and not self._updating and not self.done:
             self.update()
         if self.done:
@@ -957,7 +1022,33 @@ class Job(object):
                        .format(self.name, code), 'error')
         return code
 
-    def fetch_outputs(self, save=True, delete_files=None):
+    def update(self, fetch_info=True):
+        """Update status from the queue.
+
+        Args:
+            fetch_info (bool): Fetch basic job info if complete.
+        """
+        if not self._updating:
+            self._update(fetch_info)
+        else:
+            _logme.log('Already updating, aborting.', 'debug')
+
+    def update_queue_info(self):
+        """Set queue_info from the queue even if done."""
+        _logme.log('Updating queue_info', 'debug')
+        queue_info1 = self.queue[self.id]
+        self.queue.update()
+        queue_info2 = self.queue[self.id]
+        if queue_info2:
+            self.queue_info = queue_info2
+        elif queue_info1:
+            self.queue_info = queue_info1
+        elif self.queue_info is None and self.submitted:
+            _logme.log('Cannot find self in the queue and queue_info is empty',
+                       'warn')
+        return self.queue_info
+
+    def fetch_outputs(self, save=True, delete_files=None, get_stats=True):
         """Save all outputs in their current state. No return value.
 
         This method does not wait for job completion, but merely gets the
@@ -967,13 +1058,14 @@ class Job(object):
             save (bool):         Save all outputs to the class also (advised)
             delete_files (bool): Delete the output files when getting, only
                                  used if save is True
+            get_stats (bool):    Try to get exitcode.
         """
         _logme.log('Saving outputs to self, delete_files={}'
                    .format(delete_files), 'debug')
         self.update()
         if delete_files is None:
             delete_files = self.clean_outputs
-        if not self._got_exitcode:
+        if not self._got_exitcode and get_stats:
             self.get_exitcode(update=False)
         if not self._got_times:
             self.get_times(update=False)
@@ -982,46 +1074,15 @@ class Job(object):
             self.get_stdout(save=True, delete_file=delete_files, update=False)
             self.get_stderr(save=True, delete_file=delete_files, update=False)
 
-    def update(self, fetch_info=True):
-        """Update status from the queue.
-
-        Args:
-            fetch_info (bool): Fetch basic job info if complete.
-        """
-        if not self._updating:
-            return self._update(fetch_info)
-        else:
-            _logme.log('Already updating, aborting.', 'debug')
-            return self
-
-    ######################
-    #  Property Methods  #
-    ######################
-
-    @property
-    def outfiles(self):
-        """A list of all outfiles associated with this Job."""
-        outfiles = [self.outfile, self.errfile]
-        if self.poutfile:
-            outfiles.append(self.poutfile)
-        return outfiles
-
-    @property
-    def incomplete_outfiles(self):
-        """A list of all outfiles that haven't already been fetched."""
-        outfiles = []
-        if self.outfile and not self._got_stdout:
-            outfiles.append(self.outfile)
-        if self.errfile and not self._got_stderr:
-            outfiles.append(self.errfile)
-        if self.poutfile and not self._got_out:
-            outfiles.append(self.poutfile)
-        return outfiles
-
     @property
     def files(self):
         """Build a list of files associated with this class."""
-        return self.script_files + self.outfiles
+        files = [self.submission]
+        if self.kind == 'script':
+            files.append(self.exec_script)
+        if self.kind == 'function':
+            files.append(self.function)
+        return files
 
     @property
     def runtime(self):
@@ -1067,10 +1128,11 @@ class Job(object):
             self._updating = False
             return
         self.queue.update()
-        if self.id:
+        if self.submitted and self.id:
             queue_info = self.queue[self.id]
             if queue_info:
                 assert self.id == queue_info.id
+                self.found = True
                 self.queue_info = queue_info
                 self.state = self.queue_info.state
                 if self.done and fetch_info:
@@ -1079,6 +1141,21 @@ class Job(object):
                             self.get_exitcode(update=False)
                         if not self._got_times:
                             self.get_times(update=False)
+            elif self.found:
+                _logme.log('Job appears to have disappeared, waiting for '
+                           'reappearance, this may take a while', 'warn')
+                status = self.wait()
+                if status == 'disappeared':
+                    _logme.log('Job disappeared, but the output files are '
+                               'present', 'info')
+                elif not status:
+                    _logme.log('Job appears to have failed and disappeared',
+                               'error')
+            # If job not found after 360 seconds, assume trouble
+            elif self.submitted and (_dt.now()-self.submit_time).seconds > 1000:
+                s = (_dt.now()-self.submit_time).seconds
+                _logme.log('Job not in queue after {} seconds of searching.'
+                           .format(s), 'warn')
         self._updating = False
         return self
 

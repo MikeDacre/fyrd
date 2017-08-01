@@ -174,11 +174,16 @@ def get_cluster_environment():
         conf.set_option('queue', 'queue_type', 'auto')
         conf_queue = 'auto'
     if conf_queue == 'auto':
-        for system, data in CLUSTER_DICT.items():
-            for script in data.BatchSystem.identifying_scripts:
-                if run.which(script):
-                    MODE = system
-        MODE = 'local'
+        sbatch_cmnd = conf.get_option('queue', 'sbatch')
+        qsub_cmnd   = conf.get_option('queue', 'qsub')
+        sbatch_cmnd = sbatch_cmnd if sbatch_cmnd else 'sbatch'
+        qsub_cmnd   = qsub_cmnd if qsub_cmnd else 'qsub'
+        if run.which(sbatch_cmnd):
+            MODE = 'slurm'
+        elif run.which(qsub_cmnd):
+            MODE = 'torque'
+        else:
+            MODE = 'local'
     else:
         MODE = conf_queue
     logme.log('Using {} batch system'.format(MODE), 'debug')

@@ -110,6 +110,10 @@ CLUSTER_CORE = _OD([
      {'help': 'A comma-separated list of node features to require',
       'slurm': '--constraint={}',  # Torque handled separately
       'default': None, 'type': list, 'sjoin': '&'}),
+    ('qos',
+     {'help': 'A quality of service to require',
+      'slurm': '--qos={}',  # Torque in options_to_string()
+      'default': None, 'type': str}),
     ('time',
      {'help': 'Walltime in HH:MM:SS',
       'default': '12:00:00', 'type': str,

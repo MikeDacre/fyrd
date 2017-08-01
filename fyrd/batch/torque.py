@@ -169,6 +169,8 @@ class BatchSystem(_Batch):
         if features
             outstr += ':' + ':'.join(
                 run.opt_split(option_dict.pop('features'), (',', ':')))
+        if 'qos' in option_dict:
+            outstr += ',qos={}'.format(option_dict.pop('qos'))
         return outstr + '\n' + _options.options_to_string(kwds)
 
 

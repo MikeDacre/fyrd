@@ -124,7 +124,7 @@ def is_exc(x):
     """
     return bool(isinstance(x, tuple)
                 and len(x) == 3
-                and issubclass(x[0], BaseException))
+                and issubclass(BaseException, x[0]))
 
 
 ###############################################################################

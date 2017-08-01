@@ -238,7 +238,7 @@ class Queue(object):
                 while True:
                     self._update()
                     # Allow 12 seconds to elapse before job is found in queue,
-                    # if it is not in the queue by then, raise exception.
+                    # if it is not in the queue by then, assume completion.
                     if job not in self.jobs:
                         if lgd:
                             logme.log('Attempt #{}/12'.format(not_found),
@@ -251,10 +251,13 @@ class Queue(object):
                         sleep(1)
                         not_found += 1
                         if not_found == 12:
-                            raise QueueError(
+                            logme.log(
                                 '{} not in queue, tried 12 times over 12s'
-                                .format(job)
+                                .format(job) + '. Job likely completed, ' +
+                                'assuming completion, stats will be ' +
+                                'unavailable.','warn'
                             )
+                            return 'disappeared'
                         continue
                     ## Actually look for job in running/queued queues
                     lgd      = False
