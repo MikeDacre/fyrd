@@ -31,10 +31,11 @@ environment!
 .. image:: https://readthedocs.org/projects/fyrd/badge/?version=latest
    :target: https://fyrd.readthedocs.io/
    
+.. image:: https://img.shields.io/badge/python%20versions-2.7%203.4%203.5%203.6%203.7-brightgreen.svg
+   :target: https://fyrd.science
 .. image:: https://requires.io/github/MikeDacre/fyrd/requirements.svg?branch=master
    :target: https://requires.io/github/MikeDacre/fyrd/requirements/?branch=master
    :alt: Requirements Status
-.. image:: https://img.shields.io/badge/python%20versions-2.7%203.4%203.5%203.6%203.7-brightgreen.svg
 
 
 Allows simple job submission with *dependency tracking and queue waiting* on
