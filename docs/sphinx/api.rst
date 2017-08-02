@@ -41,7 +41,7 @@ Methods
 
 .. automethod:: fyrd.queue.Queue.update
 
-.. automethod:: fyrd.queue.Queue.QueueJob
+.. autoclass:: fyrd.queue.Queue.QueueJob
 
 .. autoexception:: fyrd.queue.QueueError
 
@@ -354,9 +354,9 @@ fyrd.local.job_runner
 fyrd.run
 --------
 
-.. automodule:: fyrd.local.run
+.. automodule:: fyrd.run
    :members:
-   "show-inheritance:
+   :show-inheritance:
 
 fyrd.logme
 ----------

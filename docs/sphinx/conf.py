@@ -9,7 +9,7 @@ project   = 'Fyrd'
 copyright = '2016, Michael Dacre <mike.dacre@gmail.com>'
 author    = 'Michael Dacre <mike.dacre@gmail.com>'
 version   = '0.6'
-release   = '0.6.1-beta.6'
+release   = '0.6.1-beta.7'
 language  = 'en'
 
 # Add any paths that contain templates here, relative to this directory.
