@@ -54,7 +54,8 @@ was formerly known as 'Python Cluster'.
 
 For usage instructions and complete documentation see `the documentation site
 <https://fyrd.readthedocs.io>`_ and the `fyrd_manual.pdf
-</docs/fyrd_manual.pdf>`_ document in this repository.
+<https://github.com/MikeDacre/fyrd/blob/master/docs/fyrd_manual.pdf>`_ document
+in this repository.
 
 .. contents:: **Contents**
 
@@ -167,13 +168,18 @@ Installation
 
 This module will work with Python 2.7+ on Linux and Mac OS systems.
 
-It is not on PyPI yet, but it will be as of version 0.6.2.
-
-To install, do the following:
+The betas are on PyPI, and can be installed directly from there:
 
 .. code:: shell
 
-   pip install https://github.com/MikeDacre/fyrd/archive/v0.6.1-beta.6.tar.gz
+   pip install fyrd
+   fyrd conf init
+
+To install a specific tag from github, do the following:
+
+.. code:: shell
+
+   pip install https://github.com/MikeDacre/fyrd/archive/v0.6.1-beta.7.tar.gz
    fyrd conf init
 
 To get the latest version:

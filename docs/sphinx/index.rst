@@ -37,6 +37,13 @@ was formerly known as 'Python Cluster'.
 The code is hosted at github:
 `https://github.com/MikeDacre/fyrd <https://github.com/MikeDacre/fyrd>`_
 
+To install, use `PyPI <https://pypi.python.org/pypi/fyrd>_`:
+
+.. code:: shell
+
+   pip install fyrd
+   fyrd conf init
+
 Contents:
 
 .. toctree::
