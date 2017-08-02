@@ -20,18 +20,22 @@ environment!
 | Version | 0.6.1-beta.7                                       |
 +---------+----------------------------------------------------+
 
-.. image:: https://readthedocs.org/projects/fyrd/badge/?version=latest
-   :target: https://fyrd.readthedocs.io/
+
 .. image:: https://badge.buildkite.com/b6659b460caf5205919916c4e9d212c4e04d4301fa55a51180.svg?branch=master
    :target: https://buildkite.com/mikedacre/fyrd-cluster-tests
 .. image:: https://travis-ci.org/MikeDacre/fyrd.svg?branch=master
    :target: https://travis-ci.org/MikeDacre/python-cluster
 .. image:: https://api.codacy.com/project/badge/Grade/c163cff81a1941a18b2c5455901695a3
    :target: https://www.codacy.com/app/mike-dacre/fyrd?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=MikeDacre/fyrd&amp;utm_campaign=Badge_Grade
-.. image:: https://img.shields.io/badge/python%20versions-2.7%203.4%203.5%203.6-brightgreen.svg
+
+.. image:: https://readthedocs.org/projects/fyrd/badge/?version=latest
+   :target: https://fyrd.readthedocs.io/
+   
 .. image:: https://requires.io/github/MikeDacre/fyrd/requirements.svg?branch=master
-     :target: https://requires.io/github/MikeDacre/fyrd/requirements/?branch=master
-     :alt: Requirements Status
+   :target: https://requires.io/github/MikeDacre/fyrd/requirements/?branch=master
+   :alt: Requirements Status
+.. image:: https://img.shields.io/badge/python%20versions-2.7%203.4%203.5%203.6%203.7-brightgreen.svg
+
 
 Allows simple job submission with *dependency tracking and queue waiting* on
 either torque, slurm, or locally with the multiprocessing module. It uses simple
