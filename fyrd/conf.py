@@ -51,6 +51,8 @@ DEFAULTS = {
         'queue_update': 2,
         'res_time':     2700,
         'queue_type':   'auto',
+        'sbatch':       None, # Path to sbatch command
+        'qsub':         None, # Path to qsub command
         # Not implemented yet
         #  'db':           _os.path.join(CONFIG_PATH, 'db.sql'),
     },
@@ -106,7 +108,11 @@ CONF_HELP = {
             queue_type (str):   the type of queue to use, one of 'torque',
                                 'slurm', 'local', 'auto'. Default is auto to
                                 auto-detect the queue.
-            db_path (str):      where to put the job database
+            sbatch (str):       A path to the sbatch executable, only required
+                                for slurm mode if sbatch is not in the PATH.
+            qsub (str):         A path to the qsub executable, only required
+                                for torque mode if sbatch is not in the PATH.
+            db_path (str):      Where to put the job database (Not implemented)
         """
     ),
     'jobs': _dnt(
@@ -540,7 +546,7 @@ def get_job_paths(kwds):
     # Set the output path
     cpath = get_option('jobs', 'outpath')
     if 'outpath' in kwds:
-        outpath = kwds['outpath']
+        outpath = kwds.pop('outpath')
     elif cpath:
         outpath = cpath
     else:
@@ -550,7 +556,7 @@ def get_job_paths(kwds):
     # Set the script path
     cpath = get_option('jobs', 'scriptpath')
     if 'scriptpath' in kwds:
-        scriptpath = kwds['scriptpath']
+        scriptpath = kwds.pop('scriptpath')
     elif cpath:
         scriptpath = cpath
     else:
@@ -654,23 +660,23 @@ def get_profile(profile=None, allow_none=True):
                              .format(profile))
 
 
-def get_profiles(profiles=None, allow_none=True):
+def get_profiles(profs=None, allow_none=True):
     """Return a dictionary of profiles from profiles.
 
     Returns all profiles if profiles argument is None.
 
     Args:
-        profiles (list):   A list of profiles to get.
+        profs (list):      A list of profiles to get.
         allow_none (bool): If True, return None if no profile matches,
                            otherwise raise a ValueError.
 
     Returns:
         dict: A ditionary of profile: fyrd.conf.Profile
     """
-    if profiles:
-        profiles = _run.listify(profiles)
+    if profs:
+        profs = _run.listify(profs)
         pfls = {}
-        for profile in profiles:
+        for profile in profs:
             pfls[profile] = get_profile(profile, allow_none)
     else:
         if not allow_none:
@@ -684,7 +690,7 @@ def get_profiles(profiles=None, allow_none=True):
             pfls[section] = Profile(
                 section, _section_to_dict(profiles.items(section))
             )
-        return pfls
+    return pfls
 
 
 def set_profile(name, kwds, update=True):

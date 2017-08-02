@@ -11,6 +11,7 @@ Version        0.6.2-beta.6
 ============   ======================================
 """
 from __future__ import print_function
+import os
 import sys
 import argparse
 from itertools import chain
@@ -382,9 +383,9 @@ def wait(args):
 
 def clean_dir(args):
     """Clean up a job directory."""
+    run_tmp_clean = False
     if args.dir:
         directory = args.dir
-        run_tmp_clean = False
     else:
         scriptpath = fyrd.conf.get_option('jobs', 'scriptpath')
         outpath    = fyrd.conf.get_option('jobs', 'outpath')

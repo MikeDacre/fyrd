@@ -39,6 +39,8 @@ nodes:         Number of nodes to request
                Type: int; Default: 1
 features:      A comma-separated list of node features to require
                Type: list; Default: None
+qos:           A quality of service to require
+               Type: str; Default: None
 time:          Walltime in HH:MM:SS
                Type: str; Default: 12:00:00
 mem:           Memory to use in MB (e.g. 4000)

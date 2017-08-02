@@ -15,7 +15,7 @@ Common: Used in every mode
 +---------------+-----------------------------------------------------------------------------------+--------+-----------+
 | modules       | Modules to load with the `module load` command                                    | list   | None      |
 +---------------+-----------------------------------------------------------------------------------+--------+-----------+
-| syspaths      | Paths to add to sys.path for submitted functions                                  | list   | None      |
+| syspaths      | Paths to add to _sys.path for submitted functions                                 | list   | None      |
 +---------------+-----------------------------------------------------------------------------------+--------+-----------+
 | scriptpath    | Folder to write cluster script files to, must be accessible to the compute nodes. | str    | .         |
 +---------------+-----------------------------------------------------------------------------------+--------+-----------+
@@ -60,6 +60,8 @@ Cluster: Options that work in both slurm and torque
 | nodes     | Number of nodes to request                                | int            | 1         |
 +-----------+-----------------------------------------------------------+----------------+-----------+
 | features  | A comma-separated list of node features to require        | list           | None      |
++-----------+-----------------------------------------------------------+----------------+-----------+
+| qos       | A quality of service to require                           | str            | None      |
 +-----------+-----------------------------------------------------------+----------------+-----------+
 | time      | Walltime in HH:MM:SS                                      | str            | 12:00:00  |
 +-----------+-----------------------------------------------------------+----------------+-----------+
