@@ -1,4 +1,7 @@
 .cache
+.coverage*
+coverage*
+htmlcov*
 build
 dist
 docs
