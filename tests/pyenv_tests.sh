@@ -72,6 +72,8 @@ for i in ${versions[@]}; do
     aborted=$((aborted+1))
     continue
   fi
+  pyenv shell $i
+  pip install --upgrade pip
   echo "Creating virtualenv $v"
   pyenv virtualenv-delete --force $v >/dev/null 2>/dev/null
   pyenv virtualenv --force $i $v
