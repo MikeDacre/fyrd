@@ -686,6 +686,7 @@ def get_imports(function, mode='string'):
     """Build a list of potentially useful imports from a function handle.
 
     Gets:
+
         - All modules from globals()
         - All modules from the function's globals()
         - All functions from the function's globals()

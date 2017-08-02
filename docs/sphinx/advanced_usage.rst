@@ -259,6 +259,7 @@ The method can actually be simply accessed as a function instead of needing
 the `Queue` class:
 
 .. code:: python
+
    fyrd.wait([1,2,3])
 
 To generate a `Queue` object, do the following:

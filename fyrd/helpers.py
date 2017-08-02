@@ -299,7 +299,8 @@ def splitrun(jobs, infile, inheader, command, args=None, kwargs=None,
     with the jobs argument, and run command on each.
 
     Accepts exactly the same arguments as the Job class, with the exception of
-    the first three and last four arguments, which are:
+    the first three and last four arguments, which are::
+
         - the number of jobs
         - the file to work on
         - whether the input file has a header
@@ -357,10 +358,12 @@ def splitrun(jobs, infile, inheader, command, args=None, kwargs=None,
 
     Returns:
         Primary return value varies and is decided in this order:
+
             If outfile:    the absolute path to that file
             If merge_func: the result of merge_func(list), where list
                            is the list of outputs.
             Else:          a list of results
+
         If direct is False, this function returns a fyrd.job.Job object which
         will return the results described above on get().
     """

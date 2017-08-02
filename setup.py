@@ -54,7 +54,7 @@ for scpt in scpt_dir:
 
 setup(
     name='fyrd',
-    version='0.6.1-beta.6',
+    version='0.6.1-beta.7',
     description=('Submit functions and shell scripts to torque, slurm, ' +
                  'or local machines'),
     long_description=long_description,
