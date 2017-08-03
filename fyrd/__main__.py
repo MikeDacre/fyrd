@@ -7,13 +7,14 @@ Manage fyrd config, profiles, and queue.
 Author         Michael D Dacre <mike.dacre@gmail.com>
 Organization   Stanford University
 License        MIT License, use as you wish
-Version        0.6.2-beta.8
+Version        0.6.2b9
 ============   ======================================
 """
 from __future__ import print_function
 import os
 import sys
 import argparse
+import signal
 from itertools import chain
 from tabulate import tabulate
 
@@ -158,6 +159,17 @@ Caution:
         _func.<suffix>.py.pickle.out
 
 """
+
+###############################################################################
+#                         Catch Keyboard Interruption                         #
+###############################################################################
+
+def catch_keyboard(signal, frame):
+    """Catch Keyboard Interruption."""
+    sys.stderr.write('\nKeyBoard Interrupt Detected, Exiting\n')
+    sys.exit(1)
+
+signal.signal(signal.SIGINT, catch_keyboard)
 
 ###############################################################################
 #                Functions to work with Command Line Arguments                #

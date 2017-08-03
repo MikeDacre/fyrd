@@ -10,6 +10,9 @@ from setuptools import setup
 from setuptools.command.test import test as TestCommand
 log = setuptools.distutils.log
 
+VERSION='0.6.1b9'
+GITHUB='https://github.com/MikeDacre/fyrd'
+
 ###############################################################################
 #                            A class to run tests                             #
 ###############################################################################
@@ -54,11 +57,15 @@ for scpt in scpt_dir:
 
 setup(
     name='fyrd',
-    version='0.6.1-beta.8',
+    version=VERSION,
     description=('Submit functions and shell scripts to torque, slurm, ' +
                  'or local machines'),
     long_description=long_description,
     url='https://fyrd.science',
+    download_url='{}/v{}.tar.gz'.format(
+        GITHUB, VERSION
+    ),
+    bugtrack_url='{}/issues'.format(GITHUB),
     author='Michael Dacre',
     author_email='mike.dacre@gmail.com',
     license='MIT',

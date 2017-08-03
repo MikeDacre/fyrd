@@ -8,7 +8,7 @@ Python job submission on torque and slurm clusters with dependency tracking.
 +---------+----------------------------------------------------+
 | License | MIT License, property of Stanford, use as you wish |
 +---------+----------------------------------------------------+
-| Version | 0.6.1-beta.8                                       |
+| Version | 0.6.1b9                                            |
 +---------+----------------------------------------------------+
 
 .. only:: html
@@ -37,7 +37,7 @@ was formerly known as 'Python Cluster'.
 The code is hosted at github:
 `https://github.com/MikeDacre/fyrd <https://github.com/MikeDacre/fyrd>`_
 
-To install, use `PyPI <https://pypi.python.org/pypi/fyrd>_`:
+To install, use `PyPI <https://pypi.python.org/pypi/fyrd>`_:
 
 .. code:: shell
 
