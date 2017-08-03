@@ -2,7 +2,7 @@
 Fyrd
 ####
 
-One liner script and function to torque, slurm, or a local machine with
+One liner script and function submission to torque, slurm, or a local machine with
 dependency tracking using python. Uses the same syntax irrespective of cluster
 environment!
 
@@ -351,4 +351,5 @@ Documentation
 
 This software is much more powerful that this document gives it credit for,
 to get the most out of it, read the docs at https://fyrd.readthedocs.org
-or get the PDF version from the file in `docs/fyrd.pdf`.
+or get the PDF version from the file in `docs/fyrd_manual.pdf
+<https://github.com/MikeDacre/fyrd/blob/master/docs/fyrd_manual.pdf>_`.
