@@ -54,11 +54,11 @@ for scpt in scpt_dir:
 
 setup(
     name='fyrd',
-    version='0.6.1-beta.7',
+    version='0.6.1-beta.8',
     description=('Submit functions and shell scripts to torque, slurm, ' +
                  'or local machines'),
     long_description=long_description,
-    url='https://github.com/MikeDacre/fyrd',
+    url='https://fyrd.science',
     author='Michael Dacre',
     author_email='mike.dacre@gmail.com',
     license='MIT',
@@ -68,7 +68,7 @@ setup(
         'Development Status :: 4 - Beta',
         'Intended Audience :: Science/Research',
         'Environment :: Console',
-        'Operating System :: Linux',
+        'Operating System :: POSIX :: Linux',
         'Natural Language :: English',
         'Topic :: System :: Clustering',
         'Topic :: System :: Monitoring',
@@ -86,6 +86,7 @@ setup(
 
     keywords='slurm torque multiprocessing cluster job_management',
 
+    requires=['dill', 'tabulate', 'six', 'tblib'],
     install_requires=['dill', 'tabulate', 'six', 'tblib'],
     tests_require=['pytest'],
     packages=['fyrd'],

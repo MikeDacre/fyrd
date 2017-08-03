@@ -2,7 +2,7 @@
 Fyrd
 ####
 
-One liner script and function to torque, slurm, or a local machine with
+One liner script and function submission to torque, slurm, or a local machine with
 dependency tracking using python. Uses the same syntax irrespective of cluster
 environment!
 
@@ -17,14 +17,14 @@ environment!
 +---------+----------------------------------------------------+
 | License | MIT License, property of Stanford, use as you wish |
 +---------+----------------------------------------------------+
-| Version | 0.6.1-beta.7                                       |
+| Version | 0.6.1-beta.8                                       |
 +---------+----------------------------------------------------+
 
 
 .. image:: https://badge.buildkite.com/b6659b460caf5205919916c4e9d212c4e04d4301fa55a51180.svg?branch=master
    :target: https://buildkite.com/mikedacre/fyrd-cluster-tests
 .. image:: https://travis-ci.org/MikeDacre/fyrd.svg?branch=master
-   :target: https://travis-ci.org/MikeDacre/python-cluster
+   :target: https://travis-ci.org/MikeDacre/fyrd
 .. image:: https://api.codacy.com/project/badge/Grade/c163cff81a1941a18b2c5455901695a3
    :target: https://www.codacy.com/app/mike-dacre/fyrd?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=MikeDacre/fyrd&amp;utm_campaign=Badge_Grade
 
@@ -54,7 +54,8 @@ was formerly known as 'Python Cluster'.
 
 For usage instructions and complete documentation see `the documentation site
 <https://fyrd.readthedocs.io>`_ and the `fyrd_manual.pdf
-</docs/fyrd_manual.pdf>`_ document in this repository.
+<https://github.com/MikeDacre/fyrd/blob/master/docs/fyrd_manual.pdf>`_ document
+in this repository.
 
 .. contents:: **Contents**
 
@@ -167,13 +168,18 @@ Installation
 
 This module will work with Python 2.7+ on Linux and Mac OS systems.
 
-It is not on PyPI yet, but it will be as of version 0.6.2.
-
-To install, do the following:
+The betas are on PyPI, and can be installed directly from there:
 
 .. code:: shell
 
-   pip install https://github.com/MikeDacre/fyrd/archive/v0.6.1-beta.6.tar.gz
+   pip install fyrd
+   fyrd conf init
+
+To install a specific tag from github, do the following:
+
+.. code:: shell
+
+   pip install https://github.com/MikeDacre/fyrd/archive/v0.6.1-beta.7.tar.gz
    fyrd conf init
 
 To get the latest version:
@@ -291,7 +297,7 @@ Issues and Contributing
 =======================
 
 If you have any trouble with this software add an issue in
-https://github.com/MikeDacre/python-cluster/issues
+https://github.com/MikeDacre/fyrd/issues
 
 For peculiar technical questions or help getting the code installed, email
 me at `mike.dacre@gmail.com <mailto:mike.dacre@gmail.com>`_.
@@ -345,4 +351,5 @@ Documentation
 
 This software is much more powerful that this document gives it credit for,
 to get the most out of it, read the docs at https://fyrd.readthedocs.org
-or get the PDF version from the file in `docs/fyrd.pdf`.
+or get the PDF version from the file in `docs/fyrd_manual.pdf
+<https://github.com/MikeDacre/fyrd/blob/master/docs/fyrd_manual.pdf>_`.
