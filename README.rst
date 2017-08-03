@@ -33,7 +33,10 @@ https://github.com/MikeDacre/fyrd
 
 .. image:: https://readthedocs.org/projects/fyrd/badge/?version=latest
    :target: https://fyrd.readthedocs.io/
-   
+
+.. image:: https://badge.fury.io/py/fyrd.svg
+   :target: https://badge.fury.io/py/fyrd
+   :alt: PyPI Version
 .. image:: https://img.shields.io/badge/python%20versions-2.7%203.4%203.5%203.6%203.7-brightgreen.svg
    :target: https://fyrd.science
 .. image:: https://requires.io/github/MikeDacre/fyrd/requirements.svg?branch=master

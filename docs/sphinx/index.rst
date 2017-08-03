@@ -20,6 +20,9 @@ Python job submission on torque and slurm clusters with dependency tracking.
   .. image:: https://api.codacy.com/project/badge/Grade/c163cff81a1941a18b2c5455901695a3
      :target: https://www.codacy.com/app/mike-dacre/fyrd?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=MikeDacre/fyrd&amp;utm_campaign=Badge_Grade
   .. image:: https://img.shields.io/badge/python%20versions-2.7%203.4%203.5%203.6-brightgreen.svg
+  .. image:: https://badge.fury.io/py/fyrd.svg
+     :target: https://badge.fury.io/py/fyrd
+     :alt: PyPI Version
 
 Allows simple job submission with *dependency tracking and queue waiting* on
 either torque, slurm, or locally with the multiprocessing module. It uses simple
