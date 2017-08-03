@@ -62,10 +62,9 @@ setup(
                  'or local machines'),
     long_description=long_description,
     url='https://fyrd.science',
-    download_url='{}/v{}.tar.gz'.format(
+    download_url='{}/archive/v{}.tar.gz'.format(
         GITHUB, VERSION
     ),
-    bugtrack_url='{}/issues'.format(GITHUB),
     author='Michael Dacre',
     author_email='mike.dacre@gmail.com',
     license='MIT',
