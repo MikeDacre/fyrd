@@ -30,7 +30,6 @@ extensions = [
     'sphinx.ext.coverage',
     'sphinx.ext.ifconfig',
     'sphinx.ext.viewcode',
-    'sphinxarg.ext',
 ]
 
 # Autodoc configuration
