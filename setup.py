@@ -10,7 +10,8 @@ from setuptools import setup
 from setuptools.command.test import test as TestCommand
 log = setuptools.distutils.log
 
-VERSION='0.6.1-beta.8',
+VERSION='0.6.1b9'
+GITHUB='https://github.com/MikeDacre/fyrd'
 
 ###############################################################################
 #                            A class to run tests                             #
@@ -61,10 +62,10 @@ setup(
                  'or local machines'),
     long_description=long_description,
     url='https://fyrd.science',
-    download_url='https://github.com/MikeDacre/fyrd/archive/v{}.tar.gz'.format(
-        VERSION
+    download_url='{}/v{}.tar.gz'.format(
+        GITHUB, VERSION
     ),
-    bugtrack_url='https://github.com/MikeDacre/fyrd/issues',
+    bugtrack_url='{}/issues'.format(GITHUB),
     author='Michael Dacre',
     author_email='mike.dacre@gmail.com',
     license='MIT',

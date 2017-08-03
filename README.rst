@@ -20,7 +20,7 @@ https://github.com/MikeDacre/fyrd
 +---------+----------------------------------------------------+
 | License | MIT License, property of Stanford, use as you wish |
 +---------+----------------------------------------------------+
-| Version | 0.6.1-beta.8                                       |
+| Version | 0.6.1b9                                            |
 +---------+----------------------------------------------------+
 
 
@@ -246,7 +246,7 @@ To install a specific tag from github, do the following:
 
 .. code:: shell
 
-   pip install https://github.com/MikeDacre/fyrd/archive/v0.6.1-beta.8.tar.gz
+   pip install https://github.com/MikeDacre/fyrd/archive/v0.6.1b9.tar.gz
    fyrd conf init
 
 To get the latest version:
