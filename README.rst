@@ -2,9 +2,12 @@
 Fyrd
 ####
 
-One liner script and function submission to torque, slurm, or a local machine with
-dependency tracking using python. Uses the same syntax irrespective of cluster
-environment!
+One liner script and function submission to torque, slurm, or a local machines
+with dependency tracking using python. Uses the same syntax irrespective of
+cluster environment!
+
+Learn more at https://fyrd.science, https://fyrd.rtfd.com, and
+https://github.com/MikeDacre/fyrd
 
 .. image:: http://i.imgur.com/NNbprZH.png
    :alt: fyrd cluster logo — a Saxon shield remeniscent of those used in fyrds
@@ -76,15 +79,15 @@ as working with the multiprocessing library. It aims to provide:
 - A fallback local mode that allows code to run locally using the multiprocessing
   module without needing any changes to syntax.
 
-To do this, all major torque and slurm keyword arguments are encoded in dictionaries
-in the `fyrd/options.py` file using synonyms so that all arguments are standardized
-on the fly. Job management is handled by the `Job` class in `fyrd/job.py`, which
-accepts any of the keyword arguments in the options file. To make submission as simple
-as possible, the code makes used of profiles defined in the `~/.fyrd/profiles.txt`
-config file. These allow simple grouping of keyword arguments into named profiles to
-make submission even easier. Dependency tracking is handled by the `depends=`
-argument to `Job`, which accepts job numbers or `Job` objects, either singularly or
-as lists.
+To do this, all major torque and slurm keyword arguments are encoded in
+dictionaries in the `fyrd/options.py` file using synonyms so that all arguments
+are standardized on the fly. Job management is handled by the `Job` class in
+`fyrd/job.py`, which accepts any of the keyword arguments in the options file.
+To make submission as simple as possible, the code makes used of profiles
+defined in the `~/.fyrd/profiles.txt` config file. These allow simple grouping
+of keyword arguments into named profiles to make submission even easier.
+Dependency tracking is handled by the `depends=` argument to `Job`, which
+accepts job numbers or `Job` objects, either singularly or as lists.
 
 To allow simple queue management and job waiting, a `Queue` class is
 implemented in `fyrd/queue.py`. It uses iterators, also defined in that file,
@@ -99,7 +102,11 @@ tracking, is implemented in the `fyrd/jobqueue.py` file. It is based on
 multiprocessing but behaves like torque.  It is not a good idea to use this
 module in place of multiprocessing due to the dependency tracking overhead, it
 is primarily intended as a fallback, but it does work well enough to use
-independently.
+independently. **Note: the local mode currently is quite slow, as the overhead
+for job management means that 100% of each available CPU is not used, only
+around 80% is. The local mode still works fine as a fallback or for testing
+code, but it is important to remember that fyrd is meant primarily for large
+cluster use.**
 
 As all clusters are different, common alterable parameters are defined in a
 config file located at `~/.fyrd/config.txt`. This includes an option for max
@@ -113,6 +120,9 @@ created in `fyrd/helpers.py` that allow the automation of more complex tasks,
 like running `apply` on a pandas dataframe in parallel on the cluster
 (`fyrd.helpers.parapply()`).
 
+Basic Usage
+-----------
+
 The end result is that submitting 10 thousand very small jobs to a small cluster
 can be done like this:
 
@@ -125,13 +135,13 @@ can be done like this:
    for i in jobs:
        results.append(i.get())
 
-The results list in this example will contain the function outputs, even if those
-outputs are integers, objects, or other Python types. Similarly, shell scripts can
-be run like this:
+The results list in this example will contain the function outputs, even if
+those outputs are integers, objects, or other Python types. Similarly, shell
+scripts can be run like this:
 
 .. code:: python
 
-   script = r"""zcat {} | grep "#config" | awk '{split($1,a,"."); print a[2]"\t"$2}'"""
+   script = r"""zcat {} | grep "#config" | awk '{{split($1,a,"."); print a[2]"\t"$2}}'"""
    jobs   = []
    for i in [i for i in os.listdir('.') if i.endswith('.gz')]:
        jobs.append(fyrd.Job(script.format(i), profile='long').submit())
@@ -146,7 +156,7 @@ Here is the same code with dependency tracking:
 
 .. code:: python
 
-   script = r"""zcat {} | grep "#config" | awk '{split($1,a,"."); print a[2]"\t"$2}'"""
+   script = r"""zcat {} | grep "#config" | awk '{{split($1,a,"."); print a[2]"\t"$2}}'"""
    jobs   = []
    jobs2  = []
    for i in [i for i in os.listdir('.') if i.endswith('.gz')]:
@@ -162,6 +172,63 @@ As you can see, the `profile` keyword is not required, if not supplied the
 default profile is used. It is also important to note that `.out` will contain
 the same contents as `.stdout` for all script submissions, but for function
 submissions, `.out` contains the function output, not STDOUT.
+
+Command Line Tools
+------------------
+
+Fyrd provides a few command line tools to make little jobs easier. The main
+tool is `fyrd`. Running `fyrd --help` will give instructions on use, something
+like this::
+
+    usage: fyrd [-h] [-v] {conf,prof,keywords,queue,wait,clean} ...
+
+    Manage fyrd config, profiles, and queue.
+
+    ============   ======================================
+    Author         Michael D Dacre <mike.dacre@gmail.com>
+    Organization   Stanford University
+    License        MIT License, use as you wish
+    Version        0.6.2-beta.7
+    ============   ======================================
+
+    positional arguments:
+      {conf,prof,keywords,queue,wait,clean}
+        conf (config)       View and manage the config
+        prof (profile)      Manage profiles
+        keywords (keys, options)
+                            Print available keyword arguments.
+        queue (q)           Search the queue
+        wait                Wait for jobs
+        clean               Clean up a job directory
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      -v, --verbose         Show debug outputs
+
+The keywords each have their own help menus and are fairly self-explanatory.
+The `conf` and `profile` arguments allow you to edit the fyrd config and
+cluster profiles without having to directly edit the config files in the
+`~/.fyrd/` directory.
+
+The `keywords` argument is a help function only, it prints all possible keyword
+arguments that can be used in cluster submissions.
+
+`queue` allows you to query the queue in the same way that `squeue` or `qstat`
+would, with a few extra functions to make it easy to see only your jobs, or
+only your running jobs.
+
+There is another command line tool provided `myqueue` or `myq` (both are the
+same), these tools are just wrappers for `fyrd queue` and they make it really
+fast to query a torque or slurm queue on any machine. e.g. `myq -r` will show
+you all your currently running jobs, `myq -r -c` will display a count of all
+currently running jobs, and `myq -r -l` will dump a list of job numbers only to
+the console, really useful when combined with `xargs`, e.g. `myq -r -l | xargs
+qdel`.
+
+The `wait` command just blocks until the provided job numbers complete.
+
+And the `clean` command provides options to clean out a job directory that
+contains leftover files from a fyrd session.
 
 Installation
 -------------
@@ -179,7 +246,7 @@ To install a specific tag from github, do the following:
 
 .. code:: shell
 
-   pip install https://github.com/MikeDacre/fyrd/archive/v0.6.1-beta.7.tar.gz
+   pip install https://github.com/MikeDacre/fyrd/archive/v0.6.1-beta.8.tar.gz
    fyrd conf init
 
 To get the latest version:
@@ -189,16 +256,26 @@ To get the latest version:
    pip install https://github.com/MikeDacre/fyrd/tarball/master
    fyrd conf init
 
+To get the development version (still pretty stable):
+
+.. code:: shell
+
+   pip install https://github.com/MikeDacre/fyrd/tarball/dev
+   fyrd conf init
+ 
 The `fyrd conf init` command initializes your environment interactively by
 asking questions about the local cluster system.
 
-I recommend installing using pyenv in a pyenv anaconda environment, this will
-make your life much simpler, but is not required.
+I recommend installing using anaconda or pyenv, this will make your life much
+simpler, but is not required.
 
 In general you want either `pyenv <https://github.com/yyuu/pyenv>`_ or user
-level install (`pip install --user`) even if you have sudo access, as most
+level install (`pip install --user`) even if you have `sudo` access, as most
 cluster environments share /home/<user> across the cluster, making this module
-available everywhere.
+available everywhere. Anaconda will work if it is installed in a cross-cluster
+capacity, usually as a module (with lmod, e.g. `module load anaconda`). An
+install to the system python will usually fail as cluster nodes need to have
+access to the module also.
 
 Importing is simple:
 
@@ -209,9 +286,12 @@ Importing is simple:
 Prerequisites
 .............
 
-This software requires two external modules:
-- `dill <https://pypi.python.org/pypi/dill>`_ —  which makes function submission more stable
-- `tabulate <https://pypi.python.org/pypi/tabulate>`_ —  allows readable printing of help
+This software requires the following external modules:
+
+ - `dill <https://pypi.python.org/pypi/dill>`_ —  which makes function submission more stable
+ - `tabulate <https://pypi.python.org/pypi/tabulate>`_ —  allows readable printing of help
+ - `six <https://pypi.python.org/pypi/six>`_ —  makes python2/3 cross-compatibility easier
+ - `tblib <https://pypi.python.org/pypi/tblib>`_ —  allows me to pass Tracebacks between nodes
 
 Cluster Dependencies
 ....................
@@ -317,17 +397,17 @@ fyrd to your environment, please contact me.
 If you are planning on contributing and submitting a pull request, please
 follow these rules:
 
-- Follow the code style as closely as possible, I am a little obsessive about
-  that
-- If you add new functions or features:
-  - Add some tests to the test suite that fully test your new feature
-  - Add notes to the documentation on what your feature does and how it works
-- Make sure your code passes the full test suite, which means you need to run
-  `python tests/run_tests.py` from the root of the repository at a bare
-  minimum. Ideally, you will install pyenv and run `bash tests/pyenv_tests.py`
-- Squash all of your commits into a single commit with a well written and
-  informative commit message.
-- Send me a pull request to either the `dev` or `master` branches.
+ - Follow the code style as closely as possible, I am a little obsessive about
+   that
+ - If you add new functions or features:
+   - Add some tests to the test suite that fully test your new feature
+   - Add notes to the documentation on what your feature does and how it works
+ - Make sure your code passes the full test suite, which means you need to run
+   `python tests/run_tests.py` from the root of the repository at a bare
+   minimum. Ideally, you will install pyenv and run `bash tests/pyenv_tests.py`
+ - Squash all of your commits into a single commit with a well written and
+   informative commit message.
+ - Send me a pull request to either the `dev` or `master` branches.
 
 It may take a few days for me to fully review your pull request, as I will test
 it extensively. If it is a big new feature implementation I may request that
