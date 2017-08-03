@@ -335,8 +335,7 @@ which is an amazing piece of software. It integrates into this repository and
 runs tests on all python versions I support on my two clusters (a slurm cluster
 and a torque cluster) every day and on every push or pull request. I also use
 `travis ci <travis-ci.org>`_ to run local queue tests, and
-`codacy <https://www.codacy.com/>`_ and
-`scrutinizer <https://scrutinizer-ci.com/>`_ to monitor code style.
+`codacy <https://www.codacy.com/>`_ to monitor code style.
 
 All code in the master branch must pass the travis-ci and buildkite tests, code
 in dev also *usually* passes those test, but it is not guaranteed. All other
