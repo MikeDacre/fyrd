@@ -24,7 +24,7 @@ environment!
 .. image:: https://badge.buildkite.com/b6659b460caf5205919916c4e9d212c4e04d4301fa55a51180.svg?branch=master
    :target: https://buildkite.com/mikedacre/fyrd-cluster-tests
 .. image:: https://travis-ci.org/MikeDacre/fyrd.svg?branch=master
-   :target: https://travis-ci.org/MikeDacre/python-cluster
+   :target: https://travis-ci.org/MikeDacre/fyrd
 .. image:: https://api.codacy.com/project/badge/Grade/c163cff81a1941a18b2c5455901695a3
    :target: https://www.codacy.com/app/mike-dacre/fyrd?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=MikeDacre/fyrd&amp;utm_campaign=Badge_Grade
 
@@ -297,7 +297,7 @@ Issues and Contributing
 =======================
 
 If you have any trouble with this software add an issue in
-https://github.com/MikeDacre/python-cluster/issues
+https://github.com/MikeDacre/fyrd/issues
 
 For peculiar technical questions or help getting the code installed, email
 me at `mike.dacre@gmail.com <mailto:mike.dacre@gmail.com>`_.

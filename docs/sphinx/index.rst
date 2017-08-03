@@ -16,7 +16,7 @@ Python job submission on torque and slurm clusters with dependency tracking.
   .. image:: https://readthedocs.org/projects/fyrd/badge/?version=latest
      :target: https://fyrd.readthedocs.io/
   .. image:: https://travis-ci.org/MikeDacre/fyrd.svg?branch=master
-     :target: https://travis-ci.org/MikeDacre/python-cluster
+     :target: https://travis-ci.org/MikeDacre/fyrd
   .. image:: https://api.codacy.com/project/badge/Grade/c163cff81a1941a18b2c5455901695a3
      :target: https://www.codacy.com/app/mike-dacre/fyrd?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=MikeDacre/fyrd&amp;utm_campaign=Badge_Grade
   .. image:: https://img.shields.io/badge/python%20versions-2.7%203.4%203.5%203.6-brightgreen.svg
