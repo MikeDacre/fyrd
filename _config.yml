@@ -2,9 +2,8 @@
 title:        Fyrd
 tagline:      "A Python Cluster: Submit functions and shell scripts to torque, slurm, or local machines using easy python syntax."
 description:  "Submit functions and shell scripts to torque, slurm, or local machines using easy python syntax."
-version:      "0.6.1-beta.6"
+version:      "0.6.1-beta.8"
 baseurl:      "https://fyrd.science"
-# baseurl:      "/fyrd"
 csshighlight: default
 
 # License
