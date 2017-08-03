@@ -1,5 +1,5 @@
 <header id="header" class="page-header">
-  <h1 class="project-name"><a class="project-name" href="{{ site.github.url }}">{{ site.title }}</a></h1><br>
+  <h1 class="project-name"><a class="project-name" href="{{ site.baseurl }}">{{ site.title }}</a></h1><br>
   {% include logo_small.html %}
   <h2 class="project-tagline">{{ site.tagline }}</h2>
   <nav id="menu">
@@ -8,8 +8,8 @@
       <a href="{{ site.github.repository_url }}" class="btn">View on GitHub</a>
       <a href="https://fyrd.readthedocs.io" class="btn">Read the Docs</a>
       <a href="{{ site.github.repository_url }}/archive/v{{ site.version }}.tar.gz" class="btn">Download Latest</a>
-      <a href="{{ site.github.url }}/news" class="btn">News</a>
-      <a href="{{ site.github.url }}/releases" class="btn">Releases</a>
+      <a href="{{ site.baseurl }}/news" class="btn">News</a>
+      <a href="{{ site.baseurl }}/releases" class="btn">Releases</a>
     </div>
   </nav>
 </header>
