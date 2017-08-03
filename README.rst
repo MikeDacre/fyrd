@@ -286,15 +286,15 @@ Importing is simple:
 
   import fyrd
 
-Prerequisites
-.............
+Requirements
+............
 
 This software requires the following external modules:
 
- - `dill <https://pypi.python.org/pypi/dill>`_ —  which makes function submission more stable
- - `tabulate <https://pypi.python.org/pypi/tabulate>`_ —  allows readable printing of help
- - `six <https://pypi.python.org/pypi/six>`_ —  makes python2/3 cross-compatibility easier
- - `tblib <https://pypi.python.org/pypi/tblib>`_ —  allows me to pass Tracebacks between nodes
+- `dill <https://pypi.python.org/pypi/dill>`_ —  which makes function submission more stable
+- `tabulate <https://pypi.python.org/pypi/tabulate>`_ —  allows readable printing of help
+- `six <https://pypi.python.org/pypi/six>`_ —  makes python2/3 cross-compatibility easier
+- `tblib <https://pypi.python.org/pypi/tblib>`_ —  allows me to pass Tracebacks between nodes
 
 Cluster Dependencies
 ....................
@@ -399,17 +399,17 @@ fyrd to your environment, please contact me.
 If you are planning on contributing and submitting a pull request, please
 follow these rules:
 
- - Follow the code style as closely as possible, I am a little obsessive about
-   that
- - If you add new functions or features:
-   - Add some tests to the test suite that fully test your new feature
-   - Add notes to the documentation on what your feature does and how it works
- - Make sure your code passes the full test suite, which means you need to run
-   `python tests/run_tests.py` from the root of the repository at a bare
-   minimum. Ideally, you will install pyenv and run `bash tests/pyenv_tests.py`
- - Squash all of your commits into a single commit with a well written and
-   informative commit message.
- - Send me a pull request to either the `dev` or `master` branches.
+- Follow the code style as closely as possible, I am a little obsessive about
+  that
+- If you add new functions or features:
+  - Add some tests to the test suite that fully test your new feature
+  - Add notes to the documentation on what your feature does and how it works
+- Make sure your code passes the full test suite, which means you need to run
+  `python tests/run_tests.py` from the root of the repository at a bare
+  minimum. Ideally, you will install pyenv and run `bash tests/pyenv_tests.py`
+- Squash all of your commits into a single commit with a well written and
+  informative commit message.
+- Send me a pull request to either the `dev` or `master` branches.
 
 It may take a few days for me to fully review your pull request, as I will test
 it extensively. If it is a big new feature implementation I may request that
