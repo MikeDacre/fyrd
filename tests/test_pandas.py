@@ -3,9 +3,11 @@ Tests submitting pandas functions.
 
 Pandas is hard to install, so this isn't part of the travis py.test.
 """
+import os
 import sys
 import argparse
 from uuid import uuid4
+sys.path.append(os.path.abspath('.'))
 import fyrd
 import pytest
 try:
@@ -14,7 +16,7 @@ try:
     canrun = True
 except ImportError:
     canrun = False
-env = fyrd.get_cluster_environment()
+env = fyrd.batch_systems.get_cluster_environment()
 
 
 ###############################################################################
@@ -203,7 +205,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     if args.local:
-        fyrd.queue.MODE = 'local'
+        fyrd.batch_systems.MODE = 'local'
     if args.verbose:
         fyrd.logme.MIN_LEVEL = 'debug'
 

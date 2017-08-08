@@ -8,7 +8,7 @@ Python job submission on torque and slurm clusters with dependency tracking.
 +---------+----------------------------------------------------+
 | License | MIT License, property of Stanford, use as you wish |
 +---------+----------------------------------------------------+
-| Version | 0.6.1b9                                            |
+| Version | 0.6.2a1                                            |
 +---------+----------------------------------------------------+
 
 .. only:: html
@@ -57,5 +57,7 @@ Contents:
    keywords
    console
    advanced_usage
+   adding_batch_systems
    api
+   changelog
    indices

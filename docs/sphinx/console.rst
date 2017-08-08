@@ -12,17 +12,29 @@ fyrd
 
 This software has uses a subcommand system to separate modes, and has six modes:
 
+- `run`      - run an arbitrary shell script on the cluster
+- `run-job`  - run existing cluster script(s)
+- `wait`     - wait for a list of jobs
+- `queue`    - show running jobs, makes filtering jobs very easy
 - `config`   — show and edit the contents of the config file
 - `profile`  - inspect and manage cluster profiles
 - `keywords` - print a list of current keyword arguments with descriptions for each
-- `queue`    - show running jobs, makes filtering jobs very easy
-- `wait`     - wait for a list of jobs
 - `clean`    - clean all script and output files in the given directory
 
 Several of the commands have aliases (`conf` and `prof` being the two main ones)
 
 Examples
 ........
+
+.. code:: shell
+
+   fyrd run 'samtools display big_file.bam | python $HOME/bin/my_parser.py > outfile'
+   fyrd run --profile long --args walltime=24:00:00,mem=20G --wait \
+            'samtools display big_file.bam | python $HOME/bin/my_parser.py > outfile'
+
+.. code:: shell
+
+   fyrd run-jobs --wait ./jobs/*.sh
 
 .. code:: shell
 
@@ -52,7 +64,7 @@ All Options
 
 `fyrd`::
 
-    usage: fyrd [-h] [-v] {conf,prof,keywords,queue,wait,clean} ...
+    usage: fyrd [-h] [-v] {run,submit,wait,queue,conf,prof,keywords,clean} ...
 
     Manage fyrd config, profiles, and queue.
 
@@ -60,22 +72,102 @@ All Options
     Author         Michael D Dacre <mike.dacre@gmail.com>
     Organization   Stanford University
     License        MIT License, use as you wish
-    Version        0.6.2b9
+    Version        0.6.2a1
     ============   ======================================
 
     positional arguments:
-      {conf,prof,keywords,queue,wait,clean}
+      {run,submit,wait,queue,conf,prof,keywords,clean}
+        run (r)             Run simple shell scripts
+        submit (sub, s)     Submit existing job files
+        wait (w)            Wait for jobs
+        queue (q)           Search the queue
         conf (config)       View and manage the config
         prof (profile)      Manage profiles
         keywords (keys, options)
                             Print available keyword arguments.
-        queue (q)           Search the queue
-        wait                Wait for jobs
         clean               Clean up a job directory
 
     optional arguments:
       -h, --help            show this help message and exit
       -v, --verbose         Show debug outputs
+
+`fyrd run`::
+
+    usage: fyrd run [-h] [-w] [-p PROFILE] [-a ARGS]
+                    shell_script [shell_script ...]
+
+    Run a shell script on the cluster and optionally wait for completion.
+
+    positional arguments:
+      shell_script          The script to run
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      -w, --wait            Wait for the job to complete
+      -p PROFILE, --profile PROFILE
+                            The profile to use to run
+      -a ARGS, --args ARGS  Submission args, e.g.:
+                            'time=00:20:00,mem=20G,cores=10'
+
+`fyrd run-jobs`::
+
+    usage: fyrd run-job [-h] [-w] shell_scripts [shell_scripts ...]
+
+    Run a shell script on the cluster and optionally wait for completion.
+
+    positional arguments:
+      shell_scripts  The script to run
+
+    optional arguments:
+      -h, --help     show this help message and exit
+      -w, --wait     Wait for the job to complete
+
+`fyrd wait`::
+  
+    usage: fyrd wait [-h] [-u USERS] [jobs [jobs ...]]
+
+    Wait on a list of jobs, block until they complete.
+
+    positional arguments:
+      jobs                  Job list to wait for
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      -u USERS, --users USERS
+                            A comma-separated list of users to wait for
+ 
+`fyrd queue`::
+
+    usage: fyrd queue [-h] [-u  [...] | -a] [-p  [...]] [-r | -q | -d | -b]
+                      [-l | -c]
+
+    Check the local queue, similar to squeue or qstat but simpler, good for
+    quickly checking the queue.
+
+    By default it searches only your own jobs, pass '--all-users' or
+    '--users <user> [<user2>...]' to change that behavior.
+
+    To just list jobs with some basic info, run with no arguments.
+
+    optional arguments:
+      -h, --help            show this help message and exit
+
+    queue filtering:
+      -u  [ ...], --users  [ ...]
+                            Limit to these users
+      -a, --all-users       Display jobs for all users
+      -p  [ ...], --partitions  [ ...]
+                            Limit to these partitions (queues)
+
+    queue state filtering:
+      -r, --running         Show only running jobs
+      -q, --queued          Show only queued jobs
+      -d, --done            Show only completed jobs
+      -b, --bad             Show only completed jobs
+
+    display options:
+      -l, --list            Print job numbers only, works well with xargs
+      -c, --count           Print job count only
 
 `fyrd conf`::
 
@@ -163,53 +255,6 @@ All Options
       -s, --split-tables  Print keywords as multiple tables
       -l, --list          Print a list of keywords only
 
-`fyrd queue`::
-
-    usage: fyrd queue [-h] [-u  [...] | -a] [-p  [...]] [-r | -q | -d | -b]
-                      [-l | -c]
-
-    Check the local queue, similar to squeue or qstat but simpler, good for
-    quickly checking the queue.
-
-    By default it searches only your own jobs, pass '--all-users' or
-    '--users <user> [<user2>...]' to change that behavior.
-
-    To just list jobs with some basic info, run with no arguments.
-
-    optional arguments:
-      -h, --help            show this help message and exit
-
-    queue filtering:
-      -u  [ ...], --users  [ ...]
-                            Limit to these users
-      -a, --all-users       Display jobs for all users
-      -p  [ ...], --partitions  [ ...]
-                            Limit to these partitions (queues)
-
-    queue state filtering:
-      -r, --running         Show only running jobs
-      -q, --queued          Show only queued jobs
-      -d, --done            Show only completed jobs
-      -b, --bad             Show only completed jobs
-
-    display options:
-      -l, --list            Print job numbers only, works well with xargs
-      -c, --count           Print job count only
-
-`fyrd wait`::
-  
-    usage: fyrd wait [-h] [-u USERS] [jobs [jobs ...]]
-
-    Wait on a list of jobs, block until they complete.
-
-    positional arguments:
-      jobs                  Job list to wait for
-
-    optional arguments:
-      -h, --help            show this help message and exit
-      -u USERS, --users USERS
-                            A comma-separated list of users to wait for
-
 `fyrd clean`::
 
     usage: fyrd clean [-h] [-o] [-s SUFFIX] [-q {torque,slurm,local}] [-n] [dir]
@@ -253,6 +298,8 @@ Aliases
 Several shell scripts are provided in `bin/` to provide shortcuts to the *fyrd*
 subcommands:
 
+- `frun`: `fyrd run`
+- `fsub`: `fyrd submit`
 - `my-queue` (or `myq`): `fyrd queue`
 - `clean-job-files`: `fyrd clean`
 - `monitor-jobs`: `fyrd wait`

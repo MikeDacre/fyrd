@@ -10,7 +10,7 @@ from setuptools import setup
 from setuptools.command.test import test as TestCommand
 log = setuptools.distutils.log
 
-VERSION='0.6.1b9'
+VERSION='0.6.2a1'
 GITHUB='https://github.com/MikeDacre/fyrd'
 
 ###############################################################################
@@ -95,7 +95,7 @@ setup(
     requires=['dill', 'tabulate', 'six', 'tblib'],
     install_requires=['dill', 'tabulate', 'six', 'tblib'],
     tests_require=['pytest'],
-    packages=['fyrd'],
+    packages=['fyrd', 'fyrd/batch_systems'],
     cmdclass={'test': TestRunner},
     scripts=scpts,
     entry_points={

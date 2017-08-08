@@ -14,7 +14,7 @@ Options are defined in dictionaries with the syntax:
 
 All of these fields are required except in the case that:
     1. The option is managed in options_to_string explicitly
-    2. The option is in NORMAL, TORQUE, or SLURM dictionaries, in which case
+    2. The option is in TORQUE or SLURM dictionaries, in which case
        flags used by other queue systems can be skipped.
 """
 import os  as _os
@@ -27,9 +27,12 @@ from collections import OrderedDict as _OD
 from six import reraise as _raise
 from tabulate import tabulate as _tabulate
 
-from . import run
-from . import logme
-from . import ClusterError
+from .. import logme
+from .. import ClusterError
+
+from . import MODE
+from . import get_batch_system
+from . import check_queue
 
 __all__ = ['option_help']
 
@@ -92,14 +95,7 @@ COMMON  = _OD([
       'slurm': '-e {}', 'torque': '-e {}'}),
 ])
 
-# Options used in only local runs
-NORMAL  = _OD([
-    ('threads',
-     {'help': 'Number of threads to use on the local machine',
-      'default': 4, 'type': int}),
-])
-
-# Options used in both torque and slurm
+# Options used in all batch systems
 CLUSTER_CORE = _OD([
     ('nodes',
      {'help': 'Number of nodes to request',
@@ -177,6 +173,7 @@ SYNONYMS = _OD([
     ('queue',          'partition'),
     ('memory',         'mem'),
     ('cpus',           'cores'),
+    ('threads',        'cores'),
     ('walltime',       'time'),
     ('delete_files',   'clean_files'),
     ('delete_outputs', 'clean_outputs'),
@@ -217,12 +214,13 @@ for kds in [CLUSTER_CORE, CLUSTER_OPTS, TORQUE]:
 CLUSTER_KWDS = SLURM_KWDS.copy()
 CLUSTER_KWDS.update(TORQUE_KWDS)
 
-NORMAL_KWDS = COMMON.copy()
-for kds in [NORMAL]:
-    NORMAL_KWDS.update(kds)
+# Should include the above in a dictionary by qtype
+BATCH_KWDS = {
+    'slurm': SLURM_KWDS,
+    'torque': TORQUE_KWDS,
+}
 
 ALL_KWDS = CLUSTER_KWDS.copy()
-ALL_KWDS.update(NORMAL_KWDS)
 
 # Will be 'name' -> type
 ALLOWED_KWDS = _OD()
@@ -370,7 +368,7 @@ def check_arguments(kwargs):
                     err = list(_sys.exc_info())
                     err[1] = ValueError(memerror)
                     _raise(*err)
-                if len(list(groups)) != 0 or not svalk or sunitk:
+                if list(groups) or not svalk or sunitk:
                     raise ValueError(memerror)
                 if sunit == 'b':
                     opt = int(float(sval)/float(1024)/float(1024))
@@ -400,15 +398,13 @@ def option_to_string(option, value=None, qtype=None):
     Args:
         option: An allowed option definied in options.all_options
         value:  A value for that option if required (if None, default used)
-        qtype:  'torque', 'slurm', or 'local': override queue.MODE
+        qtype:  One of the defined batch systems
 
     Returns:
         str: A string with the appropriate flags for the active queue.
     """
     # Import a couple of queue functions here
-    from . import queue
-    qtype = qtype if qtype else queue.MODE
-    queue.check_queue(qtype)
+    qtype = qtype if qtype else MODE
 
     if isinstance(option, dict):
         raise ValueError('Arguments to option_to_string cannot be '
@@ -420,15 +416,7 @@ def option_to_string(option, value=None, qtype=None):
         raise OptionsError('Cannot handle cores or nodes here, use ' +
                            'options_to_string')
 
-    if qtype == 'slurm':
-        kwds = SLURM_KWDS
-    elif qtype == 'torque':
-        kwds = TORQUE_KWDS
-    elif qtype == 'local':
-        return ''  # There is no need of this in local mode
-    else:
-        # This should never happen
-        raise ClusterError('Invalid qtype {}'.format(qtype))
+    kwds = BATCH_KWDS[qtype]
 
     # Make sure argument allowed
     option, value = list(check_arguments({option: value}).items())[0]
@@ -450,7 +438,7 @@ def option_to_string(option, value=None, qtype=None):
                 raise OptionsError('{} requires a value'.format(option))
 
     # Return formatted string
-    prefix = '#SBATCH' if qtype == 'slurm' else '#PBS'
+    prefix = get_batch_system(qtype).PREFIX
     if '{}' in kwds[option][qtype]:
         if value is None:
             return ''
@@ -462,18 +450,23 @@ def option_to_string(option, value=None, qtype=None):
 
 
 def options_to_string(option_dict, qtype=None):
-    """Return a multi-line string for slurm or torque job submission.
+    """Return a multi-line string for job submission.
+
+    This function pre-parses options and then passes them to the
+    parse_strange_options function of each batch system, before using the
+    option_to_string function to parse the remaining options.
 
     Args:
         option_dict (dict): Dict in format {option: value} where value can be
                             None. If value is None, default used.
-        qtype (str):        'torque', 'slurm', or 'local': override queue.MODE
+        qtype (str):        The defined batch system
 
     Returns:
         str: A multi-line string of torque or slurm options.
     """
-    # Import a couple of queue functions here
-    from . import queue
+    qtype = qtype if qtype else MODE
+    batch = get_batch_system(qtype)
+    check_queue(qtype)
 
     # Sanitize arguments
     if not isinstance(option_dict, dict):
@@ -482,15 +475,7 @@ def options_to_string(option_dict, qtype=None):
 
     option_dict = check_arguments(option_dict.copy())
 
-    qtype = qtype if qtype else queue.MODE
-
-    queue.check_queue(qtype)
-
     outlist = []
-
-    # Handle cores separately
-    nodes = int(option_dict.pop('nodes')) if 'nodes' in option_dict else 1
-    cores = int(option_dict.pop('cores')) if 'cores' in option_dict else 1
 
     # Set path if required
     if 'filepath' in option_dict:
@@ -502,19 +487,9 @@ def options_to_string(option_dict, qtype=None):
             option_dict['errfile'] = _os.path.join(
                 filepath, _os.path.basename(option_dict['errfile']))
 
-    if qtype == 'slurm':
-        outlist.append('#SBATCH --ntasks {}'.format(nodes))
-        outlist.append('#SBATCH --cpus-per-task {}'.format(cores))
-    elif qtype == 'torque':
-        outstring = '#PBS -l nodes={}:ppn={}'.format(nodes, cores)
-        if 'features' in option_dict:
-            outstring += ':' + ':'.join(
-                run.opt_split(option_dict.pop('features'), (',', ':')))
-        if 'qos' in option_dict:
-            outstring += ',qos={}'.format(option_dict.pop('qos'))
-        outlist.append(outstring)
+    outlist, option_dict = batch.parse_strange_options(option_dict)
 
-    # Loop through all options
+    # Loop through all remaining options
     for option, value in option_dict.items():
         outlist.append(option_to_string(option, value, qtype))
 
@@ -556,11 +531,6 @@ def option_help(mode='string', qtype=None, tablefmt='simple'):
         'help': _OD([('imports', impts)]),
     }
 
-    hlp['local'] = {
-        'summary': 'Used only in local mode',
-        'help': NORMAL,
-    }
-
     # Include all cluster options in one
     cluster = CLUSTER_CORE.copy()
     cluster.update(CLUSTER_OPTS)
@@ -582,16 +552,12 @@ def option_help(mode='string', qtype=None, tablefmt='simple'):
         }
 
     if qtype:
-        if qtype == 'local':
-            hlp.pop('cluster')
-            hlp.pop('torque')
-            hlp.pop('slurm')
-        elif qtype == 'slurm':
+        if qtype == 'slurm':
             hlp.pop('torque')
         elif qtype == 'torque':
             hlp.pop('slurm')
         else:
-            raise ClusterError('qtype must be "torque", "slurm", or "local"')
+            raise ClusterError('qtype must be "torque", "slurm"')
 
     if mode == 'print' or mode == 'string':
         outstr = ''

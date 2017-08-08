@@ -1,8 +1,8 @@
-#job -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 Monitor the queue for torque or slurm.
 
-Provides a class to monitor the torque, slurm, or local queues with identical
+Provides a class to monitor the all defined batch queues with identical
 syntax.
 
 At its simplest, you can use it like::
@@ -25,59 +25,28 @@ objects, or JobQueue.Job objects and blocks until those jobs to complete
 The default cluster environment is also defined in this file as MODE, it can be
 set directly or with the get_cluster_environment() function definied here.
 """
-import re
-import sys
-import pwd      # Used to get usernames for queue
-import socket   # Used to get the hostname
-import getpass  # Used to get usernames for queue
+import pwd as _pwd          # Used to get usernames for queue
+import getpass as _getpass  # Used to get usernames for queue
 from datetime import datetime as _dt
-from time import time, sleep
-from subprocess import check_output, CalledProcessError
-
-# For parsing torque queues
-import xml.etree.ElementTree as ET
+from time import time as _time
+from time import sleep as _sleep
 
 ###############################################################################
 #                                Our functions                                #
 ###############################################################################
 
-from . import run
-from . import logme
-from . import conf
-from . import ClusterError
-
-#########################
-#  Which system to use  #
-#########################
-
-from . import ALLOWED_MODES
-
-#########################################################
-#  The multiprocessing pool, only used in 'local' mode  #
-#########################################################
-
-from . import local
+from . import run as _run
+from . import logme as _logme
+from . import conf as _conf
+from . import ClusterError as _ClusterError
+from . import batch_systems as _batch
 
 # Funtions to import if requested
-__all__ = ['Queue', 'wait', 'check_queue', 'get_cluster_environment']
+__all__ = ['Queue']
 
 # We only need the queue defaults
-_defaults = conf.get_option('queue')
+_defaults = _conf.get_option('queue')
 
-# This is set in the get_cluster_environment() function.
-MODE = ''
-
-# Define torque-to-slurm mappings
-TORQUE_SLURM_STATES = {
-    'C': 'completed',
-    'E': 'completing',
-    'H': 'held',  # Not a SLURM state
-    'Q': 'pending',
-    'R': 'running',
-    'T': 'suspended',
-    'W': 'running',
-    'S': 'suspended',
-}
 
 # Define job states
 GOOD_STATES      = ['complete', 'completed', 'special_exit']
@@ -97,7 +66,7 @@ DONE_STATES = GOOD_STATES + BAD_STATES
 
 class Queue(object):
 
-    """A wrapper for torque, slurm, or local queues.
+    """A wrapper for all defined batch systems.
 
     Attributes:
         jobs (dict)             A dictionary of all jobs in this queue
@@ -118,14 +87,14 @@ class Queue(object):
                              If user='self' or 'current', the current user will
                              be used.
             partition (str): Optional partition to filter the queue with.
-            qtype (str):     'torque', 'slurm', or 'local', defaults to auto-detect.
+            qtype (str):     one of the defined batch queues (e.g. 'slurm')
         """
         # Get user ID as an int UID
         if user:
             if user == 'self' or user == 'current':
-                self.user = getpass.getuser()
+                self.user = _getpass.getuser()
                 """The username if defined."""
-                self.uid  = pwd.getpwnam(self.user).pw_uid
+                self.uid  = _pwd.getpwnam(self.user).pw_uid
             elif user == 'ALL':
                 self.user = None
             else:
@@ -133,33 +102,32 @@ class Queue(object):
                         or (isinstance(user, str) and user.isdigit()):
                     self.uid  = int(user)
                 else:
-                    self.uid = pwd.getpwnam(str(user)).pw_uid
+                    self.uid = _pwd.getpwnam(str(user)).pw_uid
         else:
             self.uid = None
-        self.user = pwd.getpwuid(self.uid).pw_name if self.uid else None
+        self.user = _pwd.getpwuid(self.uid).pw_name if self.uid else None
         self.partition = partition
         """The partition if defined."""
 
         # Set queue length
-        self.max_jobs = conf.get_option('queue', 'max_jobs')
+        self.max_jobs = _conf.get_option('queue', 'max_jobs')
         """The maximum number of jobs that can run in this queue."""
 
         # Support python2, which hates reciprocal import
         from .job import Job
-        from .local import Job as QJob
         self._Job      = Job
-        self._JobQueue = QJob
 
         # Get sleep time and update time
-        self.queue_update_time = conf.get_option('queue', 'queue_update', 2)
-        self.sleep_len         = conf.get_option('queue', 'sleep_len', 2)
+        self.queue_update_time = _conf.get_option('queue', 'queue_update', 2)
+        self.sleep_len         = _conf.get_option('queue', 'sleep_len', 2)
 
         # Set type
         if qtype:
-            check_queue(qtype)
+            _batch.check_queue(qtype)
         else:
-            check_queue()
-        self.qtype = qtype if qtype else MODE
+            _batch.check_queue()
+        self.qtype = qtype if qtype else _batch.MODE
+        self.batch_system = _batch.get_batch_system(self.qtype)
 
         # Allow tracking of updates to prevent too many updates
         self._updating = False
@@ -185,8 +153,8 @@ class Queue(object):
                  completed, 'bad' if failed, cancelled, or suspended, 'absent'
                  otherwise.
         """
-        for dep in run.listify(dependencies):
-            dep = int(dep)
+        for dep in _run.listify(dependencies):
+            dep = str(dep)
             if dep not in self.jobs:
                 return 'absent'
             state = self.jobs[dep].state
@@ -217,121 +185,178 @@ class Queue(object):
             True on success False or None on failure.
         """
         self.update()
-        logme.log('Queue waiting.', 'debug')
+        _logme.log('Queue waiting.', 'debug')
 
         # Sanitize arguments
+        jobs = _run.listify(jobs)
         if not isinstance(jobs, (list, tuple)):
             jobs = [jobs]
         for job in jobs:
-            if not isinstance(job, (str, int, self.QueueJob, self._Job,
-                                    self._JobQueue)):
-                raise ClusterError('job must be int, string, or Job, ' +
-                                   'is {}'.format(type(job)))
+            if not isinstance(job, (str, int, QueueJob, self._Job)):
+                raise _ClusterError('job must be int, string, or Job, ' +
+                                    'is {}'.format(type(job)))
 
         # Wait for 0.1 second before checking, as jobs take a while to be
         # queued sometimes
-        sleep(0.1)
+        _sleep(0.1)
+        pbar = _run.get_pbar(jobs, name="Waiting for job completion",
+                             unit='jobs')
         for job in jobs:
-            logme.log('Checking {}'.format(job), 'debug')
-            qtype = job.qtype if isinstance(job, self._Job) else self.qtype
-            if isinstance(job, (self._Job, self._JobQueue, self.QueueJob)):
+            _logme.log('Checking {}'.format(job), 'debug')
+            if isinstance(job, (self._Job, QueueJob)):
                 job = job.id
-            if qtype == 'local':
-                logme.log('Job is in local queue', 'debug')
-                try:
-                    job = int(job)
-                except TypeError:
-                    raise TypeError('Job must be a Job object or job #.')
-                if not local.JQUEUE \
-                        or not local.JQUEUE.runner.is_alive():
-                    raise ClusterError('Cannot wait on job ' + str(job) +
-                                       'JobQueue does not exist')
-                local.JQUEUE.wait(job)
-            else:
-                logme.log('Job is in remote queue', 'debug')
-                if isinstance(job, self._Job):
-                    job = job.id
-                job = int(job)
-                not_found = 0
-                lgd = False
-                while True:
-                    self._update()
-                    # Allow 12 seconds to elapse before job is found in queue,
-                    # if it is not in the queue by then, assume completion.
-                    if job not in self.jobs:
-                        if lgd:
-                            logme.log('Attempt #{}/12'.format(not_found),
-                                      'debug')
-                        else:
-                            logme.log('{} not in queue, waiting up to 12s '
-                                      .format(job) +
-                                      'for it to appear', 'info')
-                            lgd = True
-                        sleep(1)
-                        not_found += 1
-                        if not_found == 12:
-                            logme.log(
-                                '{} not in queue, tried 12 times over 12s'
-                                .format(job) + '. Job likely completed, ' +
-                                'assuming completion, stats will be ' +
-                                'unavailable.','warn'
-                            )
-                            return 'disappeared'
-                        continue
-                    ## Actually look for job in running/queued queues
-                    lgd      = False
-                    lgd2     = False
-                    start    = _dt.now()
-                    res_time = conf.get_option('queue', 'res_time')
-                    count    = 0
-                    # Get job state
-                    job_state = self.jobs[job].state
-                    # Check the state
-                    if job_state in GOOD_STATES:
-                        logme.log('Queue wait for {} complete'
-                                  .format(job), 'debug')
-                        sleep(0.1)
-                        break
-                    elif job_state in ACTIVE_STATES:
-                        if lgd:
-                            logme.log('{} not complete yet, waiting'
-                                      .format(job), 'debug')
-                            lgd = True
-                        else:
-                            logme.log('{} still not complete, waiting'
-                                      .format(job), 'verbose')
-                        sleep(self.sleep_len)
-                    elif job_state in BAD_STATES:
-                        logme.log('Job {} failed with state {}'
-                                  .format(job, job_state), 'error')
-                        return False
-                    elif job_state in UNCERTAIN_STATES:
-                        if not lgd2:
-                            logme.log('Job {} in state {}, waiting {} '
-                                      .format(job, job_state, res_time) +
-                                      'seconds for resolution', 'warn')
-                            lgd2 = True
-                        if (_dt.now() - start).seconds > res_time:
-                            logme.log('Job {} still in state {}, aborting'
-                                      .format(job, job_state), 'error')
-                            return False
-                        sleep(self.sleep_len)
+            if isinstance(job, self._Job):
+                job = job.id
+            job, _ = self.batch_system.normalize_job_id(job)
+            lgd = False
+            while True:
+                self._update()
+                # Allow 12 seconds to elapse before job is found in queue,
+                # if it is not in the queue by then, assume completion.
+                if not self.test_job_in_queue(job):
+                    break
+                ## Actually look for job in running/queued queues
+                lgd      = False
+                lgd2     = False
+                start    = _dt.now()
+                res_time = _conf.get_option('queue', 'res_time')
+                count    = 0
+                # Get job state
+                job_state = self.jobs[job].state
+                # Check the state
+                if job_state in GOOD_STATES:
+                    _logme.log('Queue wait for {} complete'
+                               .format(job), 'debug')
+                    _sleep(0.1)
+                    pbar.update()
+                    break
+                elif job_state in ACTIVE_STATES:
+                    if lgd:
+                        _logme.log('{} not complete yet, waiting'
+                                   .format(job), 'debug')
+                        lgd = True
                     else:
-                        if count == 5:
-                            logme.log('Job {} in unknown state {} '
-                                      .format(job, job_state) +
-                                      'cannot continue', 'critical')
-                            raise QueueError('Unknown job state {}'
-                                             .format(job_state))
-                        logme.log('Job {} in unknown state {} '
-                                  .format(job, job_state) +
-                                  'trying to resolve', 'debug')
-                        count += 1
-                        sleep(self.sleep_len)
+                        _logme.log('{} still not complete, waiting'
+                                   .format(job), 'verbose')
+                    _sleep(self.sleep_len)
+                elif job_state in BAD_STATES:
+                    _logme.log('Job {} failed with state {}'
+                               .format(job, job_state), 'error')
+                    return False
+                elif job_state in UNCERTAIN_STATES:
+                    if not lgd2:
+                        _logme.log('Job {} in state {}, waiting {} '
+                                   .format(job, job_state, res_time) +
+                                   'seconds for resolution', 'warn')
+                        lgd2 = True
+                    if (_dt.now() - start).seconds > res_time:
+                        _logme.log('Job {} still in state {}, aborting'
+                                   .format(job, job_state), 'error')
+                        return False
+                    _sleep(self.sleep_len)
+                else:
+                    if count == 5:
+                        _logme.log('Job {} in unknown state {} '
+                                   .format(job, job_state) +
+                                   'cannot continue', 'critical')
+                        raise QueueError('Unknown job state {}'
+                                         .format(job_state))
+                    _logme.log('Job {} in unknown state {} '
+                               .format(job, job_state) +
+                               'trying to resolve', 'debug')
+                    count += 1
+                    _sleep(self.sleep_len)
 
         # Sleep an extra half second to allow post-run scripts to run
-        sleep(0.5)
+        _sleep(0.5)
         return True
+
+    def get(self, jobs):
+        """Get all results from a bunch of Job objects.
+
+        Attributes:
+            jobs (list): List of fyrd.Job objects
+
+        Returns:
+            job_results (dict): {job_id: Job}
+
+        Raises:
+            fyrd.ClusterError if any job fails or goes missing.
+        """
+        self.update()
+        _logme.log('Queue waiting.', 'debug')
+        singular = True if isinstance(jobs, self._Job) else False
+
+        # Force into enumerated list to preserve order
+        jobs = dict(enumerate(_run.listify(jobs)))
+        done = {}
+
+        # Check that all jobs are valid
+        for job in jobs.values():
+            if not isinstance(job, self._Job):
+                raise _ClusterError('This only works with cluster job '
+                                    'objects')
+
+        # Loop through all jobs continuously trying to get outputs
+        pbar = _run.get_pbar(jobs, name="Getting Job Results", unit='jobs')
+        while jobs:
+            for i in list(jobs):
+                job = jobs[i]
+                job.update()
+                if not self.test_job_in_queue(job.id):
+                    raise _ClusterError('Job {} not queued'.format(job.id))
+                if job.state == 'completed':
+                    done[i] = jobs.pop(i).get()
+                    pbar.update()
+                elif job.state in BAD_STATES:
+                    pbar.close()
+                    raise _ClusterError('Job {} failed, cannot get output'
+                                        .format(job.id))
+            # Block between attempts
+            _sleep(self.sleep_len)
+        pbar.write('Done\n')
+        pbar.close()
+
+        # Correct the order, make it the same as the input list
+        results = []
+        for i in sorted(done.keys()):
+            results.append(done[i])
+        return results[0] if singular else results
+
+    def test_job_in_queue(self, job):
+        """Check to make sure job is in self.
+
+        Tries 12 times with 1 second between each. If found returns True,
+        else False.
+        """
+        lgd = False
+        not_found = 0
+        while True:
+            self._update()
+            # Allow 12 seconds to elapse before job is found in queue,
+            # if it is not in the queue by then, assume completion.
+            if job in self.jobs:
+                return True
+            else:
+                if lgd:
+                    _logme.log('Attempt #{}/12'.format(not_found),
+                               'debug')
+                else:
+                    _logme.log('{} not in queue, waiting up to 12s '
+                               .format(job) +
+                               'for it to appear', 'info')
+                    lgd = True
+                _sleep(1)
+                not_found += 1
+                if not_found == 12:
+                    _logme.log(
+                        '{} not in queue, tried 12 times over 12s'
+                        .format(job) + '. Job likely completed, ' +
+                        'assuming completion, stats will be ' +
+                        'unavailable.','warn'
+                    )
+                    return False
+                continue
 
     def wait_to_submit(self, max_jobs=None):
         """Block until fewer running/queued jobs in queue than max_jobs.
@@ -347,32 +372,33 @@ class Queue(object):
             if self.can_submit:
                 return
             if not written:
-                logme.log(('The queue is full, there are {} jobs running and '
-                           '{} jobs queued. Will wait to submit, retrying '
-                           'every {} seconds.')
-                          .format(len(self.running), len(self.queued),
-                                  self.sleep_len),
-                          'info')
+                _logme.log(('The queue is full, there are {} jobs running and '
+                            '{} jobs queued. Will wait to submit, retrying '
+                            'every {} seconds.')
+                           .format(len(self.running), len(self.queued),
+                                   self.sleep_len),
+                           'info')
                 written = True
             if count == 0:
-                logme.log('Still waiting to submit.', 'info')
+                _logme.log('Still waiting to submit.', 'info')
                 count = 50
             count -= 1
-            sleep(self.sleep_len)
+            _sleep(self.sleep_len)
 
     def update(self):
         """Refresh the list of jobs from the server, limit queries."""
-        if int(time()) - self.last_update > self.queue_update_time:
+        if int(_time()) - self.last_update > self.queue_update_time:
             self._update()
         else:
-            logme.log('Skipping update as last update too recent', 'debug')
+            _logme.log('Skipping update as last update too recent', 'debug')
         return self
 
     def get_jobs(self, key):
         """Return a dict of jobs where state matches key."""
         retjobs = {}
+        keys = [k.lower() for k in _run.listify(key)]
         for jobid, job in self.jobs.items():
-            if job.state == key.lower():
+            if job.get_state in keys:
                 retjobs[jobid] = job
         return retjobs
 
@@ -397,8 +423,8 @@ class Queue(object):
 
     @property
     def users(self):
-        """Return a list of users with jobs running."""
-        return [job.owner for job in self.jobs.values()]
+        """Return a set of users with jobs running."""
+        return set([job.owner for job in self.jobs.values()])
 
     @property
     def job_states(self):
@@ -419,12 +445,11 @@ class Queue(object):
 
     @property
     def active_job_count(self):
-        """Return a count of all queued or running jobs."""
-        return sum([
-            len(j) for j in [
-                self.get_jobs(i) for i in ACTIVE_STATES
-            ]
-        ])
+        """Return a count of all queued or running jobs, inc. array jobs."""
+        jobcount = 0
+        for j in self.get_jobs(ACTIVE_STATES):
+            jobcount += j.jobcount()
+        return jobcount
 
     @property
     def can_submit(self):
@@ -446,87 +471,71 @@ class Queue(object):
         """
         if self._updating:
             return
-        logme.log('Queue updating', 'debug')
+        _logme.log('Queue updating', 'debug')
         # Set the update time I don't care about microseconds
-        self.last_update = int(time())
+        self.last_update = int(_time())
 
         jobs = []  # list of jobs created this session
+        for [job_id, array_id, job_name, job_user, job_partition,
+             job_state, job_nodelist, job_nodecount,
+             job_cpus, job_exitcode] in self.batch_system.queue_parser(
+                 self.user, self.partition):
+            if job_nodecount and job_cpus:
+                job_threads = int(job_nodecount) * int(job_cpus)
+            else:
+                job_threads = None
+            if job_state == 'completed' or job_state == 'failed':
+                job_exitcode = job_exitcode
+            else:
+                job_exitcode = None
 
-        # Mode specific initialization
-        if self.qtype == 'local':
-            if not local.JQUEUE or not local.JQUEUE.runner.is_alive():
-                local.JQUEUE = local.JobQueue(cores=local.THREADS)
-            for job_id, job_info in local.JQUEUE:
-                if job_id in self.jobs:
-                    job = self.jobs[job_id]
-                else:
-                    job = self.QueueJob()
-                job.id     = job_id
-                job.name   = job_info.function.__name__
-                job.owner  = self.user
-                self.nodes = socket.gethostname()
-                if job_info.state == 'Not Submitted':
-                    job.state = 'pending'
-                elif job_info.state == 'waiting' \
-                        or job_info.state == 'submitted':
-                    job.state = 'pending'
-                elif job_info.state == 'started' \
-                        or job_info.state == 'running':
-                    job.state = 'running'
-                elif job_info.state == 'done':
-                    job.state = 'completed'
-                    job.exitcode = int(job_info.exitcode)
-                elif job_info.state == 'queued':
-                    job.state = 'pending'
-                else:
-                    raise Exception('Unrecognized state')
+            # Get/Create the QueueJob object
+            if job_id not in self.jobs:
+                job = QueueJob()
+            else:
+                job = self.jobs[job_id]
 
-                # Assign the job to self.
-                self.jobs[job_id] = job
-                jobs.append(job_id)
+            job.id    = job_id
+            job.name  = job_name
+            job.owner = job_user
+            job.queue = job_partition
+            job.state = job_state.lower()
 
-        else:
-            for [job_id, job_name, job_user, job_partition,
-                 job_state, job_nodelist, job_nodecount,
-                 job_cpus, job_exitcode] in queue_parser(self.qtype,
-                                                         self.user,
-                                                         self.partition):
-                if job_id not in self.jobs:
-                    job = self.QueueJob()
-                else:
-                    job = self.jobs[job_id]
-                jobs.append(job_id)
-                job.id    = job_id
-                job.name  = job_name
-                job.owner = job_user
-                job.queue = job_partition
-                job.state = job_state.lower()
-                job.nodes = job_nodelist
+            if array_id is not None:
+                job.array_job = True
+                cjob = QueueChild(job)
+                cjob.id      = array_id
+                cjob.name    = job_name
+                cjob.owner   = job_user
+                cjob.queue   = job_partition
+                cjob.state   = job_state.lower()
+                cjob.nodes   = job_nodelist
+                cjob.threads = job_threads
+                cjob.exitcode = job_exitcode
+                job.children[array_id] = cjob
+                job.state    = job.get_state()
+                job.nodes    = job.get_nodelist()
+                job.threads  = job.get_threads()
+                job.exitcode  = job.get_exitcode()
+            else:
+                job.nodes   = job_nodelist
+                job.threads = job_threads
+                job.exitcode = job_exitcode
 
-                # Threads is number of nodes * jobs per node
-                if job_nodecount and job_cpus:
-                    job.threads = int(job_nodecount) * int(job_cpus)
-                else:
-                    job.threads = None
-                if job.state == 'completed' or job.state == 'failed':
-                    job.exitcode = job_exitcode
-
-                # Assign the job to self.
-                self.jobs[job_id] = job
-                jobs.append(job_id)
+            # Assign the job to self.
+            self.jobs[job_id] = job
+            jobs.append(str(job_id))
 
         # We assume that if a job just disappeared it completed
         if self.jobs:
             for qjob in self.jobs.values():
-                if qjob.id not in jobs:
+                if str(qjob.id) not in jobs:
                     qjob.state = 'completed'
                     qjob.disappeared = True
 
     def __getattr__(self, key):
         """Make running and queued attributes dynamic."""
-        key = key.lower()
-        if key in TORQUE_SLURM_STATES:
-            key = TORQUE_SLURM_STATES[key]
+        key = self.batch_system.normalize_state(key.lower())
         if key == 'complete':
             key = 'completed'
         elif key == 'queued':
@@ -537,8 +546,8 @@ class Queue(object):
     def __getitem__(self, key):
         """Allow direct accessing of jobs by job id."""
         if isinstance(key, self._Job):
-            key = key.jobid
-        key = int(key)
+            key = key.id
+        key = str(key)
         try:
             return self.jobs[key]
         except KeyError:
@@ -569,61 +578,195 @@ class Queue(object):
         """A list of keys."""
         return str(self.jobs.keys())
 
-    ##############################################
-    #  A simple class to hold jobs in the queue  #
-    ##############################################
 
-    class QueueJob(object):
+##############################################
+#  A simple class to hold jobs in the queue  #
+##############################################
 
-        """A very simple class to store info about jobs in the queue.
 
-        Only used for torque and slurm queues.
+class _QueueJob(object):
 
-        Attributes:
-            id (int):           Job ID
-            name (str):         Job name
-            owner (str):        User who owns the job
-            threads (int):      Number of cores used by the job
-            queue (str):        The queue/partition the job is running in
-            state (str):        Current state of the job, normalized to slurm
-                                states
-            nodes (list):       List of nodes job is running on
-            exitcode (int):     Exit code of completed job
-            disappeared (bool): Job cannot be found in the queue anymore
-        """
+    """A very simple class to store info about jobs in the queue.
 
-        id          = None
-        name        = None
-        owner       = None
-        threads     = None
-        queue       = None
-        state       = None
-        nodes       = None
-        exitcode    = None
-        disappeared = False
+    Attributes:
+        id (int):           Job ID
+        name (str):         Job name
+        children (dict):    If array job, list of child job numbers
+        owner (str):        User who owns the job
+        threads (int):      Number of cores used by the job
+        queue (str):        The queue/partition the job is running in
+        state (str):        Current state of the job, normalized to slurm
+                            states
+        nodes (list):       List of nodes job is running on
+        exitcode (int):     Exit code of completed job
+        disappeared (bool): Job cannot be found in the queue anymore
+    """
 
-        def __init__(self):
-            """No initialization needed all attributes are set elsewhere."""
-            pass
+    id          = None
+    name        = None
+    owner       = None
+    threads     = None
+    queue       = None
+    state       = None
+    nodes       = None
+    exitcode    = None
+    disappeared = False
+    array_job   = False
+    children    = {}
+    parent      = None
+    _child_job  = False
+    _cname      = None
 
-        def __repr__(self):
-            """Show all info."""
-            outstr = ("Queue.QueueJob<{id}:{state}({name},owner:{owner}," +
-                      "queue:{queue},nodes:{nodes},threads:{threads}," +
-                      "exitcode:{code})").format(
-                          id=self.id, name=self.name, owner=self.owner,
-                          queue=self.queue, nodes=self.nodes,
-                          code=self.exitcode, threads=self.threads,
-                          state=self.state)
-            if self.disappeared:
-                outstr += 'DISAPPEARED>'
+    def get_state(self):
+        """return the current state of the job."""
+        if self.array_job:
+            pending_jobs = False
+            running_jobs = False
+            failed_jobs  = False
+            for job_info in self.children.values():
+                if job_info.state == 'pending':
+                    pending_jobs = True
+                elif job_info.state in ACTIVE_STATES:
+                    running_jobs = True
+                elif job_info.state in BAD_STATES:
+                    failed_jobs = True
+            if running_jobs:
+                return 'running'
+            if pending_jobs:
+                return 'pending'
+            if failed_jobs:
+                return 'failed'
+            return 'completed'
+        return self.state
+
+    def get_nodelist(self):
+        """return the current state of the job."""
+        if self.array_job:
+            nodelist = []
+            for job_info in self.children.values():
+                if job_info.nodes:
+                    nodelist = nodelist + job_info.nodes
+            return nodelist if nodelist else None
+        return self.nodes
+
+    def get_threads(self, state=None):
+        """Return a count of how many running jobs we have."""
+        states = [i.lower() for i in _run.listify(state)]
+        if self.array_job:
+            if state:
+                return sum([j.threads for j in self.children if j.state in states])
+            return len(self.children)
+        if state:
+            return self.threads if self.state in states else 0
+        return self.threads
+
+    def get_exitcode(self):
+        """Return sum of exitcodes for all completed jobs."""
+        if self.array_job:
+            code = 0
+            some_done = False
+            for child in self.children:
+                if child.state in DONE_STATES:
+                    some_done = True
+                    code += child.exitcode
+            if some_done:
+                return code
+            return None
+        return self.exitcode
+
+    def jobcount(self, state=None):
+        """Return a count of how many running jobs we have."""
+        states = [i.lower() for i in _run.listify(state)]
+        if self.array_job:
+            if state:
+                return len([j for j in self.children if j.state in states])
+            return len(self.children)
+        if state:
+            return 1 if self.state in states else 0
+        return 1
+
+    def __repr__(self):
+        """Show all info."""
+        if not self._child_job:
+            if self.array_job:
+                children = len(self.children) if self.children else None
+                child_str = ':children:{0}'.format(children)
             else:
-                outstr += '>'
-            return outstr
+                child_str = ''
+        else:
+            child_str = ':parent:{0}'.format(self.parent.id)
+        outstr = ("{cname}<{id}:{state}{child}" +
+                  "({name},owner:{owner}," +
+                  "queue:{queue},nodes:{nodes},threads:{threads}," +
+                  "exitcode:{code})").format(
+                      id=self.id, name=self.name, owner=self.owner,
+                      queue=self.queue, nodes=self.nodes,
+                      code=self.exitcode, threads=self.threads,
+                      state=self.state, child=child_str, cname=self._cname
+                  )
+        if self.disappeared:
+            outstr += 'DISAPPEARED>'
+        else:
+            outstr += '>'
+        return outstr
 
-        def __str__(self):
-            """Print job ID."""
-            return str(self.id)
+    def __str__(self):
+        """Print job ID."""
+        return str(self.id)
+
+
+class QueueJob(_QueueJob):
+
+    """A very simple class to store info about jobs in the queue.
+
+    Only used for torque and slurm queues.
+
+    Attributes:
+        id (int):           Job ID
+        name (str):         Job name
+        owner (str):        User who owns the job
+        threads (int):      Number of cores used by the job
+        queue (str):        The queue/partition the job is running in
+        state (str):        Current state of the job, normalized to slurm
+                            states
+        nodes (list):       List of nodes job is running on
+        exitcode (int):     Exit code of completed job
+        disappeared (bool): Job cannot be found in the queue anymore
+        array_job (bool):   This job is an array job and has children
+        children (dict):    If array job, list of child job numbers
+    """
+
+    def __init__(self):
+        """Initialize."""
+        self._cname   = 'QueueJob'
+        self.children = {}
+
+
+class QueueChild(_QueueJob):
+
+    """A very simple class to store info about child jobs in the queue.
+
+    Only used for torque and slurm queues.
+
+    Attributes:
+        id (int):           Job ID
+        name (str):         Job name
+        owner (str):        User who owns the job
+        threads (int):      Number of cores used by the job
+        queue (str):        The queue/partition the job is running in
+        state (str):        Current state of the job, normalized to slurm
+                            states
+        nodes (list):       List of nodes job is running on
+        exitcode (int):     Exit code of completed job
+        disappeared (bool): Job cannot be found in the queue anymore
+        parent (QueueJob):  Backref to parent job
+    """
+
+    def __init__(self, parent):
+        """Initialize with a parent."""
+        self._cname   = 'QueueChild'
+        self.parent = parent
+
 
 ################
 #  Exceptions  #
@@ -634,426 +777,3 @@ class QueueError(Exception):
     """Simple Exception wrapper."""
 
     pass
-
-
-###############################################################################
-#                             Non-Class Functions                             #
-###############################################################################
-
-
-###################
-#  Queue Parsers  #
-###################
-
-def queue_parser(qtype=None, user=None, partition=None):
-    """Call either torque or slurm qtype parsers depending on qtype.
-
-    Args:
-        qtype: Either 'torque' or 'slurm', defaults to current MODE
-        user:  optional user name to pass to queue to filter queue with
-
-    Yields:
-        tuple: job_id, name, userid, partition, state, nodelist, numnodes,
-               ntpernode, exit_code
-    """
-    if not qtype:
-        qtype = get_cluster_environment()
-    if qtype == 'torque':
-        return torque_queue_parser(user, partition)
-    elif qtype == 'slurm':
-        return slurm_queue_parser(user, partition)
-    else:
-        raise ClusterError("Invalid qtype type {}, must be 'torque' or 'slurm'"
-                           .format(qtype))
-
-
-def torque_queue_parser(user=None, partition=None):
-    """Iterator for torque queues.
-
-    Use the `qstat -x` command to get an XML queue for compatibility.
-
-    Args:
-        user:     optional user name to pass to qstat to filter queue with
-        partiton: optional partition to filter the queue with
-
-    Yields:
-        tuple: job_id, name, userid, partition, state, nodelist, numnodes,
-               ntpernode, exit_code
-
-    numcpus is currently always 1 as most torque queues treat every core as a
-    node.
-    """
-    # I am not using run.cmd because I want to catch XML errors also
-    try_count = 0
-    qargs = ['qstat', '-x']
-    while True:
-        try:
-            xmlqueue = ET.fromstring(check_output(qargs))
-        except CalledProcessError:
-            sleep(1)
-            if try_count == 5:
-                raise
-            else:
-                try_count += 1
-        except ET.ParseError:
-            # ElementTree throws error when string is empty
-            sleep(1)
-            if try_count == 1:
-                xmlqueue = None
-                break
-            else:
-                try_count += 1
-        else:
-            break
-
-    # Create QueueJob objects for all entries that match user
-    if xmlqueue is not None:
-        for xmljob in xmlqueue:
-            job_id = xmljob.find('Job_Id').text.split('.')[0]
-            if '[' in job_id:
-                job_id, array_id = job_id.split('[')
-                array_id = array_id.strip('[]')
-                if array_id:
-                    array_id = int(array_id)
-                else:
-                    array_id = 0
-            else:
-                array_id = None
-            try:
-                job_id = int(job_id)
-            except ValueError:
-                # Allow string job IDs
-                pass
-
-            job_owner = xmljob.find('Job_Owner').text.split('@')[0]
-            if user and job_owner != user:
-                continue
-            job_name  = xmljob.find('Job_Name').text
-            job_queue = xmljob.find('queue').text
-            job_state = xmljob.find('job_state').text
-            job_state = TORQUE_SLURM_STATES[job_state]
-            logme.log('Job {} state: {}'.format(job_id, job_state),
-                      'debug')
-            ndsx = xmljob.find('exec_host')
-            if ndsx:
-                nds = ndsx.text.split('+')
-            else:
-                nds = []
-            nodes = []
-            for node in nds:
-                if '-' in node:
-                    nm, num = node.split('/')
-                    for i in range(*[int(i) for i in num.split('-')]):
-                        nodes.append(nm + '/' + str(i).zfill(2))
-                else:
-                    nodes.append(node)
-            # I assume that every 'node' is a core, as that is the
-            # default for torque, but it isn't always true
-            job_threads  = len(nodes)
-            exitcode     = xmljob.find('exit_status')
-            if hasattr(exitcode, 'text'):
-                exitcode = int(exitcode.text)
-
-            if partition and job_queue != partition:
-                continue
-            yield (job_id, job_name, job_owner, job_queue, job_state,
-                   nodes, job_threads, 1, exitcode)
-
-
-def slurm_queue_parser(user=None, partition=None):
-    """Iterator for slurm queues.
-
-    Use the `squeue -O` command to get standard data across implementation,
-    supplement this data with the results of `sacct`. sacct returns data only
-    for the current user but retains a much longer job history. Only jobs not
-    returned by squeue are added with sacct, and they are added to *the end* of
-    the returned queue, i.e. *out of order with respect to the actual queue*.
-
-    Args:
-        user:      optional user name to filter queue with
-        partition: optional partition to filter queue with
-
-    Yields:
-        tuple: job_id, name, userid, partition, state, nodelist, numnodes,
-               ntpernode, exit_code
-    """
-    nodequery = re.compile(r'([^\[,]+)(\[[^\[]+\])?')
-    qargs = ['squeue', '-h', '-O',
-             'jobid:400,arraytaskid:400,name:400,userid:400,partition:400,' +
-             'state:400,nodelist:400,numnodes:400,numcpus:400,exit_code:400']
-    # Parse queue info by length
-    squeue = [
-        tuple(
-            [k[i:i+200].rstrip() for i in range(0, 4000, 400)]
-        ) for k in run.cmd(qargs)[1].split('\n')
-    ]
-    # SLURM sometimes clears the queue extremely fast, so we use sacct
-    # to get old jobs by the current user
-    qargs = ['sacct', '-p',
-             '--format=jobid,jobname,user,partition,state,' +
-             'nodelist,reqnodes,ncpus,exitcode']
-    try:
-        sacct = [tuple(i.strip(' |').split('|')) for i in
-                 run.cmd(qargs)[1].split('\n')]
-        sacct = sacct[1:]
-    # This command isn't super stable and we don't care that much, so I will
-    # just let it die no matter what
-    except Exception as e:
-        if logme.MIN_LEVEL == 'debug':
-            raise e
-        else:
-            sacct = []
-
-    if sacct:
-        if len(sacct[0]) != 9:
-            logme.log('sacct parsing failed unexpectedly as there are not ' +
-                      '9 columns, aborting.', 'critical')
-            raise ValueError('sacct output does not have 9 columns. Has:' +
-                             '{}: {}'.format(len(sacct[0]), sacct[0]))
-        jobids = [i[0] for i in squeue]
-        for sinfo in sacct:
-            # Skip job steps, only index whole jobs
-            if '.' in sinfo[0]:
-                logme.log('Skipping {} '.format(sinfo[0]) +
-                          "in sacct processing as it is a job part.",
-                          'verbose')
-                continue
-            # These are the values I expect
-            try:
-                [sid, sname, suser, spartition, sstate,
-                 snodelist, snodes, scpus, scode] = sinfo
-                if '_' in sid:
-                    sid, sarr = sid.split('_')
-                    sif = '{}_{}'.format(sid, sarr)
-                else:
-                    sarr = None
-                    sif = '{}'.format(sid)
-            except ValueError as err:
-                logme.log('sacct parsing failed with error {} '.format(err) +
-                          'due to an incorrect number of entries.\n' +
-                          'Contents of sinfo:\n{}\n'.format(sinfo) +
-                          'Expected 9 values\n:' +
-                          '[sid, sname, suser, spartition, sstate, ' +
-                          'snodelist, snodes, scpus, scode]',
-                          'critical')
-                raise
-            # Skip jobs that were already in squeue
-            if sid in jobids:
-                logme.log('{} still in squeue output'.format(sid),
-                          'verbose')
-                continue
-            scode = int(scode.split(':')[-1])
-            squeue.append((sid, sarr, sname, suser, spartition, sstate,
-                           snodelist, snodes, scpus, scode))
-    else:
-        logme.log('No job info in sacct', 'debug')
-
-    # Sanitize data
-    for sinfo in squeue:
-        if len(sinfo) == 10:
-            [sid, sarr, sname, suser, spartition, sstate, sndlst,
-             snodes, scpus, scode] = sinfo
-        else:
-            sys.stderr.write('{}'.format(repr(sinfo)))
-            raise ClusterError('Queue parsing error, expected 10 items '
-                               'in output of squeue and sacct, got {}\n'
-                               .format(len(sinfo)))
-        if partition and spartition != partition:
-            continue
-        if not isinstance(sid, int):
-            sid = int(sid) if sid else None
-        if isinstance(sarr, str) and sarr.isdigit():
-            sarr = int(sarr)
-        else:
-            sarr = None
-        if not isinstance(snodes, int):
-            snodes = int(snodes) if snodes else None
-        if not isinstance(scpus, int):
-            scpus = int(scpus) if snodes else None
-        if not isinstance(scode, int):
-            scode = int(scode) if scode else None
-        # Convert user from ID to name
-        if suser.isdigit():
-            suser = pwd.getpwuid(int(suser)).pw_name
-        if user and suser != user:
-            continue
-        # Attempt to parse nodelist
-        snodelist = []
-        if sndlst:
-            if nodequery.search(sndlst):
-                nsplit = nodequery.findall(sndlst)
-                for nrg in nsplit:
-                    node, rge = nrg
-                    if not rge:
-                        snodelist.append(node)
-                    else:
-                        for reg in rge.strip('[]').split(','):
-                            # Node range
-                            if '-' in reg:
-                                start, end = [int(i) for i in reg.split('-')]
-                                for i in range(start, end):
-                                    snodelist.append('{}{}'.format(node, i))
-                            else:
-                                snodelist.append('{}{}'.format(node, reg))
-            else:
-                snodelist = sndlst.split(',')
-
-        yield (sid, sname, suser, spartition, sstate, snodelist,
-               snodes, scpus, scode)
-
-
-###########################################################
-#  Set the global cluster type: slurm, torque, or local  #
-###########################################################
-
-
-def get_cluster_environment():
-    """Detect the local cluster environment and set MODE globally.
-
-    Uses which to search for sbatch first, then qsub. If neither is found,
-    MODE is set to local.
-
-    Returns:
-        tuple: MODE variable ('torque', 'slurm', or 'local')
-    """
-    global MODE
-    conf_queue = conf.get_option('queue', 'queue_type', 'auto')
-    if conf_queue not in ['torque', 'slurm', 'local', 'auto']:
-        logme.log('queue_type in the config file is {}, '.format(conf_queue) +
-                  'but it should be one of torque, slurm, local, or auto. ' +
-                  'Resetting it to auto', 'warn')
-        conf.set_option('queue', 'queue_type', 'auto')
-        conf_queue = 'auto'
-    if conf_queue == 'auto':
-        sbatch_cmnd = conf.get_option('queue', 'sbatch')
-        qsub_cmnd   = conf.get_option('queue', 'qsub')
-        sbatch_cmnd = sbatch_cmnd if sbatch_cmnd else 'sbatch'
-        qsub_cmnd   = qsub_cmnd if qsub_cmnd else 'qsub'
-        if run.which(sbatch_cmnd):
-            MODE = 'slurm'
-        elif run.which(qsub_cmnd):
-            MODE = 'torque'
-        else:
-            MODE = 'local'
-    else:
-        MODE = conf_queue
-    if MODE == 'slurm' or MODE == 'torque':
-        logme.log('{} detected, using for cluster submissions'.format(MODE),
-                  'debug')
-    else:
-        logme.log('No cluster environment detected, using multiprocessing',
-                  'debug')
-    return MODE
-
-
-##############################
-#  Check if queue is usable  #
-##############################
-
-
-def check_queue(qtype=None):
-    """Raise exception if MODE is incorrect."""
-    if 'MODE' not in globals():
-        global MODE
-        MODE = get_cluster_environment()
-    if not MODE:
-        MODE = get_cluster_environment()
-    if qtype:
-        if qtype not in ALLOWED_MODES:
-            raise ClusterError('qtype value {} is not recognized, '
-                               .format(qtype) +
-                               'should be: local, torque, or slurm')
-        else:
-            if MODE not in ALLOWED_MODES:
-                MODE = qtype
-            return True
-    elif MODE not in ALLOWED_MODES:
-        raise ClusterError('MODE value {} is not recognized, '.format(MODE) +
-                           'should be: local, torque, or slurm')
-
-
-######################################################################
-#  Expose the Queue waiting method without requiring a Queue object  #
-######################################################################
-
-
-def wait(jobs):
-    """Wait for jobs to finish.
-
-    Args:
-        jobs: A single job or list of jobs to wait for. With torque or slurm,
-              these should be job IDs, with local mode, these are
-              multiprocessing job objects (returned by submit())
-    """
-    # Support python2, which hates reciprocal import for 80's reasons
-    from .job import Job
-    from .local import JobQueue
-
-    check_queue()  # Make sure the MODE is usable
-
-    # Sanitize argument
-    if not isinstance(jobs, (list, tuple)):
-        jobs = [jobs]
-    for job in jobs:
-        if not isinstance(job, (str, int, Job, JobQueue)):
-            raise ClusterError('job must be int, string, or Job, ' +
-                               'is {}'.format(type(job)))
-
-    if MODE == 'local':
-        for job in jobs:
-            try:
-                job = int(job)
-            except TypeError:
-                raise TypeError('Job must be a Job object or job #.')
-            if not local.JQUEUE or not local.JQUEUE.runner.is_alive():
-                raise ClusterError('Cannot wait on job ' + str(job) +
-                                   'JobQueue does not exist')
-            local.JQUEUE.wait(job)
-
-    elif MODE == 'torque':
-        # Wait for 1 seconds before checking, as jobs take a while to be queued
-        # sometimes
-        sleep(1)
-
-        s = re.compile(r' +')  # For splitting qstat output
-        # Jobs must be strings for comparison operations
-        jobs = [str(j) for j in jobs]
-        q = run.cmd('qstat -a', tries=8)[1].rstrip().split('\n')
-        # Check header
-        if not re.split(r' {2,100}', q[3])[9] == 'S':
-            raise ClusterError('Unrecognized torque qstat format')
-        # Build a list of completed jobs
-        complete = []
-        for j in q[5:]:
-            i = s.split(j)
-            if i[9] == 'C':
-                complete.append(i[0].split('.')[0])
-        # Build a list of all jobs
-        alljobs  = [s.split(j)[0].split('.')[0] for j in q[5:]]
-        # Trim down job list
-        jobs = [j for j in jobs if j in alljobs]
-        jobs = [j for j in jobs if j not in complete]
-        if len(jobs) == 0:
-            return
-    elif MODE == 'slurm':
-        # Wait for 2 seconds before checking, as jobs take a while to be queued
-        # sometimes
-        sleep(2)
-
-        # Jobs must be strings for comparison operations
-        jobs = [str(j) for j in jobs]
-        while True:
-            # Slurm allows us to get a custom output for faster parsing
-            q = check_output(
-                ['squeue', '-h', '-o', "'%A,%t'"]).decode().rstrip().split(',')
-            # Build a list of jobs
-            complete = [i[0] for i in q if i[1] == 'CD']
-            failed   = [i[0] for i in q if i[1] == 'F']
-            allj     = [i[0] for i in q]
-            # Trim down job list, ignore failures
-            jobs = [i for i in jobs if i not in allj]
-            jobs = [i for i in jobs if i not in complete]
-            jobs = [i for i in jobs if i not in failed]
-            if len(jobs) == 0:
-                return
-            sleep(2)

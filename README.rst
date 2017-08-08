@@ -2,9 +2,9 @@
 Fyrd
 ####
 
-One liner script and function submission to torque, slurm, or a local machines
-with dependency tracking using python. Uses the same syntax irrespective of
-cluster environment!
+One liner script and function submission to torque or slurm clusters with
+dependency tracking using python. Uses the same syntax irrespective of cluster
+environment!
 
 Learn more at https://fyrd.science, https://fyrd.rtfd.com, and
 https://github.com/MikeDacre/fyrd
@@ -20,7 +20,7 @@ https://github.com/MikeDacre/fyrd
 +---------+----------------------------------------------------+
 | License | MIT License, property of Stanford, use as you wish |
 +---------+----------------------------------------------------+
-| Version | 0.6.1b9                                            |
+| Version | 0.6.2a1                                            |
 +---------+----------------------------------------------------+
 
 
@@ -134,9 +134,7 @@ can be done like this:
    jobs = []
    for i in huge_list:
        jobs.append(fyrd.Job(my_function, (i,), profile='small').submit())
-   results = []
-   for i in jobs:
-       results.append(i.get())
+   results = fyrd.get(jobs)
 
 The results list in this example will contain the function outputs, even if
 those outputs are integers, objects, or other Python types. Similarly, shell
@@ -148,10 +146,9 @@ scripts can be run like this:
    jobs   = []
    for i in [i for i in os.listdir('.') if i.endswith('.gz')]:
        jobs.append(fyrd.Job(script.format(i), profile='long').submit())
-   results = []
-   for i in jobs:
-       i.wait()
-       results.append(i.stdout)
+   results = fyrd.get(jobs)
+   for i in results:
+       print(i.stdout)
 
 Results will contain the contents of STDOUT for the submitted script
 
@@ -295,6 +292,7 @@ This software requires the following external modules:
 - `tabulate <https://pypi.python.org/pypi/tabulate>`_ —  allows readable printing of help
 - `six <https://pypi.python.org/pypi/six>`_ —  makes python2/3 cross-compatibility easier
 - `tblib <https://pypi.python.org/pypi/tblib>`_ —  allows me to pass Tracebacks between nodes
+- `tqdm <https://pypi.python.org/pypi/tqdm>`_ — pretty progress bars for multi-job get and wait
 
 Cluster Dependencies
 ....................

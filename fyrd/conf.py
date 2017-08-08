@@ -26,7 +26,8 @@ except ImportError:
 
 from . import run     as _run
 from . import logme   as _logme
-from . import options as _opt
+from . import batch_systems as _batch
+_opt = _batch.options
 
 
 ###############################################################################
@@ -53,6 +54,7 @@ DEFAULTS = {
         'queue_type':   'auto',
         'sbatch':       None, # Path to sbatch command
         'qsub':         None, # Path to qsub command
+        'progressbar':  True,
         # Not implemented yet
         #  'db':           _os.path.join(CONFIG_PATH, 'db.sql'),
     },
@@ -68,9 +70,6 @@ DEFAULTS = {
         'profile_file':    _os.path.join(
             CONFIG_PATH, 'profiles.txt'
         )
-    },
-    'jobqueue': {
-        'jobno': 1
     },
 }
 
@@ -105,13 +104,14 @@ CONF_HELP = {
                                 running or completed again after some time so
                                 it makes sense to wait a bit, but not forever.
                                 The default is 45 minutes: 2700 seconds.
-            queue_type (str):   the type of queue to use, one of 'torque',
-                                'slurm', 'local', 'auto'. Default is auto to
-                                auto-detect the queue.
+            queue_type (str):   the type of queue to use, one of the batch
+                                systems (e.g. 'slurm') or 'auto'. Default is
+                                auto to auto-detect the queue.
             sbatch (str):       A path to the sbatch executable, only required
                                 for slurm mode if sbatch is not in the PATH.
             qsub (str):         A path to the qsub executable, only required
                                 for torque mode if sbatch is not in the PATH.
+            progressbar (bool): Show a progress bar when waiting for jobs
             db_path (str):      Where to put the job database (Not implemented)
         """
     ),
@@ -147,13 +147,6 @@ CONF_HELP = {
                                    current executable, not advised, but
                                    sometimes necessary.
             profile_file (str):    the config file where profiles are defined.
-        """
-    ),
-    'jobqueue': _dnt(
-        """
-        [jobqueue]
-        Sets options for the local queue system, will be removed in the future
-        in favor of database.
         """
     ),
 }

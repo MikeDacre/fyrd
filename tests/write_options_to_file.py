@@ -9,7 +9,7 @@ Write the current set of options to a file.
   ORGANIZATION: Stanford University
        LICENSE: MIT License, property of Stanford, use as you wish
        CREATED: 2016-31-16 23:06
- Last modified: 2016-11-04 17:35
+ Last modified: 2017-08-05 23:55
 
 ============================================================================
 """
@@ -17,7 +17,6 @@ import os
 import sys
 sys.path.append(os.path.abspath('../'))
 import fyrd
-fyrd.local.THREADS = 5
 
 with open('options_help.txt', 'w') as fout:
     fout.write(fyrd.option_help(mode='string'))

@@ -7,7 +7,7 @@ import pytest
 
 sys.path.append(os.path.abspath('.'))
 import fyrd
-env = fyrd.get_cluster_environment()
+env = fyrd.batch_systems.get_cluster_environment()
 
 fyrd.logme.MIN_LEVEL = 'debug'
 
@@ -78,15 +78,32 @@ SCRIPT = r"""zcat {file} | sed 's/\t/  ' > {outfile}"""
 ###############################################################################
 
 
+def test_torque_array_normalization():
+    """Torque specific job normalization."""
+    batch = fyrd.batch_systems.get_batch_system('torque')
+    assert batch.normalize_job_id('12345[24]') == ('12345', '24')
+    assert batch.normalize_job_id('12345[]') == ('12345', None)
+
+
+def test_torque_state_normalization():
+    """Torque specific job normalization."""
+    batch = fyrd.batch_systems.get_batch_system('torque')
+    assert batch.normalize_state('R') == 'running'
+    assert batch.normalize_state('c') == 'completed'
+
+
+def test_slurm_array_normalization():
+    """Torque specific job normalization."""
+    batch = fyrd.batch_systems.get_batch_system('slurm')
+    assert batch.normalize_job_id('12345_24') == ('12345', '24')
+
+
 def test_job_creation():
     """Make a job and print it."""
-    job = fyrd.Job('echo hi', cores=2, time='00:02:00', mem='2000',
-                   threads=4, clean_files=False, clean_outputs=False)
+    job = fyrd.Job('echo hi', cores=2, time='00:02:00', mem='2000')
     assert job.qtype == env
 
 
-@pytest.mark.skipif(env == 'local',
-                    reason="Fails in local mode")
 def test_job_execution():
     """Run a job and autoclean."""
     job = fyrd.Job('echo hi', profile='default', clean_files=True,
@@ -115,8 +132,56 @@ def test_job_execution():
     assert isinstance(job.runtime, td)
 
 
-@pytest.mark.skipif(env == 'local',
-                    reason="Fails in local mode")
+def test_multi_job_get():
+    """Run a job and autoclean."""
+    job = fyrd.Job('echo hi', profile='default', clean_files=True,
+                   clean_outputs=True).submit()
+    job2 = fyrd.Job('echo ho', profile='default', clean_files=True,
+                    clean_outputs=True).submit()
+    outs = fyrd.basic.get([job, job2])
+    assert outs[0] == 'hi\n'
+    assert outs[1] == 'ho\n'
+    assert job.stdout == 'hi\n'
+    assert job2.stdout == 'ho\n'
+    assert not os.path.isfile(job.outfile)
+    assert not os.path.isfile(job2.outfile)
+
+
+def test_basic_job():
+    """Run a job using the basic.py submit function."""
+    fyrd.basic.make_job('echo hi', profile='default')
+    job = fyrd.submit('echo hi', profile='default')
+    job.wait()
+    print(repr(job))
+    print(str(job))
+    print(repr(job.submission))
+    print(str(job.submission))
+    print(job.outfile)
+    assert os.path.isfile(job.outfile)
+    assert os.path.isfile(job.errfile)
+    assert os.path.isfile(job.submission.file_name)
+    out = job.get()
+    assert not os.path.isfile(job.outfile)
+    assert not os.path.isfile(job.errfile)
+    assert not os.path.isfile(job.submission.file_name)
+    sys.stdout.write('{};\nSTDOUT: {}\nSTDERR: {}\n'
+                     .format(job.exitcode, job.stdout, job.stderr))
+    assert job.exitcode == 0
+    assert out == 'hi\n'
+    assert job.stdout == 'hi\n'
+    assert job.stderr == ''
+    assert isinstance(job.start, dt)
+    assert isinstance(job.end, dt)
+    assert isinstance(job.runtime, td)
+
+
+def test_make_job_file():
+    """Use the basic function to make a job file."""
+    job_file = fyrd.basic.make_job_file('echo hi')
+    assert os.path.isfile(job_file)
+    os.remove(job_file)
+
+
 def test_job_execution_paths():
     """Run a job and autoclean with defined paths."""
     os.makedirs('out')
@@ -144,11 +209,10 @@ def test_job_execution_paths():
     assert isinstance(job.start, dt)
     assert isinstance(job.end, dt)
     assert isinstance(job.runtime, td)
+    os.removedirs('out')
     os.system('rm -rf {}'.format('out'))
 
 
-@pytest.mark.skipif(env == 'local',
-                    reason="Fails in local mode")
 def test_job_params():
     """Run a job with some explicit parameters set."""
     job = fyrd.Job('echo ho', profile='default', clean_files=True,
@@ -160,8 +224,6 @@ def test_job_params():
     assert job.stderr == ''
 
 
-@pytest.mark.skipif(env == 'local',
-                    reason="Fails in local mode")
 def test_outfiles():
     """Run a job with outfile and errfile overriden parameters set."""
     job = fyrd.Job('echo ho', profile='default', clean_files=True,
@@ -173,17 +235,12 @@ def test_outfiles():
     assert job.stderr == ''
 
 
-@pytest.mark.skipif(env == 'local',
-                    reason="Fails in local mode")
 def test_depends():
     """Run some jobs with dependencies."""
     job = fyrd.Job('sleep 3', profile='default', clean_files=True,
                    clean_outputs=True)
     job.submit()
     job.submit()  # Test submission abort
-    with pytest.raises(fyrd.ClusterError):
-        job2 = fyrd.Job('echo eggs', profile='default', clean_files=True,
-                        clean_outputs=True, depends='job').submit()
     job2 = fyrd.Job('echo eggs', profile='default', clean_files=True,
                     clean_outputs=True, depends=job).submit()
     out = job2.get()
@@ -198,8 +255,6 @@ def test_depends():
     assert job3.stderr == ''
 
 
-@pytest.mark.skipif(env == 'local',
-                    reason="Fails in local mode")
 def test_resubmit():
     """Alter a job and resubmit."""
     job = fyrd.Job('echo ho', profile='default', clean_files=True,
@@ -209,16 +264,14 @@ def test_resubmit():
     assert out == 'ho\n'
     assert job.stdout == 'ho\n'
     assert job.stderr == ''
-    #  job.command = 'echo hi'
+    job.command = 'echo hi'
     job.resubmit()
     out = job.get()
-    assert out == 'ho\n'
-    assert job.stdout == 'ho\n'
+    assert out == 'hi\n'
+    assert job.stdout == 'hi\n'
     assert job.err == ''
 
 
-@pytest.mark.skipif(env == 'local',
-                    reason="Fails in local mode")
 def test_job_cleaning():
     """Delete intermediate files without autoclean."""
     job = fyrd.Job('echo hi', profile='default', clean_files=False,
@@ -234,8 +287,28 @@ def test_job_cleaning():
     assert not os.path.isfile(job.submission.file_name)
 
 
-@pytest.mark.skipif(env == 'local',
-                    reason="Fails in local mode")
+def test_multi_job_cleaning():
+    """Delete intermediate files for more than one job."""
+    job = fyrd.Job('echo hi', profile='default', clean_files=False,
+                   clean_outputs=False).submit()
+    job2 = fyrd.Job('echo ho', profile='default', clean_files=False,
+                    clean_outputs=False).submit()
+    fyrd.basic.wait([job, job2])
+    assert os.path.isfile(job.outfile)
+    assert os.path.isfile(job.errfile)
+    assert os.path.isfile(job.submission.file_name)
+    assert os.path.isfile(job2.outfile)
+    assert os.path.isfile(job2.errfile)
+    assert os.path.isfile(job2.submission.file_name)
+    fyrd.basic.clean([job, job2], clean_outputs=True)
+    assert not os.path.isfile(job.outfile)
+    assert not os.path.isfile(job.errfile)
+    assert not os.path.isfile(job.submission.file_name)
+    assert not os.path.isfile(job2.outfile)
+    assert not os.path.isfile(job2.errfile)
+    assert not os.path.isfile(job2.submission.file_name)
+
+
 def test_function_submission():
     """Submit a function."""
     job = fyrd.Job(write_to_file, ('42', 'bobfile'), clean_files=False)
@@ -266,8 +339,6 @@ def test_function_submission():
     job.clean(delete_outputs=True)
 
 
-@pytest.mark.skipif(env == 'local',
-                    reason="Fails in local mode")
 def test_method_submission():
     """Submit a method."""
     t = MethodSubmission()
@@ -276,8 +347,6 @@ def test_method_submission():
     assert t2 == t.me*2
 
 
-@pytest.mark.skipif(env == 'local',
-                    reason="Fails in local mode")
 def test_function_keywords():
     """Submit a simple function with keyword arguments."""
     job = fyrd.Job(raise_me, (10,), kwargs={'power': 10}).submit()
@@ -285,8 +354,6 @@ def test_function_keywords():
     job.clean(delete_outputs=True)
 
 
-@pytest.mark.skipif(env == 'local',
-                    reason="Fails in local mode")
 def test_splitfile():
     """Use the splitfile helper function."""
     out = fyrd.helpers.splitrun(2, 'tests/test.txt.gz',
@@ -294,8 +361,6 @@ def test_splitfile():
     assert out == dosomething('tests/test.txt.gz')
 
 
-@pytest.mark.skipif(env == 'local',
-                    reason="Fails in local mode")
 def test_splitfile_script():
     """Test splitfile() with a script and outfile."""
     out = fyrd.helpers.splitrun(2, 'tests/test.txt.gz',
@@ -303,30 +368,18 @@ def test_splitfile_script():
     assert out == dosomething('tests/test.txt.gz')
 
 
-@pytest.mark.skipif(env == 'local',
-                    reason="Fails in local mode")
 def test_splitfile_indirect():
     """Use the splitfile helper function."""
     job = fyrd.helpers.splitrun(
         2, 'tests/test.txt.gz', False, SCRIPT, name='test',
-        outfile='test.out.txt', direct=False)
+        outfile='test.out.txt', direct=False
+    )
     job.wait()
+    os.remove('test.txt.gz.split_0001.gz.out')
+    os.remove('test.txt.gz.split_0002.gz.out')
     assert os.path.isfile('test.out.txt')
     os.remove('test.out.txt')
     return 0
-
-
-# This test does not currently work
-#  @pytest.mark.skipif(env == 'local',
-                    #  reason="Fails in local mode")
-#  def test_splitfile_bad():
-    #  """Use the splitfile helper function and fail."""
-    #  with pytest.raises(AttributeError):
-        #  fyrd.helpers.splitrun(2, 'tests/test.txt.gz',
-                              #  False, dosomethingbad, ('{file}',))
-    #  scriptpath = fyrd.conf.get_job_paths(dict())[3]
-    #  for i in ['test.txt.gz.split_0001.gz', 'test.txt.gz.split_0002.gz']:
-        #  os.remove(os.path.join(scriptpath, i))
 
 
 def test_dir_clean():

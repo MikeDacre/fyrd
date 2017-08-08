@@ -5,7 +5,6 @@ from collections import OrderedDict
 import pytest
 sys.path.append(os.path.abspath('.'))
 import fyrd
-fyrd.local.THREADS = 5
 
 
 def test_help():
@@ -24,24 +23,20 @@ def test_help():
 def test_dict_types():
     """Make sure all expected dictionaries exist and have the right type."""
     assert hasattr(fyrd.options, 'COMMON')
-    assert hasattr(fyrd.options, 'NORMAL')
     assert hasattr(fyrd.options, 'CLUSTER_OPTS')
     assert hasattr(fyrd.options, 'TORQUE')
     assert hasattr(fyrd.options, 'SLURM')
     assert hasattr(fyrd.options, 'SLURM_KWDS')
     assert hasattr(fyrd.options, 'TORQUE_KWDS')
     assert hasattr(fyrd.options, 'CLUSTER_KWDS')
-    assert hasattr(fyrd.options, 'NORMAL_KWDS')
     assert hasattr(fyrd.options, 'ALLOWED_KWDS')
     assert isinstance(fyrd.options.COMMON, OrderedDict)
-    assert isinstance(fyrd.options.NORMAL, OrderedDict)
     assert isinstance(fyrd.options.CLUSTER_OPTS, OrderedDict)
     assert isinstance(fyrd.options.TORQUE, OrderedDict)
     assert isinstance(fyrd.options.SLURM, OrderedDict)
     assert isinstance(fyrd.options.SLURM_KWDS, OrderedDict)
     assert isinstance(fyrd.options.TORQUE_KWDS, OrderedDict)
     assert isinstance(fyrd.options.CLUSTER_KWDS, OrderedDict)
-    assert isinstance(fyrd.options.NORMAL_KWDS, OrderedDict)
     assert isinstance(fyrd.options.ALLOWED_KWDS, OrderedDict)
 
 
@@ -159,10 +154,6 @@ def test_string_formatting():
         '#SBATCH -o joe',
         '#SBATCH -p large'
     ]
-    assert fyrd.options.options_to_string(
-        test_options,
-        qtype='local'
-    ) == '\n'
     with pytest.raises(fyrd.options.OptionsError):
         fyrd.options.option_to_string('nodes', 2)
     with pytest.raises(ValueError):
@@ -171,4 +162,4 @@ def test_string_formatting():
 
 def test_back_to_normal():
     """Return the queue to the normal setting."""
-    fyrd.queue.get_cluster_environment()
+    fyrd.batch_systems.get_cluster_environment()

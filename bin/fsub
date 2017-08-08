@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Simple alias for `fyrd submit`
+# Allows the user to submit existing job files on the cluster
+fyrd submit $@

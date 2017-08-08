@@ -5,6 +5,10 @@ sys.path.append(os.path.abspath('.'))
 import fyrd
 
 
+def test_get_config():
+    """Simply get the config."""
+    fyrd.conf.get_config()
+
 def test_change_file():
     """Change the default config file to here."""
     fyrd.conf.CONFIG_FILE = os.path.abspath('conftest')
@@ -17,6 +21,7 @@ def test_create():
         {'jobs':{'profile_file': os.path.abspath('proftest')}}
     )
     assert os.path.isfile(os.path.abspath('conftest'))
+    fyrd.conf.load_config()
 
 
 def test_get():

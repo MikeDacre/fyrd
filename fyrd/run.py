@@ -8,7 +8,6 @@ imports.
 
 These functions are not intended to be accessed directly.
 """
-from __future__ import print_function
 from __future__ import with_statement
 import os as _os
 import re as _re
@@ -22,10 +21,36 @@ from subprocess import Popen
 from subprocess import PIPE
 from time import sleep
 
-from six import reraise
 from six.moves import input as _get_input
 
+# Progress bar handling
+from tqdm import tqdm, tqdm_notebook
+try:
+    if str(type(get_ipython())) == "<class 'ipykernel.zmqshell.ZMQInteractiveShell'>":
+        _pb = tqdm_notebook
+    else:
+        _pb = tqdm
+except NameError:
+    _pb = tqdm
+
 from . import logme as _logme
+
+
+def get_pbar(iterable, name=None, unit=None, **kwargs):
+    """Return a tqdm progress bar iterable.
+
+    If progressbar is set to False in the config, will not be shown.
+    """
+    from . import conf  # Avoid reciprocal import issues
+    show_pb = bool(conf.get_option('queue', 'progressbar', True))
+    if 'desc' in kwargs:
+        dname = kwargs.pop('desc')
+        name = name if name else dname
+    if 'disable' in kwargs:
+        disable = kwargs['disable']
+    else:
+        disable = False if show_pb else True
+    return _pb(iterable, desc=name, unit=unit, disable=disable, **kwargs)
 
 
 ###############################################################################
@@ -61,9 +86,13 @@ def listify(iterable):
         return [iterable]
     if not iterable:
         return []
-    if callable(iterable):
-        iterable = iterable()
-    return list(iter(iterable))
+    #  if callable(iterable):
+        #  iterable = iterable()
+    try:
+        iterable = list(iterable)
+    except TypeError:
+        iterable = [iterable]
+    return iterable
 
 
 def merge_lists(lists):
@@ -315,7 +344,6 @@ def cmd(command, args=None, stdout=None, stderr=None, tries=1):
 def export_run(function, args, kwargs):
     """Execute a function after first exporting all imports."""
     kwargs['imports'] = export_imports(function, kwargs)
-    print('bob', kwargs['imports'])
     return function(*args, **kwargs)
 
 

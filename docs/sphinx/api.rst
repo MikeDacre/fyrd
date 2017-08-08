@@ -35,34 +35,35 @@ Methods
 
 .. automethod:: fyrd.queue.Queue.wait
 
+.. automethod:: fyrd.queue.Queue.get
+
 .. automethod:: fyrd.queue.Queue.wait_to_submit
+
+.. automethod:: fyrd.queue.Queue.test_job_in_queue
 
 .. automethod:: fyrd.queue.Queue.get_jobs
 
+.. automethod:: fyrd.queue.Queue.get_user_jobs
+
 .. automethod:: fyrd.queue.Queue.update
 
-.. autoclass:: fyrd.queue.Queue.QueueJob
+.. automethod:: fyrd.queue.Queue.check_dependencies
+
+fyrd.queue Jobs
+................
+
+Hold information about individual jobs, `QueueJob` about primary jobs,
+`QueueChild` about individual array jobs (which are stored in the `children`
+attribute of `QueueJob` objects.
+
+.. autoclass:: fyrd.queue.QueueJob
+
+.. autoclass:: fyrd.queue.QueueChild
+
+fyrd.queue.QueueError
+.....................
 
 .. autoexception:: fyrd.queue.QueueError
-
-fyrd.queue functions
-....................
-
-parsers
-~~~~~~~
-
-.. autofunction:: fyrd.queue.queue_parser
-
-.. autofunction:: fyrd.queue.torque_queue_parser
-
-.. autofunction:: fyrd.queue.slurm_queue_parser
-
-utilities
-~~~~~~~~~
-
-.. autofunction:: fyrd.queue.get_cluster_environment
-
-.. autofunction:: fyrd.queue.check_queue
 
 
 fyrd.job
@@ -96,11 +97,23 @@ fyrd.job.Job
 Methods
 ~~~~~~~
 
+.. automethod:: fyrd.job.Job.initialize
+
+.. automethod:: fyrd.job.Job.gen_scripts
+
 .. automethod:: fyrd.job.Job.write
 
 .. automethod:: fyrd.job.Job.clean
 
+.. automethod:: fyrd.job.Job.scrub
+
 .. automethod:: fyrd.job.Job.submit
+
+.. automethod:: fyrd.job.Job.resubmit
+
+.. automethod:: fyrd.job.Job.get_keywords
+
+.. automethod:: fyrd.job.Job.set_keywords
 
 .. automethod:: fyrd.job.Job.wait
 
@@ -137,8 +150,22 @@ including writing the files. `Function` is actually a child class of `Script`.
    :members:
    :show-inheritance:
 
-fyrd.options
-------------
+fyrd.batch_systems
+------------------
+
+All batch systems are defined here.
+
+fyrd.batch_systems functions
+............................
+
+.. autofunction:: fyrd.batch_systems.get_cluster_environment
+
+.. autofunction:: fyrd.batch_systems.check_queue
+
+.. autofunction:: fyrd.batch_systems.get_batch_system
+
+fyrd.batch_systems.options
+..........................
 
 All `keyword arguments </keywords.html>`_ are defined in dictionaries in the
 `options.py` file, alongside function to manage those dictionaries. Of
@@ -171,17 +198,17 @@ an empty string is returned.
 whole dictionary of arguments, it explicitly handle arguments that cannot be
 managed using a simple string format.
 
-.. autofunction:: fyrd.options.option_help
+.. autofunction:: fyrd.batch_systems.options.option_help
 
-.. autofunction:: fyrd.options.sanitize_arguments
+.. autofunction:: fyrd.batch_systems.options.sanitize_arguments
 
-.. autofunction:: fyrd.options.split_keywords
+.. autofunction:: fyrd.batch_systems.options.split_keywords
 
-.. autofunction:: fyrd.options.check_arguments
+.. autofunction:: fyrd.batch_systems.options.check_arguments
 
-.. autofunction:: fyrd.options.options_to_string
+.. autofunction:: fyrd.batch_systems.options.options_to_string
 
-.. autofunction:: fyrd.options.option_to_string
+.. autofunction:: fyrd.batch_systems.options.option_to_string
 
 fyrd.conf
 ---------
@@ -308,48 +335,6 @@ from any directory.
 
 .. autofunction:: fyrd.basic.clean_dir()
 
-
-fyrd.local
-----------
-
-The local queue implementation is based on the multiprocessing library and is
-not intended to be used directly, it should always be used via the Job class
-because it is somewhat temperamental. The essential idea behind it is that we
-can have one JobQueue class that is bound to the parent process, it exclusively
-manages a single child thread that runs the `job_runner()` function. The two
-process communicate using a `multiprocessing.Queue` object, and pass
-`fyrd.local.Job` objects back and forth between them.
-
-The Job objects (different from the Job objects in `job.py`) contain information
-about the task to run, including the number of cores required. The job runner
-manages a pool of `multiprocessing.Pool` tasks directly, and keeps the total
-running cores below the total allowed (default is the system max, can be set
-with the threads keyword). It backfills smaller jobs and holds on to larger jobs
-until there is enough space free.
-
-This is close to what torque and slurm do, but vastly more crude. It serves as a
-stopgap to allow parallel software written for compute clusters to run on a
-single machine in a similar fashion, without the need for a pipeline alteration.
-The reason I have reimplemented a process pool is that I need dependency
-tracking and I need to allow some processes to run on multiple cores (e.g. 6 of
-the available 24 on the machine).
-
-The `job_runner()` and `Job` objects should never be accessed except by the
-JobQueue. Only one JobQueue should run at a time (not enforced), and by default
-it is bound to `fyrd.local.JQUEUE`. That is the interface used by all
-other parts of this package.
-
-fyrd.local.JobQueue
-...................
-
-.. autoclass:: fyrd.local.JobQueue
-   :members:
-   :show-inheritance:
-
-fyrd.local.job_runner
-.....................
-
-.. autofunction:: fyrd.local.job_runner
 
 fyrd.run
 --------

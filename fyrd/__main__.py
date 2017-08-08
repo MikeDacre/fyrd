@@ -7,7 +7,7 @@ Manage fyrd config, profiles, and queue.
 Author         Michael D Dacre <mike.dacre@gmail.com>
 Organization   Stanford University
 License        MIT License, use as you wish
-Version        0.6.2b9
+Version        0.6.2a1
 ============   ======================================
 """
 from __future__ import print_function
@@ -24,6 +24,20 @@ import fyrd
 #                                  Help Text                                  #
 ###############################################################################
 
+RUN_HELP = """\
+Run a shell script on the cluster and optionally wait for completion.
+"""
+
+RUN_JOB_HELP = """\
+Run an existing job file or set of files on the cluster and optionally wait
+for completion.
+
+e.g. fyrd run_file --wait ./jobs/*sh
+"""
+
+WAIT_HELP = """\
+Wait on a list of jobs, block until they complete.
+"""
 
 CONF_HELP = """\
 This script allows display and management of the fyrd config file found
@@ -90,10 +104,6 @@ By default it searches only your own jobs, pass '--all-users' or
 '--users <user> [<user2>...]' to change that behavior.
 
 To just list jobs with some basic info, run with no arguments.
-"""
-
-WAIT_HELP = """\
-Wait on a list of jobs, block until they complete.
 """
 
 DEFAULT_CONF_SECTIONS = set(fyrd.conf.DEFAULTS.keys())
@@ -164,9 +174,9 @@ Caution:
 #                         Catch Keyboard Interruption                         #
 ###############################################################################
 
-def catch_keyboard(signal, frame):
+def catch_keyboard(sig, frame):
     """Catch Keyboard Interruption."""
-    sys.stderr.write('\nKeyBoard Interrupt Detected, Exiting\n')
+    sys.stderr.write('\nKeyboard Interrupt Detected, Exiting\n')
     sys.exit(1)
 
 signal.signal(signal.SIGINT, catch_keyboard)
@@ -314,12 +324,65 @@ def delete_profile_option(args):
 
     Args:
         args (Namespace): Argparse command line arguments defined in main.
-
     """
     for opt in args.options:
         print('Removing {} from {}'.format(opt, args.section))
         fyrd.conf.profiles.remove_option(args.section, opt)
     print('Done')
+
+###################
+#  Running stuff  #
+###################
+
+
+def run(args):
+    """Run an arbitrary shell script as a job.
+
+    Args:
+        args (Namespace): Argparse command line arguments defined in main.
+    """
+    kwargs = {}
+    if args.args:
+        for arg in args.args.split(','):
+            sarg = arg.split('=')
+            if len(sarg) == 1:
+                kwargs[sarg[0]] = None
+            elif len(sarg) == 2:
+                kwargs[sarg[0]] = sarg[1]
+            else:
+                raise TypeError(
+                    'Invalid argument: {arg}, must be key=value, or just key'
+                )
+
+    command = ' '.join(args.shell_script)
+
+    job = fyrd.job.Job(command, profile=args.profile, **kwargs).submit()
+
+    print('Job submitted as job {0}'.format(job.id))
+
+    if args.wait:
+        print('Waiting for job to complete')
+        fyrd.wait(job)
+
+
+def sub_files(args):
+    """Run any number of existing job files and optionally wait for them.
+
+    Args:
+        args (Namespace): Argparse command line arguments defined in main.
+    """
+    for job in args.shell_scripts:
+        if not os.path.isfile(job):
+            sys.stderr.write('Job file {0} does not exist'.format(job))
+            sys.exit(1)
+    job_nos = []
+    for job in args.shell_scripts:
+        job_no = fyrd.basic.submit_file(job)
+        print('{0}: {1}'.format(job_no, job))
+        job_nos.append(job_no)
+    if args.wait:
+        print('Waiting for job to complete')
+        fyrd.basic.wait(job_nos)
 
 
 #######################
@@ -552,7 +615,113 @@ def command_line_parser():
 
     # Subcommands
     modes = parser.add_subparsers(
-        dest='modes', metavar='{conf,prof,keywords,queue,wait,clean}')
+        dest='modes',
+        metavar='{run,submit,wait,queue,conf,prof,keywords,clean}'
+    )
+
+    ######################
+    #  Run Shell Script  #
+    ######################
+
+    run_sub = modes.add_parser(
+        'run', description=RUN_HELP, help="Run simple shell scripts",
+        aliases=['r'],
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+
+    run_sub.add_argument('shell_script', nargs='+',
+                         help="The script to run")
+    run_sub.add_argument('-w', '--wait', action='store_true',
+                         help='Wait for the job to complete')
+    run_sub.add_argument('-p', '--profile',
+                         help='The profile to use to run')
+    run_sub.add_argument('-a', '--args',
+                         help='Submission args, e.g.: ' +
+                         "'time=00:20:00,mem=20G,cores=10'")
+
+    # Set function
+    run_sub.set_defaults(func=run)
+
+    ########################
+    #  Run Existing Files  #
+    ########################
+
+    run_job_sub = modes.add_parser(
+        'submit', description=RUN_HELP, help="Submit existing job files",
+        aliases=['sub', 's'],
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+
+    run_job_sub.add_argument('shell_scripts', nargs='+',
+                         help="The script to run")
+    run_job_sub.add_argument('-w', '--wait',  action='store_true',
+                         help='Wait for the job to complete')
+
+    # Set function
+    run_job_sub.set_defaults(func=sub_files)
+
+    #################
+    #  Job Waiting  #
+    #################
+
+    wait_sub = modes.add_parser(
+        'wait', description=WAIT_HELP, help="Wait for jobs",
+        aliases=['w'],
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+
+    # We use * here instead of + because it is possible to wait on all jobs
+    # for a user, making the jobs argument unnecessary.
+    wait_sub.add_argument('jobs', nargs='*', help="Job list to wait for")
+    wait_sub.add_argument('-u', '--users',
+                          help='A comma-separated list of users to wait for')
+
+    # Set function
+    wait_sub.set_defaults(func=wait)
+
+    ###################
+    #  Queue Parsing  #
+    ###################
+
+    queue_sub = modes.add_parser(
+        'queue', aliases=['q'],
+        description=QUEUE_HELP, help="Search the queue",
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+
+    # User and partition filtering
+    queue_filter = queue_sub.add_argument_group('queue filtering')
+    queue_filter_m = queue_filter.add_mutually_exclusive_group()
+    queue_filter_m.add_argument('-u', '--users', nargs='+', metavar='',
+                                help='Limit to these users')
+    queue_filter_m.add_argument('-a', '--all-users', action='store_true',
+                                help='Display jobs for all users')
+    queue_filter.add_argument('-p', '--partitions', nargs='+', metavar='',
+                              help="Limit to these partitions (queues)")
+
+    # State filtering
+    queue_filter = queue_sub.add_argument_group('queue state filtering')
+    queue_filter_s = queue_filter.add_mutually_exclusive_group()
+    queue_filter_s.add_argument('-r', '--running', action='store_true',
+                                help="Show only running jobs")
+    queue_filter_s.add_argument('-q', '--queued', action='store_true',
+                                help="Show only queued jobs")
+    queue_filter_s.add_argument('-d', '--done', action='store_true',
+                                help="Show only completed jobs")
+    queue_filter_s.add_argument('-b', '--bad', action='store_true',
+                                help="Show only completed jobs")
+
+    # Display mode
+    queue_disp_group = queue_sub.add_argument_group('display options')
+    queue_disp = queue_disp_group.add_mutually_exclusive_group()
+    queue_disp.add_argument('-l', '--list', action='store_true',
+                            help="Print job numbers only, works well with " +
+                            "xargs")
+    queue_disp.add_argument('-c', '--count', action='store_true',
+                            help="Print job count only")
+
+    # Set function
+    queue_sub.set_defaults(func=queue)
 
     #########################
     #  Config Manipulation  #
@@ -678,66 +847,6 @@ def command_line_parser():
     keywords_grp.add_argument('-l', '--list', action='store_true',
                               help="Print a list of keywords only")
     keywords.set_defaults(func=keyword_help)
-
-    ###################
-    #  Queue Parsing  #
-    ###################
-
-    queue_sub = modes.add_parser(
-        'queue', aliases=['q'],
-        description=QUEUE_HELP, help="Search the queue",
-        formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-
-    # User and partition filtering
-    queue_filter = queue_sub.add_argument_group('queue filtering')
-    queue_filter_m = queue_filter.add_mutually_exclusive_group()
-    queue_filter_m.add_argument('-u', '--users', nargs='+', metavar='',
-                                help='Limit to these users')
-    queue_filter_m.add_argument('-a', '--all-users', action='store_true',
-                                help='Display jobs for all users')
-    queue_filter.add_argument('-p', '--partitions', nargs='+', metavar='',
-                              help="Limit to these partitions (queues)")
-
-    # State filtering
-    queue_filter = queue_sub.add_argument_group('queue state filtering')
-    queue_filter_s = queue_filter.add_mutually_exclusive_group()
-    queue_filter_s.add_argument('-r', '--running', action='store_true',
-                                help="Show only running jobs")
-    queue_filter_s.add_argument('-q', '--queued', action='store_true',
-                                help="Show only queued jobs")
-    queue_filter_s.add_argument('-d', '--done', action='store_true',
-                                help="Show only completed jobs")
-    queue_filter_s.add_argument('-b', '--bad', action='store_true',
-                                help="Show only completed jobs")
-
-    # Display mode
-    queue_disp_group = queue_sub.add_argument_group('display options')
-    queue_disp = queue_disp_group.add_mutually_exclusive_group()
-    queue_disp.add_argument('-l', '--list', action='store_true',
-                            help="Print job numbers only, works well with " +
-                            "xargs")
-    queue_disp.add_argument('-c', '--count', action='store_true',
-                            help="Print job count only")
-
-    # Set function
-    queue_sub.set_defaults(func=queue)
-
-    #################
-    #  Job Waiting  #
-    #################
-
-    wait_sub = modes.add_parser(
-        'wait', description=WAIT_HELP, help="Wait for jobs",
-        formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-
-    wait_sub.add_argument('jobs', nargs='*', help="Job list to wait for")
-    wait_sub.add_argument('-u', '--users',
-                          help='A comma-separated list of users to wait for')
-
-    # Set function
-    wait_sub.set_defaults(func=wait)
 
     ########################
     #  Directory Cleaning  #

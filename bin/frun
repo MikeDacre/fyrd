@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Simple alias for `fyrd run`
+# Allows the user to run arbitrary shell commands on the cluster
+fyrd run $@

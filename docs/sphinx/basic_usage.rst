@@ -17,7 +17,7 @@ To run with dependency tracking, run:
   import fyrd
   job  = fyrd.submit(<command1>)
   job2 = fyrd.submit(<command2>, depends=job1)
-  out  = job2.get()  # Will block until job completes
+  out1, out2 = fyrd.get([job, job2])  # Will block until job completes
 
 The `submit()` function is actually just a wrapper for the
 `Job </api.html#fyrd-job-job>`_ class. The same behavior as above can be
@@ -35,6 +35,25 @@ Note that as shown above, the submit method returns the `Job` object, so it
 can be called on job initialization. Also note that the object returned by
 calling the `submit()` function (as in the first example) is also a `Job`
 object, so these two examples can be used fully interchangeably.
+
+Similar wrappers allow you to submit and monitor existing job files, such
+as those made by other pipelines:
+
+.. code:: python
+
+   import os
+   import fyrd
+   jobs = []
+   job_dir = os.path.abspath('./jobs/')
+   for job in [os.path.join(job_dir, i) for i in os.listdir(job_dir) if i.endswith('sh')]:
+       jobs.append(fyrd.submit_file(job))
+   fyrd.wait(jobs)  # Will block until every job is completed
+
+This type of thing can also be accomplished using the `console script </console.html>`_:
+
+.. code:: shell
+
+   fyrd run --wait ./jobs/*.sh
 
 Functions
 ---------

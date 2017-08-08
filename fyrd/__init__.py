@@ -6,20 +6,20 @@ Submit jobs to slurm or torque, or with multiprocessing.
          AUTHOR: Michael D Dacre, mike.dacre@gmail.com
    ORGANIZATION: Stanford University
         LICENSE: MIT License, property of Stanford, use as you wish
-        VERSION: 0.6.1b9
+        VERSION: 0.6.2a1
         CREATED: 2015-12-11 22:19
-  Last modified: 2017-08-03 14:35
+  Last modified: 2017-08-07 15:28
  =============== ===================================================
 
 Allows simple job submission with *dependency tracking and queue waiting* with
-either torque, slurm, or locally with the multiprocessing module. It uses
-simple techiques to avoid overwhelming the queue and to catch bugs on the fly.
+either torque or slurm. It uses simple techiques to avoid overwhelming the
+queue and to catch bugs on the fly.
 
 Setting Environment
 -------------------
 
-To set the environement, set queue.MODE to one of ['torque',
-'slurm', 'local'], or run get_cluster_environment().
+To set the environement, set batch_systems.MODE to one of the defined batch
+systems, or run get_cluster_environment().
 
 Simple Use
 ----------
@@ -100,11 +100,10 @@ clearly documented.
 Job Files
 ---------
 
-All jobs write out a job file before submission, even though this is not
-necessary (or useful) with multiprocessing. In local mode, this is a .cluster
-file, in slurm is is a .cluster.sbatch and a .cluster.script file, in torque it
-is a .cluster.qsub file. 'cluster' is set by the suffix keyword, and can be
-overridden.
+All jobs write out a job file before submission, these files will end in
+<suffix>.<job_suffix>, where suffix defaults to 'cluster' and can be set with
+the 'suffix' keyword argument and <job_suffix> is defined in the batch_systems
+config.
 
 To change the directory these files are written to, use the 'filedir' keyword
 argument to Job or submit.  *NOTE:* This *must* be accessible to the compute
@@ -118,9 +117,7 @@ with keyword arguments.
 Dependecy Tracking
 ------------------
 
-Dependency tracking is supported in all modes. Local mode uses a unique
-queueing system that works similarly to torque and slurm and which is defined
-in local.py.
+Dependency tracking is supported in all modes.
 
 To use dependency tracking in any mode pass a list of job ids to submit or
 submit_file with the `dependencies` keyword argument.
@@ -136,21 +133,15 @@ Help
 ----
 
 Full help is available at::
-    github.com/MikeDacre/fyrd
+    https://fyrd.rtfd.io
 """
 import os as _os
 import signal as _signal
 import atexit as _atexit
 
 # Version Number
-__version__ = '0.6.1b9'
+__version__ = '0.6.2a1'
 
-#################################################
-#  Currently configured job submission systems  #
-#################################################
-
-ALLOWED_MODES = ['local', 'torque', 'slurm']
-# Current mode held in queue.MODE
 
 ###################
 #  House Keeping  #
@@ -163,22 +154,23 @@ class ClusterError(Exception):
 
     pass
 
+
 #########################################
 #  Make our functions easily available  #
 #########################################
 
-from . import local
+
 from . import queue
 from . import job
 from . import conf
-from . import options
 from . import helpers
+from . import batch_systems
 from .run import check_pid as _check_pid
 
 from .queue import Queue
-from .queue import wait
-from .queue import check_queue
-from .queue import get_cluster_environment
+from .batch_systems import check_queue
+from .batch_systems import get_cluster_environment
+from .batch_systems import options
 
 from .job import Job
 from .basic import submit
@@ -186,31 +178,24 @@ from .basic import submit_file
 from .basic import make_job_file
 from .basic import clean
 from .basic import clean_dir
+from .basic import wait
+from .basic import get
 
 from .conf import set_profile
 from .conf import get_profile
 from .conf import get_profiles
 
-from .options import option_help
+option_help = batch_systems.options.option_help
 
-__all__ = ['Job', 'Queue', 'wait', 'submit', 'submit_file', 'make_job_file',
-           'clean', 'clean_dir', 'check_queue', 'option_help', 'set_profile',
-           'get_profile', 'get_profiles', 'helpers']
+#  import fyrd.batch_system as batch_system
+
+__all__ = ['Job', 'Queue', 'wait', 'get', 'submit', 'submit_file',
+           'make_job_file', 'clean', 'clean_dir', 'check_queue', 'option_help',
+           'set_profile', 'get_profile', 'get_profiles', 'conf', 'helpers']
 
 ##########################
 #  Set the cluster type  #
 ##########################
 
-queue.MODE = get_cluster_environment()
+batch_systems.MODE = get_cluster_environment()
 check_queue()
-
-
-###############################
-#  Kill the JobQueue on exit  #
-###############################
-#  def _kill_local():
-    #  if local.JQUEUE and _check_pid(local.JQUEUE.pid):
-        #  local.JQUEUE.terminate()
-    #  #  del(local.JQUEUE)
-
-#  _atexit.register(_kill_local)

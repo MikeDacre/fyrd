@@ -15,8 +15,8 @@ from subprocess import CalledProcessError as _CalledProcessError
 from . import run   as _run
 from . import conf  as _conf
 from . import queue as _queue
-from . import local as _local
 from . import logme as _logme
+from . import batch_systems as _batch
 from . import ClusterError as _ClusterError
 from .job import Job
 
@@ -53,7 +53,7 @@ def submit(command, args=None, kwargs=None, name=None, qtype=None,
         Job object
     """
 
-    _queue.check_queue()  # Make sure the queue.MODE is usable
+    _batch.check_queue()  # Make sure the queue.MODE is usable
 
     job = Job(command=command, args=args, kwargs=kwargs, name=name,
               qtype=qtype, profile=profile, **kwds)
@@ -73,8 +73,6 @@ def submit(command, args=None, kwargs=None, name=None, qtype=None,
 def make_job(command, args=None, kwargs=None, name=None, qtype=None,
              profile=None, **kwds):
     """Make a job file compatible with the chosen cluster.
-
-    If mode is local, this is just a simple shell script.
 
     Args:
             command (function/str): The command or function to execute.
@@ -98,7 +96,7 @@ def make_job(command, args=None, kwargs=None, name=None, qtype=None,
         Job object
     """
 
-    _queue.check_queue()  # Make sure the queue.MODE is usable
+    _batch.check_queue()  # Make sure the queue.MODE is usable
 
     job = Job(command=command, args=args, kwargs=kwargs, name=name,
               qtype=qtype, profile=profile, **kwds)
@@ -133,7 +131,7 @@ def make_job_file(command, args=None, kwargs=None, name=None, qtype=None,
         Job object
     """
 
-    _queue.check_queue()  # Make sure the queue.MODE is usable
+    _batch.check_queue()  # Make sure the queue.MODE is usable
 
     job = Job(command=command, args=args, kwargs=kwargs, name=name,
               qtype=qtype, profile=profile, **kwds)
@@ -141,7 +139,7 @@ def make_job_file(command, args=None, kwargs=None, name=None, qtype=None,
     job = job.write()
 
     # Return the path to the script
-    return job.submission
+    return job.submission.file_name
 
 
 ##############
@@ -149,14 +147,15 @@ def make_job_file(command, args=None, kwargs=None, name=None, qtype=None,
 ##############
 
 
-def clean(jobs):
-    """Delete all files in jobs list or single Job object."""
-    if isinstance(jobs, Job):
-        jobs = [jobs]
-    if not isinstance(jobs, (list, tuple)):
-        raise _ClusterError('Job list must be a Job, list, or tuple')
+def clean(jobs, clean_outputs=False):
+    """Delete all files in jobs list or single Job object.
+
+    Attributes:
+        clean_outputs (bool): Also clean outputs.
+    """
+    jobs = _run.listify(jobs)
     for job in jobs:
-        job.clean()
+        job.clean(delete_outputs=clean_outputs)
 
 
 ###############################################################################
@@ -168,7 +167,6 @@ def submit_file(script_file, dependencies=None, threads=None, qtype=None):
     """Submit a job file to the cluster.
 
     If qtype or queue.MODE is torque, qsub is used; if it is slurm, sbatch
-    is used; if it is local, the file is executed with subprocess.
 
     This function is independent of the Job object and just submits a file.
 
@@ -177,96 +175,18 @@ def submit_file(script_file, dependencies=None, threads=None, qtype=None):
                       In slurm: `--dependency=afterok:` is used
                       For torque: `-W depend=afterok:` is used
 
-        threads:      Total number of threads to use at a time, defaults to all.
+        threads:      Total number of threads to use at a time, defaults to all
                       ONLY USED IN LOCAL MODE
 
     Returns:
-        job number for torque or slurm multiprocessing job object for local
-        mode
+        job number
     """
-    _queue.check_queue()  # Make sure the queue.MODE is usable
+    qtype = qtype if qtype else _batch.get_cluster_environment()
+    _batch.check_queue(qtype)
+    dependencies = _run.listify(dependencies)
 
-    if not qtype:
-        qtype = _queue.get_cluster_environment()
-
-    # Check dependencies
-    if dependencies:
-        if isinstance(dependencies, (str, int)):
-            dependencies = [dependencies]
-        if not isinstance(dependencies, (list, tuple)):
-            raise Exception('dependencies must be a list, int, or string.')
-        dependencies = [str(i) for i in dependencies]
-
-    if qtype == 'slurm':
-        if dependencies:
-            dependencies = '--dependency=afterok:{}'.format(
-                ':'.join([str(d) for d in dependencies]))
-            args = ['sbatch', dependencies, script_file]
-        else:
-            args = ['sbatch', script_file]
-        # Try to submit job 5 times
-        count = 0
-        while True:
-            code, stdout, stderr = _run.cmd(args)
-            if code == 0:
-                job = int(stdout.split(' ')[-1])
-                break
-            else:
-                if count == 5:
-                    _logme.log('sbatch failed with code {}\n'.format(code),
-                               'stdout: {}\nstderr: {}'.format(stdout, stderr),
-                               'critical')
-                    raise _CalledProcessError(code, args, stdout, stderr)
-                _logme.log('sbatch failed with err {}. Resubmitting.'.format(
-                    stderr), 'debug')
-                count += 1
-                _sleep(1)
-                continue
-            break
-        return job
-
-    elif qtype == 'torque':
-        if dependencies:
-            dependencies = '-W depend={}'.format(
-                ','.join(['afterok:' + d for d in dependencies]))
-            args = ['qsub', dependencies, script_file]
-        else:
-            args = ['qsub', script_file]
-        # Try to submit job 5 times
-        count = 0
-        while True:
-            code, stdout, stderr = _run.cmd(args)
-            if code == 0:
-                job = int(stdout.split('.')[0])
-                break
-            else:
-                if count == 5:
-                    _logme.log('qsub failed with code {}\n'.format(code),
-                               'stdout: {}\nstderr: {}'.format(stdout, stderr),
-                               'critical')
-                    raise _CalledProcessError(code, args, stdout, stderr)
-                _logme.log('qsub failed with err {}. Resubmitting.'.format(
-                    stderr), 'debug')
-                count += 1
-                _sleep(1)
-                continue
-            break
-        return job
-
-    elif qtype == 'local':
-        # Normal mode dependency tracking uses only integer job numbers
-        depends = []
-        if dependencies:
-            for depend in dependencies:
-                if isinstance(depend, Job):
-                    depends.append(int(depend.id))
-                else:
-                    depends.append(int(depend))
-        command = 'bash {}'.format(script_file)
-        # Make sure the global job pool exists
-        if not _local.JQUEUE or not _local.JQUEUE.runner.is_alive():
-            _local.JQUEUE = _local.JobQueue(cores=threads)
-        return _local.JQUEUE.add(_run.cmd, (command,), dependencies=depends)
+    batch = _batch.get_batch_system(qtype)
+    return batch.submit(script_file)
 
 
 def clean_work_dirs(outputs=False, confirm=False):
@@ -316,7 +236,7 @@ def clean_dir(directory=None, suffix=None, qtype=None, confirm=False,
     Returns:
         A set of deleted files
     """
-    _queue.check_queue(qtype)  # Make sure the queue.MODE is usable
+    _batch.check_queue(qtype)  # Make sure the queue.MODE is usable
 
     if delete_outputs is None:
         delete_outputs = _conf.get_option('jobs', 'clean_outputs')
@@ -388,3 +308,20 @@ def clean_dir(directory=None, suffix=None, qtype=None, confirm=False,
             _sys.stdout.write('Done\n')
 
     return deleted
+
+
+###############################################################################
+#               Simple Wrapper to Wait on Queue and Get Outputs               #
+###############################################################################
+
+
+def wait(jobs):
+    """Simple wrapper for Queue.wait()."""
+    q = _queue.Queue()
+    return q.wait(jobs)
+
+
+def get(jobs):
+    """Simple wrapper for Queue.wait()."""
+    q = _queue.Queue()
+    return q.get(jobs)

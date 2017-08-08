@@ -11,8 +11,10 @@ import os as _os
 from . import run as _run
 from . import conf as _conf
 from . import logme as _logme
-from . import options as _options
+from . import batch_systems as _batch
 from .job import Job as _Job
+
+_options = _batch.options
 
 ###############################################################################
 #                       Try Import Non-Required Modules                       #
@@ -70,20 +72,19 @@ def parapply_summary(jobs, df, func, args=(), profile=None, applymap=False,
             jobs, df, func, args=args, profile=profile, applymap=applymap,
             name=name, imports=imports, **kwds
         )
-    else:
-        kwargs = dict(
-            args=args, profile=profile, applymap=applymap,
-            name=name, imports=imports
-            )
-        kwds = _options.sanitize_arguments(kwds)
-        kwargs.update(kwds)
-        kwargs['imports']  = _run.get_all_imports(func, kwargs)
-        kwargs['syspaths'] = _run.update_syspaths(func, kwargs)
-        return _wrap_runner(
-            _parapply_summary,
-            *(jobs, df, func),
-            **kwargs
+    kwargs = dict(
+        args=args, profile=profile, applymap=applymap,
+        name=name, imports=imports
         )
+    kwds = _options.sanitize_arguments(kwds)
+    kwargs.update(kwds)
+    kwargs['imports']  = _run.get_all_imports(func, kwargs)
+    kwargs['syspaths'] = _run.update_syspaths(func, kwargs)
+    return _wrap_runner(
+        _parapply_summary,
+        *(jobs, df, func),
+        **kwargs
+    )
 
 
 def _parapply_summary(jobs, df, func, args=(), profile=None, applymap=False,
@@ -151,21 +152,20 @@ def parapply(jobs, df, func, args=(), profile=None, applymap=False,
             merge_axis=merge_axis, merge_apply=merge_apply, name=name,
             imports=imports, **kwds
         )
-    else:
-        kwargs = dict(
-            args=args, profile=profile, applymap=applymap,
-            merge_axis=merge_axis, merge_apply=merge_apply, name=name,
-            imports=imports
-        )
-        kwds = _options.sanitize_arguments(kwds)
-        kwargs.update(kwds)
-        kwargs['imports']  = _run.get_all_imports(func, kwargs)
-        kwargs['syspaths'] = _run.update_syspaths(func, kwargs)
-        return _wrap_runner(
-            _parapply,
-            *(jobs, df, func),
-            **kwargs
-        )
+    kwargs = dict(
+        args=args, profile=profile, applymap=applymap,
+        merge_axis=merge_axis, merge_apply=merge_apply, name=name,
+        imports=imports
+    )
+    kwds = _options.sanitize_arguments(kwds)
+    kwargs.update(kwds)
+    kwargs['imports']  = _run.get_all_imports(func, kwargs)
+    kwargs['syspaths'] = _run.update_syspaths(func, kwargs)
+    return _wrap_runner(
+        _parapply,
+        *(jobs, df, func),
+        **kwargs
+    )
 
 
 def _parapply(jobs, df, func, args=(), profile=None, applymap=False,

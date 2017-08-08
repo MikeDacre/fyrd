@@ -7,7 +7,7 @@ Run all applicable tests.
 
         AUTHOR: Michael D Dacre, mike.dacre@gmail.com
        CREATED: 2016-54-22 15:06
- Last modified: 2016-12-01 18:03
+ Last modified: 2017-08-05 23:54
 
    DESCRIPTION: Run multiple kinds of tests, provide options to skip some.
 
@@ -46,7 +46,7 @@ def main(argv=None):
         if os.path.exists('.coverage'):
             os.remove('.coverage')
         cmnd = ['coverage', 'run', '-a', '--source', 'fyrd']
-        pytt = ['py.test', '--cov=fyrd']
+        pytt = cmnd + ['-m', 'pytest', '--cov=fyrd']
     else:
         cmnd = [sys.executable]
         pytt = ['py.test']
@@ -58,15 +58,6 @@ def main(argv=None):
                  'tests/test_local.py', 'tests/test_config.py']
     outcode = call(pytt)
     print('py.test tests complete with code {}, running local queue test.'
-          .format(outcode))
-
-    local_args = cmnd + ['tests/local_queue.py']
-    if args.verbose:
-        local_args.append('-v')
-
-    outcode += call(local_args)
-
-    print('local test complete with outcode {}.'
           .format(outcode))
 
     return outcode
