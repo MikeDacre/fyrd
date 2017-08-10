@@ -295,4 +295,4 @@ def parse_strange_options(option_dict):
     outlist.append('#SBATCH --ntasks {}'.format(nodes))
     outlist.append('#SBATCH --cpus-per-task {}'.format(cores))
 
-    return outlist, option_dict
+    return outlist, option_dict, None

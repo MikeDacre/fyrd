@@ -276,9 +276,9 @@ class Job(object):
         self.state = 'Not_Submitted'
 
         # Save keywords for posterity and parsing
-        self.kwds    = kwds
+        self.kwds = kwds
 
-        self.name    = self._update_name(name)
+        self.name = self._update_name(name)
 
         self.initialize()
 
@@ -644,7 +644,7 @@ class Job(object):
 
         return self
 
-    def resubmit(self):
+    def resubmit(self, wait_on_max_queue=True):
         """Attempt to auto resubmit, deletes prior files.
 
         Parameters

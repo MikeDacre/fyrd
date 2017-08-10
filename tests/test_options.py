@@ -126,7 +126,7 @@ def test_string_formatting():
         fyrd.options.options_to_string(
             test_options,
             qtype='torque'
-        ).split('\n')
+        )[0].split('\n')
     ) == [
         '#PBS -A richguy',
         '#PBS -e john',
@@ -141,7 +141,7 @@ def test_string_formatting():
         fyrd.options.options_to_string(
             test_options,
             qtype='slurm'
-        ).split('\n')
+        )[0].split('\n')
     ) == [
         '#SBATCH --account=richguy',
         "#SBATCH --constraint=['bigmem']",

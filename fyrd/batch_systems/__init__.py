@@ -19,11 +19,9 @@ from .. import run as _run
 from .. import logme as _logme
 from .. import ClusterError as _ClusterError
 
-DEFINED_SYSTEMS = {'torque', 'slurm', 'local'}
+DEFINED_SYSTEMS = {'torque', 'slurm'}
 
-# This is set in the get_cluster_environment() function.
-MODE = ''
-
+MODE = None
 
 def get_batch_system(qtype=None):
     """Return a batch_system module."""
@@ -108,7 +106,6 @@ def check_queue(qtype=None):
     elif MODE not in DEFINED_SYSTEMS:
         raise _ClusterError('MODE value {} is not recognized, '.format(MODE) +
                             'should be: local, torque, or slurm')
-
 
 # Make options easily available everywhere
 from . import options
