@@ -15,6 +15,13 @@ if [[ $? > 0 ]]; then
   exit 50
 fi
  
+for i in $@; do
+  case $i in
+    '-l'        ) loc='--local';;
+    '--local'   ) loc='--local';;
+  esac
+done
+ 
 # Starting string for virtualenvs
 v="fyrd_$(cat /dev/urandom | LC_ALL=C tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)_conda"
 echo "Pyenv Shell: $v"
@@ -34,7 +41,7 @@ pip install --isolated --force-reinstall -r tests/test_requirements.txt
 pip install --isolated --force-reinstall pandas numpy scipy
 # Actually run tests here
 echo "Running test suite"
-python -I tests/run_tests.py --coverage
+python -I tests/run_tests.py --coverage $loc
 code=$?
 pyenv virtualenv-delete -f $v >/dev/null 2>/dev/null
 exit $code

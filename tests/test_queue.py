@@ -1,6 +1,7 @@
 """Test remote queues, we can't test local queues in py.test."""
 import os
 import sys
+import pytest
 sys.path.append(os.path.abspath('.'))
 import fyrd
 env = fyrd.batch_systems.get_cluster_environment()
@@ -28,9 +29,12 @@ def test_queue_inspection():
     assert env == fyrd.batch_systems.MODE
 
 
+
+@pytest.mark.skipif(not env,
+                    reason="No valid batch system detected")
 def test_queue_creation():
     """Test Queue object creation."""
-    assert env == 'torque' or env == 'slurm' or env == None
+    assert env == 'torque' or env == 'slurm'
     fyrd.check_queue()
     queue = fyrd.Queue()
     assert queue.qtype == env
