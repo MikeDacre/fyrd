@@ -18,7 +18,6 @@ except ImportError:
     canrun = False
 env = fyrd.batch_systems.get_cluster_environment()
 
-
 ###############################################################################
 #                      DataFrame Manipulation Functions                       #
 ###############################################################################
@@ -55,6 +54,8 @@ def join_columns(d):
 
 @pytest.mark.skipif(canrun is not True,
                     reason="Need pandas and numpy installed")
+@pytest.mark.skipif(env is None
+                    reason="No valid batch system detected")
 def test_submission(delete=True):
     """Test getting a dataframe and getting the mean."""
     job = fyrd.Job(make_df).submit()
@@ -64,6 +65,8 @@ def test_submission(delete=True):
 
 @pytest.mark.skipif(canrun is not True,
                     reason="Need pandas and numpy installed")
+@pytest.mark.skipif(env is None
+                    reason="No valid batch system detected")
 def test_mean(delete=True):
     """Test getting the mean of the dataframe."""
     df = make_df()
@@ -75,6 +78,8 @@ def test_mean(delete=True):
 
 @pytest.mark.skipif(canrun is not True,
                     reason="Need pandas and numpy installed")
+@pytest.mark.skipif(env is None
+                    reason="No valid batch system detected")
 def test_concat(delete=True):
     """Test concatenating two dataframes."""
     df1 = make_df()
@@ -84,8 +89,8 @@ def test_concat(delete=True):
     assert len(df) == 101
 
 
-@pytest.mark.skipif(env == 'local',
-                    reason="Occasionally hangs in local mode")
+@pytest.mark.skipif(env is None
+                    reason="No valid batch system detected")
 @pytest.mark.skipif(canrun is not True,
                     reason="Need pandas and numpy installed")
 def test_parapply(delete=True):
@@ -100,8 +105,8 @@ def test_parapply(delete=True):
     assert new_df.equals(df_comp)
 
 
-@pytest.mark.skipif(env == 'local',
-                    reason="Occasionally hangs in local mode")
+@pytest.mark.skipif(env is None
+                    reason="No valid batch system detected")
 @pytest.mark.skipif(canrun is not True,
                     reason="Need pandas and numpy installed")
 def test_parapply_summary(delete=True):
@@ -132,8 +137,8 @@ def test_parapply_summary(delete=True):
         raise
 
 
-@pytest.mark.skipif(env == 'local',
-                    reason="Fails in local mode")
+@pytest.mark.skipif(env is None
+                    reason="No valid batch system detected")
 @pytest.mark.skipif(canrun is not True,
                     reason="Need pandas and numpy installed")
 def test_parapply_indirect(delete=True):
@@ -149,8 +154,8 @@ def test_parapply_indirect(delete=True):
     assert new_df.equals(df_comp)
 
 
-@pytest.mark.skipif(env == 'local',
-                    reason="Fails in local mode")
+@pytest.mark.skipif(env is None
+                    reason="No valid batch system detected")
 @pytest.mark.skipif(canrun is not True,
                     reason="Need pandas and numpy installed")
 def test_parapply_summary_indirect(delete=True):

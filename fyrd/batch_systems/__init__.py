@@ -70,7 +70,7 @@ def get_cluster_environment():
         elif _run.which(qsub_cmnd):
             MODE = 'torque'
         else:
-            MODE = 'local'
+            MODE = None
     else:
         MODE = conf_queue
     if MODE == 'local':

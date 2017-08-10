@@ -20,7 +20,7 @@ def test_queue_inspection():
     elif fyrd.run.which('qsub'):
         assert fyrd.batch_systems.MODE == 'torque'
     else:
-        assert fyrd.batch_systems.MODE == 'local'
+        assert fyrd.batch_systems.MODE == None
     if queue_type != 'auto':
         fyrd.conf.CONFIG_FILE = cfile
         os.remove('conftest')

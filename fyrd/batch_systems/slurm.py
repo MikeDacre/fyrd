@@ -263,7 +263,7 @@ def queue_parser(user=None, partition=None):
             else:
                 snodelist = sndlst.split(',')
 
-        yield (sid, sname, suser, spartition, sstate, snodelist,
+        yield (sid, sarr, sname, suser, spartition, sstate, snodelist,
                snodes, scpus, scode)
 
 
