@@ -54,7 +54,7 @@ def join_columns(d):
 
 @pytest.mark.skipif(canrun is not True,
                     reason="Need pandas and numpy installed")
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_submission(delete=True):
     """Test getting a dataframe and getting the mean."""
@@ -65,7 +65,7 @@ def test_submission(delete=True):
 
 @pytest.mark.skipif(canrun is not True,
                     reason="Need pandas and numpy installed")
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_mean(delete=True):
     """Test getting the mean of the dataframe."""
@@ -78,7 +78,7 @@ def test_mean(delete=True):
 
 @pytest.mark.skipif(canrun is not True,
                     reason="Need pandas and numpy installed")
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_concat(delete=True):
     """Test concatenating two dataframes."""
@@ -89,7 +89,7 @@ def test_concat(delete=True):
     assert len(df) == 101
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 @pytest.mark.skipif(canrun is not True,
                     reason="Need pandas and numpy installed")
@@ -105,7 +105,7 @@ def test_parapply(delete=True):
     assert new_df.equals(df_comp)
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 @pytest.mark.skipif(canrun is not True,
                     reason="Need pandas and numpy installed")
@@ -137,7 +137,7 @@ def test_parapply_summary(delete=True):
         raise
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 @pytest.mark.skipif(canrun is not True,
                     reason="Need pandas and numpy installed")
@@ -154,7 +154,7 @@ def test_parapply_indirect(delete=True):
     assert new_df.equals(df_comp)
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 @pytest.mark.skipif(canrun is not True,
                     reason="Need pandas and numpy installed")

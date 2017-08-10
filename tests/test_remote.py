@@ -104,7 +104,7 @@ def test_job_creation():
     assert job.qtype == env
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_job_execution():
     """Run a job and autoclean."""
@@ -134,7 +134,7 @@ def test_job_execution():
     assert isinstance(job.runtime, td)
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_multi_job_get():
     """Run a job and autoclean."""
@@ -151,7 +151,7 @@ def test_multi_job_get():
     assert not os.path.isfile(job2.outfile)
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_basic_job():
     """Run a job using the basic.py submit function."""
@@ -181,7 +181,7 @@ def test_basic_job():
     assert isinstance(job.runtime, td)
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_make_job_file():
     """Use the basic function to make a job file."""
@@ -190,7 +190,7 @@ def test_make_job_file():
     os.remove(job_file)
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_job_execution_paths():
     """Run a job and autoclean with defined paths."""
@@ -223,7 +223,7 @@ def test_job_execution_paths():
     os.system('rm -rf {}'.format('out'))
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_job_params():
     """Run a job with some explicit parameters set."""
@@ -236,7 +236,7 @@ def test_job_params():
     assert job.stderr == ''
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_outfiles():
     """Run a job with outfile and errfile overriden parameters set."""
@@ -249,7 +249,7 @@ def test_outfiles():
     assert job.stderr == ''
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_depends():
     """Run some jobs with dependencies."""
@@ -271,7 +271,7 @@ def test_depends():
     assert job3.stderr == ''
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_resubmit():
     """Alter a job and resubmit."""
@@ -290,7 +290,7 @@ def test_resubmit():
     assert job.err == ''
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_job_cleaning():
     """Delete intermediate files without autoclean."""
@@ -307,7 +307,7 @@ def test_job_cleaning():
     assert not os.path.isfile(job.submission.file_name)
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_multi_job_cleaning():
     """Delete intermediate files for more than one job."""
@@ -331,7 +331,7 @@ def test_multi_job_cleaning():
     assert not os.path.isfile(job2.submission.file_name)
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_function_submission():
     """Submit a function."""
@@ -363,7 +363,7 @@ def test_function_submission():
     job.clean(delete_outputs=True)
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_method_submission():
     """Submit a method."""
@@ -373,7 +373,7 @@ def test_method_submission():
     assert t2 == t.me*2
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_function_keywords():
     """Submit a simple function with keyword arguments."""
@@ -382,7 +382,7 @@ def test_function_keywords():
     job.clean(delete_outputs=True)
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_splitfile():
     """Use the splitfile helper function."""
@@ -391,7 +391,7 @@ def test_splitfile():
     assert out == dosomething('tests/test.txt.gz')
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_splitfile_script():
     """Test splitfile() with a script and outfile."""
@@ -400,7 +400,7 @@ def test_splitfile_script():
     assert out == dosomething('tests/test.txt.gz')
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_splitfile_indirect():
     """Use the splitfile helper function."""
@@ -416,7 +416,7 @@ def test_splitfile_indirect():
     return 0
 
 
-@pytest.mark.skipif(env is None
+@pytest.mark.skipif(env is None,
                     reason="No valid batch system detected")
 def test_dir_clean():
     """Clean all job files in this dir."""
