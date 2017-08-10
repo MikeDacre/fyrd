@@ -8,7 +8,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
         LICENSE: MIT License, property of Stanford, use as you wish
         VERSION: 0.6.2a1
         CREATED: 2015-12-11 22:19
-  Last modified: 2017-08-10 11:49
+  Last modified: 2017-08-10 12:31
  =============== ===================================================
 
 Allows simple job submission with *dependency tracking and queue waiting* with
@@ -138,9 +138,10 @@ import signal as _signal
 import atexit as _atexit
 
 # Version Number
-version = '0.6.2a1'
-__version__ = version
-
+from ._version import get_versions
+__version__ = get_versions()['version']
+del get_versions
+version = __version__
 
 ###################
 #  House Keeping  #

@@ -2,14 +2,15 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
+import fyrd
 
 # -- General configuration ------------------------------------------------
 
 project   = 'Fyrd'
-copyright = '2016, Michael Dacre <mike.dacre@gmail.com>'
+copyright = '2017, Michael Dacre <mike.dacre@gmail.com>'
 author    = 'Michael Dacre <mike.dacre@gmail.com>'
 version   = '0.6'
-release   = '0.6.2a1'
+release   = fyrd.version
 language  = 'en'
 
 # Add any paths that contain templates here, relative to this directory.

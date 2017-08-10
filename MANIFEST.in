@@ -1,0 +1,2 @@
+include versioneer.py
+include fyrd/_version.py

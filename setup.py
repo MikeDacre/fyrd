@@ -8,9 +8,11 @@ import codecs
 import setuptools
 from setuptools import setup
 from setuptools.command.test import test as TestCommand
+import versioneer
+
 log = setuptools.distutils.log
 
-VERSION='0.6.2a1'
+VERSION=versioneer.get_version()
 GITHUB='https://github.com/MikeDacre/fyrd'
 
 ###############################################################################
@@ -50,6 +52,12 @@ scpt_dir = os.listdir(os.path.join(here, 'bin'))
 for scpt in scpt_dir:
     scpts.append(os.path.join('bin', scpt))
 
+# Set command class
+cmdclass = versioneer.get_cmdclass()
+tcmdclss = {'test': TestRunner}
+for k, v in cmdclass.items():
+    tcmdclss[k] = v
+cmdclass = tcmdclss
 
 ###############################################################################
 #                                Setup Options                                #
@@ -93,10 +101,11 @@ setup(
     keywords='slurm torque multiprocessing cluster job_management',
 
     requires=['dill', 'tabulate', 'six', 'tblib', 'tqdm'],
-    install_requires=['dill', 'tabulate', 'six', 'tblib', 'tqdm'],
+    install_requires=['dill', 'tabulate', 'six',
+                      'tblib', 'tqdm', 'versioneer'],
     tests_require=['pytest'],
     packages=['fyrd', 'fyrd/batch_systems'],
-    cmdclass={'test': TestRunner},
+    cmdclass=cmdclass,
     scripts=scpts,
     entry_points={
         'console_scripts': [

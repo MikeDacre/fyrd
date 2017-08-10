@@ -757,8 +757,8 @@ def command_line_parser():
     Returns:
         argparse parser
     """
-    parser  = argparse.ArgumentParser(
-        description=__doc__,
+    parser = argparse.ArgumentParser(
+        description=DESC,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
@@ -768,6 +768,8 @@ def command_line_parser():
     # Global arguments
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Show debug outputs')
+    parser.add_argument('-V', '--version', action='store_true',
+                        help='Print version string')
 
     # Subcommands
     modes = parser.add_subparsers(
@@ -1070,6 +1072,10 @@ def main(argv=None):
     parser = command_line_parser()
 
     args = parser.parse_args(argv)
+
+    if args.version:
+        print(fyrd.version)
+        return 0
 
     if not args.modes:
         parser.print_help()
