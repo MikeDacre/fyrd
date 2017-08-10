@@ -94,14 +94,16 @@ def check_queue(qtype=None):
         MODE = get_cluster_environment()
     if not MODE:
         MODE = get_cluster_environment()
+    if not MODE:
+        _logme.log('Queue system not detected', 'error')
+        return False
     if qtype:
         if qtype not in DEFINED_SYSTEMS:
             raise _ClusterError('qtype value {} is not recognized, '
                                 .format(qtype) +
                                 'should be one of {}'.format(DEFINED_SYSTEMS))
         else:
-            if MODE not in DEFINED_SYSTEMS:
-                MODE = qtype
+            MODE = qtype
             return True
     elif MODE not in DEFINED_SYSTEMS:
         raise _ClusterError('MODE value {} is not recognized, '.format(MODE) +
