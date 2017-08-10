@@ -199,8 +199,8 @@ def queue_parser(user=None, partition=None):
                 _logme.log('sacct parsing failed with error {} '.format(err) +
                            'due to an incorrect number of entries.\n' +
                            'Contents of sinfo:\n{}\n'.format(sinfo) +
-                           'Expected 9 values\n:' +
-                           '[sid, sname, suser, spartition, sstate, ' +
+                           'Expected 10 values\n:' +
+                           '[sid, sarr, sname, suser, spartition, sstate, ' +
                            'snodelist, snodes, scpus, scode]',
                            'critical')
                 raise
@@ -237,6 +237,7 @@ def queue_parser(user=None, partition=None):
             scpus = int(scpus) if snodes else None
         if not isinstance(scode, int):
             scode = int(scode) if scode else None
+        sstate = sstate.lower()
         # Convert user from ID to name
         if suser.isdigit():
             suser = _pwd.getpwuid(int(suser)).pw_name

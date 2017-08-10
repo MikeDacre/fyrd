@@ -30,7 +30,7 @@ def test_queue_inspection():
 
 def test_queue_creation():
     """Test Queue object creation."""
-    assert env == 'torque' or env == 'slurm' or env == 'local'
+    assert env == 'torque' or env == 'slurm' or env == None
     fyrd.check_queue()
     queue = fyrd.Queue()
     assert queue.qtype == env

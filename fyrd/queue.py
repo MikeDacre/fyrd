@@ -47,17 +47,12 @@ __all__ = ['Queue']
 # We only need the queue defaults
 _defaults = _conf.get_option('queue')
 
-
-# Define job states
-GOOD_STATES      = ['complete', 'completed', 'special_exit']
-ACTIVE_STATES    = ['configuring', 'completing', 'pending',
-                    'running']
-BAD_STATES       = ['boot_fail', 'cancelled', 'failed',
-                    'node_fail', 'timeout', 'disappeared']
-UNCERTAIN_STATES = ['hold', 'preempted', 'stopped',
-                    'suspended']
-ALL_STATES = GOOD_STATES + ACTIVE_STATES + BAD_STATES + UNCERTAIN_STATES
-DONE_STATES = GOOD_STATES + BAD_STATES
+GOOD_STATES      = _batch.GOOD_STATES
+ACTIVE_STATES    = _batch.ACTIVE_STATES
+BAD_STATES       = _batch.BAD_STATES
+UNCERTAIN_STATES = _batch.UNCERTAIN_STATES
+ALL_STATES       = _batch.ALL_STATES
+DONE_STATES      = _batch.DONE_STATES
 
 ###############################################################################
 #                               The Queue Class                               #
@@ -480,6 +475,7 @@ class Queue(object):
              job_state, job_nodelist, job_nodecount,
              job_cpus, job_exitcode] in self.batch_system.queue_parser(
                  self.user, self.partition):
+            job_state = job_state.lower()
             if job_nodecount and job_cpus:
                 job_threads = int(job_nodecount) * int(job_cpus)
             else:

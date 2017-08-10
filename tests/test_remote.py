@@ -98,6 +98,8 @@ def test_slurm_array_normalization():
     assert batch.normalize_job_id('12345_24') == ('12345', '24')
 
 
+@pytest.mark.skipif(not env,
+                    reason="No valid batch system detected")
 def test_job_creation():
     """Make a job and print it."""
     job = fyrd.Job('echo hi', cores=2, time='00:02:00', mem='2000')
