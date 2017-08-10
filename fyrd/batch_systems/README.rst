@@ -174,13 +174,19 @@ Here is an example function:
    )
    return _Script(script=sub_script, file_name=scrpt), None
  
-submit(file_name, dependencies=None)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+submit(file_name, dependencies=None, job=None, args=None, kwds=None)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Input:
 
-- file_name: string, The path to the file to execute
+- file_name: string, The path to the file to execute [required]
 - dependencies: list, A list of dependencies (job objects or job numbers)
+  [optional]
+- job: fyrd.job.Job, A job object of the calling job (not always passed)
+  [optional]
+- args: list, A list of additional arguments (currently unused) [optional]
+- kwargs: dict or str, A dictionary or string of 'arg:val,arg,arg:val,...'
+  (currently unused) [optional]
 
 Output:
 
@@ -195,8 +201,23 @@ to execute code directly on the terminal and can catch errors and retry submissi
 however many times you choose (5 is a good number). It also returns the exit_code,
 STDOUT, and STDERR for the execution.
 
-Please add as much error catching code as possible here, the `torque.py` example
-is a good one.
+The job object is passed whenever a job is submitted using the normal
+submission process, and will contain all keyword arguments. If your batch
+system requires command line arguments, you can parse the keyword arguments
+with the `parse_strange_options` function and store them in the `submit_args`
+attribute of the Job object. You can then access that attribute in this
+submission function and pass them to `fyrd.run.cmd` (or any other method you
+choose) as command line arguments.
+
+Note, this submit function can also be called on existing scripts without a job
+object, so your function *should not require* the job object. The args and kwds
+arguments exist to allow additional parsing, although they are currently
+unused; right now args gets the contents of Job.submit_args and kwds gets the
+contents of the `additional_keywords` argument to Job.submit(). This argument
+is currently ignored by all batch scripts.
+
+Please add as much error catching code as possible in the submit function, the
+`torque.py` example is a good one.
 
 queue_parser(user=None, partition=None)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -244,6 +265,9 @@ Outputs:
   file
 - option_dict: dictionary, A parsed version of option_dict with **all options not
   defined in the appropriate dictionaries in `options.py` removed**.
+- other_args: a list of parsed arguments to be passed at submit time, this will
+  be added to the `submit_args` attribute of the Job or passed as the `args`
+  argument to `submit`.
 
 Summary
 -------

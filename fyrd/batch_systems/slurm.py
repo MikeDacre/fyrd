@@ -83,15 +83,28 @@ def gen_scripts(job_object, command, args, precmd, modstr):
     return submission_script, exec_script_obj
 
 
-def submit(file_name, dependencies=None):
+def submit(file_name, dependencies=None, job=None, args=None, kwds=None):
     """Submit any file with dependencies to Torque.
 
-    Attributes:
-        file_name (str):     Path to an existing file
-        dependencies (list): List of dependencies
+    Parameters
+    ----------
+    file_name : str
+        Path to an existing file
+    dependencies : list
+        List of dependencies
+    job : fyrd.job.Job, not implemented
+        A job object for the calling job, not used by this functions
+    args : list, not implemented
+        A list of additional command line arguments to pass when submitting,
+        not used by this function
+    kwds : dict or str, not implemented
+        A dictionary of keyword arguments to parse with options_to_string, or
+        a string of option:value,option,option:value,.... Not used by this
+        function.
 
-    Returns:
-        job_id (str)
+    Returns
+    -------
+    job_id : str
     """
     _logme.log('Submitting to slurm', 'debug')
     if dependencies:
@@ -257,9 +270,22 @@ def queue_parser(user=None, partition=None):
 def parse_strange_options(option_dict):
     """Parse all options that cannot be handled by the regular function.
 
-    Returns:
-        list: A list of strings
-        dict: Altered version of option_dict
+    Parameters
+    ----------
+    option_dict : dict
+        All keyword arguments passed by the user that are not already defined
+        in the Job object
+
+    Returns
+    -------
+    list
+        A list of strings to be added at the top of the script file
+    dict
+        Altered version of option_dict with all options that can't be handled
+        by `fyrd.batch_systems.options.option_to_string()` removed.
+    None
+        Would contain additional arguments to pass to sbatch, but these are not
+        needed so we just return None
     """
     outlist = []
     # Handle cores separately

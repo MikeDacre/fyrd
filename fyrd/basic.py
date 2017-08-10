@@ -1,6 +1,27 @@
 # -*- coding: utf-8 -*-
 """
-Functions to allow simple job and file submission without the Job class.
+Wrapper functions to make some common jobs easier.
+
+Functions
+---------
+submit
+    Submit a script to the cluster
+make_job
+    Make a job compatible with the chosen cluster but do not submit
+make_job_file
+    Make a job file compatible with the chosen cluster.
+clean
+    Delete all files in jobs list or single Job object.
+submit_file
+    Submit an existing job file to the cluster.
+clean_work_dirs
+    Clean all files in the scriptpath and outpath directories.
+clean_dir
+    Delete all files made by this module in directory.
+wait
+    Wait for jobs to finish.
+get
+    Get results of jobs when they complete.
 """
 import os  as _os
 import sys as _sys
@@ -20,7 +41,8 @@ from . import batch_systems as _batch
 from . import ClusterError as _ClusterError
 from .job import Job
 
-__all__ = ['submit', 'make_job', 'make_job_file', 'submit_file', 'clean_dir']
+__all__ = ['submit', 'make_job', 'make_job_file', 'submit_file', 'clean_dir',
+           'clean_work_dirs', 'clean', 'wait', 'get']
 
 ###############################################################################
 #                            Submission Functions                             #
@@ -31,26 +53,31 @@ def submit(command, args=None, kwargs=None, name=None, qtype=None,
            profile=None, **kwds):
     """Submit a script to the cluster.
 
-    Args:
-            command (function/str): The command or function to execute.
-            args (tuple/dict):      Optional arguments to add to command,
-                                    particularly useful for functions.
-            kwargs (dict):          Optional keyword arguments to pass to the
-                                    command, only used for functions.
-            name (str):             Optional name of the job. If not defined,
-                                    guessed. If a job of the same name is
-                                    already queued, an integer job number (not
-                                    the queue number) will be added, ie.
-                                    <name>.1
-            qtype (str):            Override the default queue type
-            profile (str):          The name of a profile saved in the
-                                    conf
+    Parameters
+    ----------
+    command : function/str
+        The command or function to execute.
+    args : tuple/dict
+        Optional arguments to add to command, particularly useful for
+        functions.
+    kwargs : dict
+        Optional keyword arguments to pass to the command, only used for
+        functions.
+    name : str
+        Optional name of the job. If not defined, guessed. If a job of the same
+        name is already queued, an integer job number (not the queue number)
+        will be added, ie.  <name>.1
+    qtype : str
+        Override the default queue type
+    profile : str
+        The name of a profile saved in the conf
 
-            *All other keywords are parsed into cluster keywords by the
-            options system. For available keywords see `fyrd.option_help()`*
+    *All other keywords are parsed into cluster keywords by the options system.
+    For available keywords see `fyrd.option_help()`*
 
-    Returns:
-        Job object
+    Returns
+    -------
+    Job object
     """
 
     _batch.check_queue()  # Make sure the queue.MODE is usable
@@ -72,28 +99,33 @@ def submit(command, args=None, kwargs=None, name=None, qtype=None,
 
 def make_job(command, args=None, kwargs=None, name=None, qtype=None,
              profile=None, **kwds):
-    """Make a job file compatible with the chosen cluster.
+    """Make a job compatible with the chosen cluster but do not submit.
 
-    Args:
-            command (function/str): The command or function to execute.
-            args (tuple/dict):      Optional arguments to add to command,
-                                    particularly useful for functions.
-            kwargs (dict):          Optional keyword arguments to pass to the
-                                    command, only used for functions.
-            name (str):             Optional name of the job. If not defined,
-                                    guessed. If a job of the same name is
-                                    already queued, an integer job number (not
-                                    the queue number) will be added, ie.
-                                    <name>.1
-            qtype (str):            Override the default queue type
-            profile (str):          The name of a profile saved in the
-                                    conf
+    Parameters
+    ----------
+    command : function/str
+        The command or function to execute.
+    args : tuple/dict
+        Optional arguments to add to command, particularly useful for
+        functions.
+    kwargs : dict
+        Optional keyword arguments to pass to the command, only used for
+        functions.
+    name : str
+        Optional name of the job. If not defined, guessed. If a job of the same
+        name is already queued, an integer job number (not the queue number)
+        will be added, ie.  <name>.1
+    qtype : str
+        Override the default queue type
+    profile : str
+        The name of a profile saved in the conf
 
-            *All other keywords are parsed into cluster keywords by the
-            options system. For available keywords see `fyrd.option_help()`*
+    *All other keywords are parsed into cluster keywords by the options system.
+    For available keywords see `fyrd.option_help()`*
 
-    Returns:
-        Job object
+    Returns
+    -------
+    Job object
     """
 
     _batch.check_queue()  # Make sure the queue.MODE is usable
@@ -109,26 +141,32 @@ def make_job_file(command, args=None, kwargs=None, name=None, qtype=None,
                   profile=None, **kwds):
     """Make a job file compatible with the chosen cluster.
 
-    Args:
-            command (function/str): The command or function to execute.
-            args (tuple/dict):      Optional arguments to add to command,
-                                    particularly useful for functions.
-            kwargs (dict):          Optional keyword arguments to pass to the
-                                    command, only used for functions.
-            name (str):             Optional name of the job. If not defined,
-                                    guessed. If a job of the same name is
-                                    already queued, an integer job number (not
-                                    the queue number) will be added, ie.
-                                    <name>.1
-            qtype (str):            Override the default queue type
-            profile (str):          The name of a profile saved in the
-                                    conf
+    Parameters
+    ----------
+    command : function/str
+        The command or function to execute.
+    args : tuple/dict
+        Optional arguments to add to command, particularly useful for
+        functions.
+    kwargs : dict
+        Optional keyword arguments to pass to the command, only used for
+        functions.
+    name : str
+        Optional name of the job. If not defined, guessed. If a job of the same
+        name is already queued, an integer job number (not the queue number)
+        will be added, ie.  <name>.1
+    qtype : str
+        Override the default queue type
+    profile : str
+        The name of a profile saved in the conf
 
-            *All other keywords are parsed into cluster keywords by the
-            options system. For available keywords see `fyrd.option_help()`*
+    *All other keywords are parsed into cluster keywords by the options system.
+    For available keywords see `fyrd.option_help()`*
 
-    Returns:
-        Job object
+    Returns
+    -------
+    str
+        Path to job file
     """
 
     _batch.check_queue()  # Make sure the queue.MODE is usable
@@ -150,8 +188,12 @@ def make_job_file(command, args=None, kwargs=None, name=None, qtype=None,
 def clean(jobs, clean_outputs=False):
     """Delete all files in jobs list or single Job object.
 
-    Attributes:
-        clean_outputs (bool): Also clean outputs.
+    Parameters
+    ----------
+    jobs : fyrd.job.Job or list of fyrd.job.Job
+        Job objects to clean
+    clean_outputs : bool
+        Also clean outputs.
     """
     jobs = _run.listify(jobs)
     for job in jobs:
@@ -163,41 +205,49 @@ def clean(jobs, clean_outputs=False):
 ###############################################################################
 
 
-def submit_file(script_file, dependencies=None, threads=None, qtype=None):
-    """Submit a job file to the cluster.
+def submit_file(script_file, dependencies=None, qtype=None, submit_args=None):
+    """Submit an existing job file to the cluster.
 
-    If qtype or queue.MODE is torque, qsub is used; if it is slurm, sbatch
+    This function is independent of the Job object and just submits a file
+    using a cluster appropriate method.
 
-    This function is independent of the Job object and just submits a file.
+    Parameters
+    ----------
+    script_file : str
+        The path to the file to submit
+    dependencies: str or list of strings, optional
+        A job number or list of job numbers to depend on
+    qtype : str, optional
+        The name of the queue system to use, auto-detected if not given.
+    submit_args : dict
+        A dictionary of keyword arguments for the submission script.
 
-    Args:
-        dependencies: A job number or list of job numbers.
-                      In slurm: `--dependency=afterok:` is used
-                      For torque: `-W depend=afterok:` is used
-
-        threads:      Total number of threads to use at a time, defaults to all
-                      ONLY USED IN LOCAL MODE
-
-    Returns:
-        job number
+    Returns
+    -------
+    job_number : str
     """
     qtype = qtype if qtype else _batch.get_cluster_environment()
     _batch.check_queue(qtype)
     dependencies = _run.listify(dependencies)
 
     batch = _batch.get_batch_system(qtype)
-    return batch.submit(script_file)
+    return batch.submit(script_file, dependencies)
 
 
 def clean_work_dirs(outputs=False, confirm=False):
     """Clean all files in the scriptpath and outpath directories.
 
-    Args:
-        outputs (bool): Also delete output files.
-        confirm (bool): Confirm on command line before deleteing.
+    Parameters
+    ----------
+    outputs : bool
+        Also delete output files.
+    confirm : bool
+        Confirm on command line before deleteing.
 
-    Returns:
-        list: A list of deleted files.
+    Returns
+    -------
+    files : list
+        A list of deleted files.
     """
     files = []
     scriptpath = _conf.get_option('jobs', 'scriptpath')
@@ -225,15 +275,25 @@ def clean_dir(directory=None, suffix=None, qtype=None, confirm=False,
                  _func.<suffix>.py.pickle.in
                  _func.<suffix>.py.pickle.out
 
-    Args:
-        directory (str):       The directory to run in, defaults to the current
-                               directory.
-        suffix (str):          Override the default suffix.
-        qtype (str):           Only run on files of this qtype
-        confirm (bool):        Ask the user before deleting the files
-        delete_outputs (bool): Delete all output files too.
+    .. note:: This function will change in the future to use batch system
+              defined paths.
 
-    Returns:
+    Parameters
+    ----------
+    directory : str
+        The directory to run in, defaults to the current directory.
+    suffix : str
+        Override the default suffix.
+    qtype : str
+        Only run on files of this qtype
+    confirm : bool
+        Ask the user before deleting the files
+    delete_outputs : bool
+        Delete all output files too.
+
+    Returns
+    -------
+    list
         A set of deleted files
     """
     _batch.check_queue(qtype)  # Make sure the queue.MODE is usable
@@ -316,12 +376,36 @@ def clean_dir(directory=None, suffix=None, qtype=None, confirm=False,
 
 
 def wait(jobs):
-    """Simple wrapper for Queue.wait()."""
+    """Wait for jobs to finish.
+
+    Parameters
+    ----------
+    jobs : fyrd.job.Job or str or list of either (mixed list fine)
+        A single job or list of jobs, either Job objects or job numbers
+
+    Returns
+    -------
+    success : bool
+        True if all jobs successful, false otherwise
+    """
     q = _queue.Queue()
     return q.wait(jobs)
 
 
 def get(jobs):
-    """Simple wrapper for Queue.wait()."""
+    """Get results of jobs when they complete.
+
+    Parameters
+    ----------
+    jobs : fyrd.job.Job or list of fyrd.job.Job
+
+    Returns
+    -------
+    list
+        Outputs (STDOUT or return value) of jobs
+
+    .. note:: This function also modifies the input Job objects, so they will
+              contain all outputs and state information.
+    """
     q = _queue.Queue()
     return q.get(jobs)

@@ -14,6 +14,24 @@ be added to a profile.
 
 Options will also be pre-sanitized before being added to profile. e.g. 'mem':
     '2GB' will become 'mem': 2000.
+
+Functions
+---------
+get_option: Get a single key or section.
+set_option: Set a single key or section.
+set_option: Set a single key or section.
+delete: Delete a config item.
+create_config: Create an initial config from a dictionary and the defaults
+create_config_interactive: Interact with the user to create a new config
+
+Examples
+--------
+>>> import fyrd
+>>> i = fyrd.conf.get_option('queue', 'sleep_len')
+>>> c = fyrd.conf.set_option('queue', 'sleep_len', 0.125)
+>>> fyrd.conf.get_option('queue', 'sleep_len')
+0.125
+
 """
 from __future__ import print_function
 import os       as _os
@@ -39,6 +57,7 @@ CONFIG_PATH  = _os.path.join(_os.environ['HOME'], '.fyrd')
 """
 Where configuration files will be kept
 """
+
 CONFIG_FILE  = _os.path.join(CONFIG_PATH, 'config.txt')
 """
 Where the main config will be kept.
@@ -217,16 +236,25 @@ def get_option(section=None, key=None, default=None):
     All args are optional, if they are missing, the parent section or entire
     config will be returned.
 
-    Args:
-        section (str): The config section to use (e.g. queue), if None, all
-                       sections returned.
-        key (str) :    The config key to get (e.g. 'max_jobs'), if None, whole
-                       section returned.
-        default:       If the key does not exist, create it with this default
-                       value.
+    Parameters
+    ----------
+    section : str
+        The config section to use (e.g. queue), if None, all sections returned.
+    key : str
+        The config key to get (e.g. 'max_jobs'), if None, whole section
+        returned.
+    default
+        If the key does not exist, create it with this default value.
 
-    Returns:
+    Returns
+    -------
+    option_value
         Option value if key exists, None if no key exists.
+
+    See Also
+    --------
+    set_option : Set an option
+    get_config : Get the entire config
     """
     load_config()
 
@@ -272,19 +300,24 @@ def get_option(section=None, key=None, default=None):
         _logme.log('No option specified, returning config dictionary', 'debug')
         out = _config_to_dict(config)
 
-    return out
+    return _typecast_items(out)
 
 
 def set_option(section, key, value):
     """Write a config key to the config file.
 
-    Args:
-        section (str): Section of the config file to use.
-        key (str):     Key to add.
-        value:         Value to add for key.
+    Parameters
+    ----------
+    section : str
+        Section of the config file to use.
+    key : str
+        Key to add.
+    value
+        Value to add for key.
 
-    Returns:
-        ConfigParser
+    Returns
+    -------
+    ConfigParser
     """
     # Sanitize arguments
     section = str(section)
@@ -309,12 +342,16 @@ def set_option(section, key, value):
 def delete(section, key):
     """Delete a config item.
 
-    Args:
-        section (str): Section of config file.
-        key (str):     Key to delete
+    Parameters
+    ----------
+    section : str
+        Section of config file.
+    key : str
+        Key to delete
 
-    Returns:
-        ConfigParger
+    Returns
+    -------
+    ConfigParger
     """
     load_config()
 
@@ -331,8 +368,9 @@ def load_config():
     If any section or key from DEFAULTS is not present in the config, it is
     added back, enforcing a minimal configuration.
 
-    Returns:
-        ConfigParser: Config options.
+    Returns
+    -------
+    ConfigParser
     """
     if _os.path.isfile(CONFIG_FILE):
         config.read(CONFIG_FILE)
@@ -371,8 +409,10 @@ def create_config_interactive(prompt=True):
 
     Uses readline autocompletion to make setup easier.
 
-    Args:
-        prompt (bool): As for confirmation before beginning wizard.
+    Parameters
+    ----------
+    prompt : bool
+        As for confirmation before beginning wizard.
     """
     # Use tab completion
     t = _TabCompleter()
@@ -485,9 +525,12 @@ def create_config(cnf=None, def_queue=None):
     DEFAULTS will be ignored, and any records that are absent will be
     populated from DEFAULTS.
 
-    Args:
-        cnf (dict):      A dictionary of config defaults.
-        def_queue (str): A name for a queue to add to the default profile.
+    Parameters
+    ----------
+    cnf : dict
+        A dictionary of config defaults.
+    def_queue : str
+        A name for a queue to add to the default profile.
     """
     global config
     config = _configparser.ConfigParser(allow_no_value=True)
@@ -527,11 +570,22 @@ def create_config(cnf=None, def_queue=None):
 def get_job_paths(kwds):
     """Parse keyword arguments to get important paths.
 
-    Args:
-        kwds (dict): Keyword arguments accepted by fyrd.job.Job
+    Parameters
+    ----------
+    kwds : dict
+        Keyword arguments accepted by fyrd.job.Job
 
-    Returns:
-        tuple: kwds, runpath, outpath, scriptpath.
+    Returns
+    -------
+    kwds : dict
+        A modified version of the input kwds dictionary with path requests
+        removed
+    runpath : sctr
+        The path where the job will execute
+    outpath : sctr
+        The path where job outputs will go
+    scriptpath : sctr
+        The path where job script files will be stored
     """
     runpath = _os.path.abspath(kwds['dir'] if 'dir' in kwds else '.')
     kwds['dir'] = runpath
@@ -566,14 +620,27 @@ def get_job_paths(kwds):
 
 class Profile(object):
 
-    """A job submission profile. Just a thin wrapper around a dict."""
+    """A job submission profile. Just a thin wrapper around a dict.
+
+    Attributes
+    ----------
+    name : str
+    kwds : dict
+
+    Methods
+    -------
+    write : Write self to config file
+    """
 
     def __init__(self, name, kwds):
         """Set up bare minimum attributes.
 
-        Args:
-            name (str):  Name of the profile
-            kwds (dict): Dictionary of keyword arguments (will be validated).
+        Parameters
+        ----------
+        name : str
+            Name of the profile
+        kwds : dict
+            Dictionary of keyword arguments (will be validated).
         """
         name = 'DEFAULT' if name.lower() == 'default' else name
         self.name = name
@@ -624,13 +691,18 @@ def get_profile(profile=None, allow_none=True):
 
     Will return None if profile is supplied but does not exist.
 
-    Args:
-        profile (str):     The name of a profile to search for.
-        allow_none (bool): If True, return None if no profile matches,
-                           otherwise raise a ValueError.
+    Parameters
+    ----------
+    profile : str
+        The name of a profile to search for.
+    allow_none : bool
+        If True, return None if no profile matches, otherwise raise a
+        ValueError.
 
-    Returns:
-        fyrd.conf.Profile: The requested profile.
+    Returns
+    -------
+    fyrd.conf.Profile
+        The requested profile.
     """
     load_profiles()
     # Allow lowercase default profile
@@ -658,13 +730,17 @@ def get_profiles(profs=None, allow_none=True):
 
     Returns all profiles if profiles argument is None.
 
-    Args:
-        profs (list):      A list of profiles to get.
-        allow_none (bool): If True, return None if no profile matches,
-                           otherwise raise a ValueError.
+    Parameters
+    ----------
+    profs : list
+        A list of profiles to get.
+    allow_none : bool
+        If True, return None if no profile matches, otherwise raise a
+        ValueError.
 
     Returns:
-        dict: A ditionary of profile: fyrd.conf.Profile
+    dict:
+        A ditionary of fyrd.conf.Profile objects
     """
     if profs:
         profs = _run.listify(profs)
@@ -689,10 +765,14 @@ def get_profiles(profs=None, allow_none=True):
 def set_profile(name, kwds, update=True):
     """Write profile to config file.
 
-    Arguments:
-        name (str):    The name of the profile to add/edit.
-        kwds (dict):   Keyword arguments to add to the profile.
-        update (bool): Update the profile rather than overwriting it.
+    Parameters
+    ----------
+    name : str
+        The name of the profile to add/edit.
+    kwds : dict
+        Keyword arguments to add to the profile.
+    update : bool
+        Update the profile rather than overwriting it.
     """
     load_profiles()
     name = 'DEFAULT' if name.lower() == 'default' else name
@@ -720,8 +800,10 @@ def set_profile(name, kwds, update=True):
 def del_profile(name):
     """Delete a profile.
 
-    Args:
-        name (str): The name of the profile to delete.
+    Parameters
+    ----------
+    name : str
+        The name of the profile to delete.
     """
     load_profiles()
     if name.lower() == 'default':
@@ -750,8 +832,10 @@ def create_profiles(profs=None):
     DEFAULT_PROFILES will be ignored, and any records that are absent will be
     populated from DEFAULT_PROFILES.
 
-    Args:
-        cnf (dict): A dictionary of config defaults.
+    Parameters
+    ----------
+    profs : dict
+        A dictionary of config defaults.
     """
     global profiles
 
@@ -783,8 +867,10 @@ def create_profiles(profs=None):
 def load_profiles():
     """Load the profiles, create them if they don't exist.
 
-    Returns:
-        ConfigParser: profiles
+    Returns
+    -------
+    ConfigParser
+        profiles
     """
     if not _os.path.isfile(config.get('jobs', 'profile_file')):
         create_profiles()
@@ -806,8 +892,10 @@ def load_profiles():
 def write_profiles():
     """Write the profiles to the file.
 
-    Returns:
-        ConfigParser: profiles
+    Returns
+    -------
+    ConfigParser
+        profiles
     """
     with open(config.get('jobs', 'profile_file'), 'w') as fout:
         profiles.write(fout)
@@ -822,12 +910,17 @@ def write_profiles():
 def _sections(cnf, inc_anyway=False):
     """Include default in sections if it has items.
 
-    Args:
-        cnf (ConfigParser): Any ConfigParser object
-        inc_anyway (bool):  Include the DEFAULT section even if empty
+    Parameters
+    ----------
+    cnf : ConfigParser
+        Any ConfigParser object
+    inc_anyway : bool
+        Include the DEFAULT section even if empty
 
-    Returns:
-        list: A list of sections in cnf, including DEFAULT if defined.
+    Returns
+    -------
+    list
+        A list of sections in cnf, including DEFAULT if defined.
     """
     merged_sections = cnf.sections() + ['DEFAULT']
     return merged_sections if cnf.items('DEFAULT') or inc_anyway \
@@ -837,14 +930,20 @@ def _sections(cnf, inc_anyway=False):
 def _config_from_dict(cnf, dct, section=None):
     """Python 2 ConfigParsers cannot handle dictionaries, so we do it here.
 
-    Args:
-        cnf (ConfigParser): A ConfigParser object.
-        dct (dict):          A dictionary of {'key': 'value'} if section or
-                             {'section': {'key': 'value'}}
-        section (str):       An optional section name to update
+    Parameters
+    ----------
+    cnf : ConfigParser
+        A ConfigParser object.
+    dct : dict
+        A dictionary of {'key': 'value'} if section or {'section': {'key':
+            'value'}}
+    section : str
+        An optional section name to update
 
-    Returns:
-        ConfigParser: The original ConfigParser object, updated.
+    Returns
+    -------
+    ConfigParser
+        The original ConfigParser object, updated.
     """
     assert isinstance(cnf, _configparser.ConfigParser)
     assert isinstance(dct, dict)
@@ -882,28 +981,48 @@ def _dict_to_strings(kwds):
 def _section_to_dict(section):
     """Convert a ConfigParser list of tuples to a dictionary.
 
-    Args:
-        section (list): Output of ConfigParser.items(section)
+    Parameters
+    ----------
+    section : list
+        Output of ConfigParser.items(section)
 
-    Returns:
-        dict: A dictionary of the above with typed values
+    Returns
+    -------
+    dict
+        A dictionary of the above with typed values
     """
     dct = dict(section)
     out = {}
     for key, val in dct.items():
-        if isinstance(val, str):
-            if val == 'True':
-                out[key] = True
-            elif val == 'False':
-                out[key] = False
-            elif val == 'None':
-                out[key] = None
-            elif val.isdigit():
-                out[key] = int(val)
-            else:
-                out[key] = val
+        out[key] = _typecast_items(val)
+    return out
+
+
+def _typecast_items(val):
+    """Try to convert a variable into the true type.
+
+    For example: 'True' becomes True and '0.125' becomes 0.125
+    """
+    if isinstance(val, str):
+        if val == 'True':
+            out = True
+        elif val == 'False':
+            out = False
+        elif val == 'None':
+            out = None
+        elif val.isdigit():
+            out = int(val)
         else:
-            out[key] = val
+            if '.' in val:
+                res = val.split('.')
+                if len(res) == 2 and res[0].isdigit() and res[1].isdigit():
+                    out = float(val)
+                else:
+                    out = val
+            else:
+                out = val
+    else:
+        out = val
     return out
 
 
@@ -928,9 +1047,7 @@ class _TabCompleter(object):
     A tab completer that can either complete from the filesystem or from a
     list.
 
-    Taken from:
-
-        `https://gist.github.com/iamatypeofwalrus/5637895`_
+    Taken from `https://gist.github.com/iamatypeofwalrus/5637895`_
 
     """
     list_completer = None

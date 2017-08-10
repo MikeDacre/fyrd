@@ -8,7 +8,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
         LICENSE: MIT License, property of Stanford, use as you wish
         VERSION: 0.6.2a1
         CREATED: 2015-12-11 22:19
-  Last modified: 2017-08-07 15:28
+  Last modified: 2017-08-10 11:49
  =============== ===================================================
 
 Allows simple job submission with *dependency tracking and queue waiting* with
@@ -77,8 +77,7 @@ conf methods.
 
 For example::
 
-    conf.set_profile('small', {'nodes': 1, 'cores': 1,
-                                      'mem': '2GB'})
+    conf.set_profile('small', {'nodes': 1, 'cores': 1, 'mem': '2GB'})
 
 To see all profiles run::
 
@@ -132,15 +131,15 @@ to 'warn'.
 Help
 ----
 
-Full help is available at::
-    https://fyrd.rtfd.io
+Full help is available at: https://fyrd.rtfd.io
 """
 import os as _os
 import signal as _signal
 import atexit as _atexit
 
 # Version Number
-__version__ = '0.6.2a1'
+version = '0.6.2a1'
+__version__ = version
 
 
 ###################

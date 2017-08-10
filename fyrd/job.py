@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 Class and methods to handle Job submission.
+
+This module only defines a single object: the Job class.
 """
 import os  as _os
 import sys as _sys
@@ -40,32 +42,100 @@ class Job(object):
     Holds information about submit time, number of cores, the job script,
     and more.
 
-    Below are the core attributes and methods required to use this class.
+    Below are the core attributes and methods required to use this class,
+    note that this is an incomplete list.
 
-    Attributes:
-        out (str):            The output of the function or a copy of stdout
-                              for a script
-        stdout (str):         Any output to STDOUT
-        stderr (str):         Any output to STDERR
-        exitcode (int):       The exitcode of the running processes (the script
-                              runner if the Job is a function.
-        start (datetime):     A datetime object containing time execution
-                              started on the remote node.
-        end (datetime):       Like start but when execution ended.
-        runtime (timedelta):  A timedelta object containing runtime.
-        files (list):         A list of script files associated with this class
-        done (bool):          True if the job has completed
+    Attributes
+    ----------
+    id : str
+        The ID number for the job, only set once the job has been submitted
+    name : str
+        The name of the job
+    command : str or callable
+        The function or shell script that will be submitted
+    args : list
+        A list of arguments to the shell script or function in command
+    kwargs : dict
+        A dictionary of keyword arguments to the function (not shell script) in
+        command
+    state : str
+        A slurm-style one word description of the state of the job, one of:
+            - Not_Submitted
+            - queued
+            - running
+            - completed
+            - failed
+    submitted : bool
+    written : bool
+    done : bool
+    dependencies : list
+        A list of dependencies associated with this job
+    out : str
+        The output of the function or a copy of stdout for a script
+    stdout : str
+        Any output to STDOUT
+    stderr : str
+        Any output to STDERR
+    exitcode : int
+        The exitcode of the running processes (the script runner if the Job is
+        a function).
+    submit_time : datetime
+        A datetime object for the time of submission
+    start : datetime
+        A datetime object for time execution started on the remote node.
+    end : datetime
+        A datetime object for time execution ended on the remote node.
+    runtime : timedelta
+        A timedelta object containing runtime.
+    files : list
+        A list of script files associated with this job
+    nodes : list
+        A list of nodes associated with this job
+    modules : list
+        A list of modules associated with this job
+    clean_files : bool
+        If True, auto-delete script and function files on job completion
+    clean_outputs : bool
+        If True, auto-delete script outputs and error files on job completion
+    kwds : dict
+        Keyword arguments to the batch system (e.g. mem, cores, walltime), this
+        is initialized by taking every additional keyword argument to the Job.
+        e.g. Job('echo hi', profile=large, walltime='00:20:00', mem='2GB') will
+        result in kwds containing {walltime: '00:20:00', mem: '2GB'}. There is
+        **no need to alter this manually**.
+    submit_args : list
+        List of parsed submit arguments that will be passed at runtime to the
+        submit function. **Generated within the Job object**, no need to set
+        manually, use the `kwds` attribute instead.
 
-    Methods:
-        submit(): submit the job if it is ready
-        wait():   block until the job is done
-        get():    block until the job is done and then return the output
-                  (stdout if job is a script), by default saves all outputs to
-                  self (i.e. .out, .stdout, .stderr) and deletes all
-                  intermediate files before returning. If `save` argument is
-                  `False`, does not delete the output files by default.
-        clean():  delete any files created by this object
+    Methods
+    -------
+    initialize()
+        Use attributes to prep job for running
+    gen_scripts()
+        Create script files (but do not write them)
+    write(overwrite=True)
+        Write scripts to files
+    submit(wait_on_max_queue=True)
+        Submit the job if it is ready and the queue is sufficiently open.
+    resubmit(wait_on_max_queue=True)
+        Clean all internal states with `scrub()` and then resubmit
+    clean(delete_outputs=True, get_outputs=True)
+        Delete any files created by this object
+    scrub(confirm=True)
+        Clean everything and reset to an unrun state.
+    update(fetch_info=True)
+        Update our status from the queue
+    wait()
+        Block until the job is done
+    get()
+        Block until the job is done and then return the output (stdout if job
+        is a script), by default saves all outputs to self (i.e. .out, .stdout,
+        .stderr) and deletes all intermediate files before returning. If `save`
+        argument is `False`, does not delete the output files by default.
 
+    Notes
+    -----
     Printing or reproducing the class will display detailed job information.
 
     Both `wait()` and `get()` will update the queue every few seconds
@@ -79,14 +149,13 @@ class Job(object):
     the submission script for the job and the file name, plus a 'written' bool
     that checks if the file exists.
 
-    In addition, SLURM jobs have a .exec_script attribute, which is a Script
-    object containing the shell command to _run. This difference is due to the
-    fact that some SLURM systems execute multiple lines of the submission file
-    at the same time.
+    In addition, some batch systems (e.g. SLURM) have an .exec_script
+    attribute, which is a Script object containing the shell command to run.
+    This difference is due to the fact that some SLURM systems execute multiple
+    lines of the submission file at the same time.
 
     Finally, if the job command is a function, this object will also contain a
     `.function` attribute, which contains the script to run the function.
-
     """
 
     id            = None
@@ -98,6 +167,11 @@ class Job(object):
     submit_time   = None
     state         = None
     kind          = None
+
+    # Arguments
+    kwds          = None
+    kwargs        = None
+    submit_args   = None
 
     # Runtime
     nodes         = None
@@ -433,7 +507,9 @@ class Job(object):
                 modstr += 'module load {}\n'.format(module)
 
         # Add all of the keyword arguments at once
-        precmd = _options.options_to_string(kwds, self.qtype) + '\n\n' + modstr
+        opt_string, submit_args = _options.options_to_string(kwds, self.qtype)
+        precmd = opt_string + '\n\n' + modstr
+        self.submit_args = submit_args
 
         # Create queue-dependent scripts
         self.submission, self.exec_script = self.batch.gen_scripts(
@@ -447,8 +523,14 @@ class Job(object):
     def write(self, overwrite=True):
         """Write all scripts.
 
-        Args:
-            overwrite (bool): Overwrite existing files, defaults to True.
+        Parameters
+        ----------
+        overwrite : bool
+            Overwrite existing files, defaults to True.
+
+        Returns
+        -------
+        self : Job
         """
         if not self.scripts_ready:
             self.gen_scripts()
@@ -461,19 +543,24 @@ class Job(object):
         self.written = True
         return self
 
-    def submit(self, wait_on_max_queue=True):
+    def submit(self, wait_on_max_queue=True, additional_keywords=None):
         """Submit this job.
-
-        Args:
-            wait_on_max_queue (bool): Block until queue limit is below the
-                                      maximum before submitting.
 
         To disable max_queue_len, set it to 0. None will allow override by
         the default settings in the config file, and any positive integer will
         be interpretted to be the maximum queue length.
 
-        Returns:
-            self
+        Parameters
+        ----------
+        wait_on_max_queue : bool, optional
+            Block until queue limit is below the maximum before submitting.
+        additional_keywords : dict, optional
+            Pass this dictionary to the batch system submission function,
+            not necessary.
+
+        Returns
+        -------
+        self : Job
         """
         if self.submitted:
             _logme.log('Not submitting, already submitted.', 'warn')
@@ -542,7 +629,9 @@ class Job(object):
 
         self.id = self.batch.submit(
             self.submission.file_name,
-            self.depends
+            dependencies=self.depends,
+            job=self, args=self.submit_args,
+            kwds=additional_keywords
         )
 
         self.submitted = True
@@ -555,8 +644,68 @@ class Job(object):
 
         return self
 
+    def resubmit(self):
+        """Attempt to auto resubmit, deletes prior files.
+
+        Parameters
+        ----------
+        wait_on_max_queue : bool
+        Block until queue limit is below the maximum before submitting.
+
+        To disable max_queue_len, set it to 0. None will allow override by
+        the default settings in the config file, and any positive integer will
+        be interpretted to be the maximum queue length.
+
+        Returns
+        -------
+        self : Job
+        """
+        self.scrub(confirm=False)
+        # Rerun
+        self.initialize()
+        self.gen_scripts()
+        self.write()
+        return self.submit(wait_on_max_queue)
+
+    def clean(self, delete_outputs=None, get_outputs=True):
+        """Delete all scripts created by this module, if they were written.
+
+        Args:
+            delete_outputs (bool): also delete all output and err files,
+                                   but get their contents first.
+            get_outputs (bool):    if delete_outputs, save outputs before
+                                   deleting.
+        """
+        _logme.log('Cleaning outputs, delete_outputs={}'
+                   .format(delete_outputs), 'debug')
+        if delete_outputs is None:
+            delete_outputs = self.clean_outputs
+        assert isinstance(delete_outputs, bool)
+        for jobfile in [self.submission, self.exec_script, self.function]:
+            if jobfile:
+                jobfile.clean()
+        if delete_outputs:
+            _logme.log('Deleting output files.', 'debug')
+            if get_outputs:
+                self.fetch_outputs(delete_files=True)
+            for f in self.outfiles:
+                if _os.path.isfile(f):
+                    _logme.log('Deleteing {}'.format(f), 'debug')
+                    _os.remove(f)
+        return self
+
     def scrub(self, confirm=True):
-        """Clean everything and reset to an unrun state."""
+        """Clean everything and reset to an unrun state.
+
+        Parameters
+        ----------
+        confirm : bool
+            Get user input before proceeding
+
+        Returns
+        -------
+        self : Job
+        """
         msg = ("This will delete all outputs stored in this job, as well "
                "as all output files, job files, and scripts. Are you sure "
                "you want to do this?")
@@ -587,42 +736,6 @@ class Job(object):
         self.end           = None
         return self.update()
 
-    def resubmit(self):
-        """Attempt to auto resubmit, deletes prior files."""
-        self.scrub(confirm=False)
-        # Rerun
-        self.initialize()
-        self.gen_scripts()
-        self.write()
-        return self.submit()
-
-    def clean(self, delete_outputs=None, get_outputs=True):
-        """Delete all scripts created by this module, if they were written.
-
-        Args:
-            delete_outputs (bool): also delete all output and err files,
-                                   but get their contents first.
-            get_outputs (bool):    if delete_outputs, save outputs before
-                                   deleting.
-        """
-        _logme.log('Cleaning outputs, delete_outputs={}'
-                   .format(delete_outputs), 'debug')
-        if delete_outputs is None:
-            delete_outputs = self.clean_outputs
-        assert isinstance(delete_outputs, bool)
-        for jobfile in [self.submission, self.exec_script, self.function]:
-            if jobfile:
-                jobfile.clean()
-        if delete_outputs:
-            _logme.log('Deleting output files.', 'debug')
-            if get_outputs:
-                self.fetch_outputs(delete_files=True)
-            for f in self.outfiles:
-                if _os.path.isfile(f):
-                    _logme.log('Deleteing {}'.format(f), 'debug')
-                    _os.remove(f)
-        return self
-
     ######################
     #  Queue Management  #
     ######################
@@ -630,8 +743,10 @@ class Job(object):
     def update(self, fetch_info=True):
         """Update status from the queue.
 
-        Args:
-            fetch_info (bool): Fetch basic job info if complete.
+        Parameters
+        ----------
+        fetch_info : bool
+            Fetch basic job info if complete.
         """
         if not self._updating:
             self._update(fetch_info)
@@ -697,6 +812,83 @@ class Job(object):
                            'failure', 'error')
             return False
 
+    def get(self, save=True, cleanup=None, delete_outfiles=None,
+            del_no_save=None, raise_on_error=True):
+        """Block until job completed and return output of script/function.
+
+        By default saves all outputs to this class and deletes all intermediate
+        files.
+
+        Parameters
+        ----------
+        save : bool
+            Save all outputs to the class also (advised)
+        cleanup : bool
+            Clean all intermediate files after job completes.
+        delete_outfiles : bool
+            Clean output files after job completes.
+        del_no_save : bool
+            Delete output files even if `save` is `False`
+        raise_on_error : bool
+            If the returned output is an Exception, raise it.
+
+        Returns
+        -------
+        str
+            Function output if Function, else STDOUT
+        """
+        _logme.log(('Getting outputs, cleanup={}, autoclean={}, '
+                    'delete_outfiles={}').format(
+                        cleanup, self.clean_files, delete_outfiles
+                    ), 'debug')
+        # Wait for queue
+        status = self.wait()
+        if status == 'disappeared':
+            _logme.log('Job disappeared from queue, attempting to get outputs',
+                       'debug')
+            try:
+                self.fetch_outputs(save=save, delete_files=False,
+                                   get_stats=False)
+            except IOError:
+                _logme.log('Job disappeared from the queue and files could not'
+                           ' be found, job must have died and been deleted '
+                           'from the queue', 'critical')
+                raise IOError('Job {} disappeared, output files missing'
+                              .format(self))
+        elif status is not True:
+            _logme.log('Wait failed, cannot get outputs, aborting', 'error')
+            self.update()
+            if _os.path.isfile(self.errfile):
+                if _logme.MIN_LEVEL in ['debug', 'verbose']:
+                    _sys.stderr.write('STDERR of Job:\n')
+                    _sys.stderr.write(self.get_stderr(delete_file=False,
+                                                      update=False))
+            if self.poutfile and _os.path.isfile(self.poutfile):
+                _logme.log('Getting pickled output', 'debug')
+                self.get_output(delete_file=False, update=False,
+                                raise_on_error=raise_on_error)
+            else:
+                _logme.log('Pickled out file does not exist, cannot get error',
+                           'debug')
+            return
+        else:
+            # Get output
+            _logme.log('Wait complete, fetching outputs', 'debug')
+            self.fetch_outputs(save=save, delete_files=False)
+        out = self.out if save else self.get_output(save=save)
+        # Cleanup
+        if cleanup is None:
+            cleanup = self.clean_files
+        else:
+            assert isinstance(cleanup, bool)
+        if delete_outfiles is None:
+            delete_outfiles = self.clean_outputs
+        if save is False:
+            delete_outfiles = del_no_save if del_no_save is not None else False
+        if cleanup:
+            self.clean(delete_outputs=delete_outfiles)
+        return out
+
     def get_output(self, save=True, delete_file=None, update=True,
                    raise_on_error=True):
         """Get output of function or script.
@@ -707,16 +899,21 @@ class Job(object):
         By default, output file is kept unless delete_file is True or
         self.clean_files is True.
 
-        Args:
-            save (bool):           Save the output to self.out, default True.
-                                   Would be a good idea to set to False if the
-                                   output is huge.
-            delete_file (bool):    Delete the output file when getting
-            update (bool):         Update job info from queue first.
-            raise_on_error (bool): If the returned output is an Exception,
-                                   raise it.
+        Parameters
+        ----------
+        save : bool
+            Save the output to self.out, default True.  Would be a good idea to
+            set to False if the output is huge.
+        delete_file : bool
+            Delete the output file when getting
+        update : bool
+            Update job info from queue first.
+        raise_on_error : bool
+            If the returned output is an Exception, raise it.
 
-        Returns:
+        Returns
+        -------
+        output
             The output of the script or function. Always a string if script.
         """
         _logme.log(('Getting output, save={}, clean_files={}, '
@@ -768,19 +965,24 @@ class Job(object):
         By default, output file is kept unless delete_file is True or
         self.clean_files is True.
 
-        Args:
-            save (bool):        Save the output to self.stdout, default True.
-                                Would be a good idea to set to False if the
-                                output is huge.
-            delete_file (bool): Delete the stdout file when getting
-            update (bool):      Update job info from queue first.
-
-        Returns:
-            str: The contents of STDOUT, with runtime info and trailing
-                 newline removed.
-
         Also sets self.start and self.end from the contents of STDOUT if
         possible.
+
+        Returns
+        -------
+        save : bool
+            Save the output to self.stdout, default True.  Would be a good idea
+            to set to False if the output is huge.
+        delete_file : bool
+            Delete the stdout file when getting
+        update : bool
+            Update job info from queue first.
+
+        Returns
+        -------
+        str
+            The contents of STDOUT, with runtime info and trailing newline
+            removed.
         """
         if delete_file is None:
             delete_file = self.clean_outputs
@@ -1117,78 +1319,6 @@ class Job(object):
                            'error')
                 return False
         return True
-
-    def get(self, save=True, cleanup=None, delete_outfiles=None,
-            del_no_save=None, raise_on_error=True):
-        """Block until job completed and return output of script/function.
-
-        By default saves all outputs to this class and deletes all intermediate
-        files.
-
-        Args:
-            save (bool):            Save all outputs to the class also (advised)
-            cleanup (bool):         Clean all intermediate files after job
-                                    completes.
-            delete_outfiles (bool): Clean output files after job completes.
-            del_no_save (bool):     Delete output files even if `save` is
-                                    `False`
-            raise_on_error (bool): If the returned output is an Exception,
-                                   raise it.
-
-        Returns:
-            str: Function output if Function, else STDOUT
-        """
-        _logme.log(('Getting outputs, cleanup={}, autoclean={}, '
-                    'delete_outfiles={}').format(
-                        cleanup, self.clean_files, delete_outfiles
-                    ), 'debug')
-        # Wait for queue
-        status = self.wait()
-        if status == 'disappeared':
-            _logme.log('Job disappeared from queue, attempting to get outputs',
-                       'debug')
-            try:
-                self.fetch_outputs(save=save, delete_files=False,
-                                   get_stats=False)
-            except IOError:
-                _logme.log('Job disappeared from the queue and files could not'
-                           ' be found, job must have died and been deleted '
-                           'from the queue', 'critical')
-                raise IOError('Job {} disappeared, output files missing'
-                              .format(self))
-        elif status is not True:
-            _logme.log('Wait failed, cannot get outputs, aborting', 'error')
-            self.update()
-            if _os.path.isfile(self.errfile):
-                if _logme.MIN_LEVEL in ['debug', 'verbose']:
-                    _sys.stderr.write('STDERR of Job:\n')
-                    _sys.stderr.write(self.get_stderr(delete_file=False,
-                                                      update=False))
-            if self.poutfile and _os.path.isfile(self.poutfile):
-                _logme.log('Getting pickled output', 'debug')
-                self.get_output(delete_file=False, update=False,
-                                raise_on_error=raise_on_error)
-            else:
-                _logme.log('Pickled out file does not exist, cannot get error',
-                           'debug')
-            return
-        else:
-            # Get output
-            _logme.log('Wait complete, fetching outputs', 'debug')
-            self.fetch_outputs(save=save, delete_files=False)
-        out = self.out if save else self.get_output(save=save)
-        # Cleanup
-        if cleanup is None:
-            cleanup = self.clean_files
-        else:
-            assert isinstance(cleanup, bool)
-        if delete_outfiles is None:
-            delete_outfiles = self.clean_outputs
-        if save is False:
-            delete_outfiles = del_no_save if del_no_save is not None else False
-        if cleanup:
-            self.clean(delete_outputs=delete_outfiles)
-        return out
 
     def _update_name(self, name=None):
         """Make sure the job name is unique.

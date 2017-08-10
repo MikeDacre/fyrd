@@ -2,16 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 Manage fyrd config, profiles, and queue.
-
-============   ======================================
-Author         Michael D Dacre <mike.dacre@gmail.com>
-Organization   Stanford University
-License        MIT License, use as you wish
-Version        0.6.2a1
-============   ======================================
 """
+
 from __future__ import print_function
 import os
+import re
 import sys
 import argparse
 import signal
@@ -24,8 +19,88 @@ import fyrd
 #                                  Help Text                                  #
 ###############################################################################
 
+DESC = """\
+{doc}
+
+============   ======================================
+Author         Michael D Dacre <mike.dacre@gmail.com>
+Organization   Stanford University
+License        MIT License, use as you wish
+Version        {version}
+============   ======================================
+""".format(doc=__doc__, version=fyrd.version)
+
 RUN_HELP = """\
 Run a shell script on the cluster and optionally wait for completion.
+
+Allows the running of a single simple shell script, or the same shell script on
+many files, or more complex file interpretation.
+"""
+
+RUN_EPI = """\
+In simple mode (with `--simple` specified), all positional arguments are
+converted into a single script and run on the cluster. Otherwise, the first
+positional argument is the script and must be quoted. All other arguments
+are file path specifiers.
+
+When using file path speficiers, there are three possible modes, which will
+be determined by the contents of the shell script.
+
+1. Simple file addition:
+    If the shell script contains '{}', all other positional arguments will be
+    converted into a list, and the shell script will be submitted once for each
+    file. e.g. ::
+
+        fyrd run "my_algorithm {}" file1.txt my_dir/*.txt
+
+    That will fun `my_algorithm` on every .txt file in my_dir plus on file1.txt
+2. Complex file interpretation:
+    Any '{#}' (e.g. {0}, {1}) in the shell script will be interpretted as a
+    file, and the remaining positional arguments will be parsed to determine
+    the files to use. e.g.::
+
+        fyrd run "zcat {0} | my_algorithm --stats {1}" \
+                 "my_dir/*.txt" "my_dir/*.stat"
+
+    Note, in this mode the file blobs must interpret to be the same lengths,
+    i.e. there must be as many .txt files in the directory as .stat files, and
+    they must also sort identically (we will sort the lists alphabetically).
+3. Complex file interpretation with variables:
+    Exactly the same as two, but while '{#}' arguments will interpret to be
+    the full path to a file (same as 2), it is possible to also include
+    variables as '{name}'. These allow you to capture just one part of the
+    path for use in the script. The exact same name should appear in the
+    script itself to be used.
+
+    Note: if you provide multiple file arguments that share a variable name,
+    the string must be identical. For example, consider a directory with the
+    files: {'sample_1.info.txt', 'sdata.sample_1.bat', 'sample_2.info.txt',
+    'sdata.sample_2.bat'}. The following script would work::
+
+        fyrd run "C=$(echo {sample} | sed 's/.*_//); \
+                  algorithm -n {sample} -c $C -b {1} {0} > {sample}.done" \
+                  "my_dir/{sample}.info.txt" "my_dir/sdata.{sample}.bat"
+
+Note: all of these 'modes' are actually compatible with each other and are
+simply detected by parsing the arguments to fyrd. Only running a non-quoted
+shell script with no file parsing requires an additional argument (`-s`).
+
+If you want to use additional arguments, or to parse existing arguments,
+you can pass the --extra-args argument, this allows you to define regular
+expressions to alter arguments in the following format::
+
+    name:orig_name:regex:sub,name:orig_name:regex:sub
+
+`name` is what you would like the new variable to be called `orig_name` is the
+original variable to parse, it can be the same as `name` if you want to edit
+a variable. `regex` and `sub` are used to edit the contents of the variable.
+For example, imagine a file name 'test_dir/sample4_parsed.bed.gz'::
+
+    fyrd run --extra-vars "name:name:(.*)_.*:\\1" "parse_bed -o {name} {0}
+
+The will result in the command::
+
+    parse_bed -o sample4 /path/test_dir/sample4_parsed.bed.gz
 """
 
 RUN_JOB_HELP = """\
@@ -238,7 +313,7 @@ def init_config(args):
     """Start config initialization."""
     if args.defaults:
         if args.yes:
-            ans = fyrd.run.get_input('Overwrite current config? [y/N] ')
+            ans = fyrd.fyrd.run.get_input('Overwrite current config? [y/N] ')
             if ans.lower() != 'y':
                 print('Aborting')
                 return 1
@@ -307,7 +382,7 @@ def del_profile(args):
     args.name = 'DEFAULT' if args.name.lower() == 'default' else args.name
 
     print('This will delete the {} profile.'.format(args.name))
-    if fyrd.run.get_input('Are you sure? [y/N] ', ['y', 'n']).lower() == 'y':
+    if fyrd.fyrd.run.get_input('Are you sure? [y/N] ', ['y', 'n']).lower() == 'y':
         fyrd.conf.del_profile(args.name)
         print('Done')
     else:
@@ -335,12 +410,21 @@ def delete_profile_option(args):
 ###################
 
 
-def run(args):
-    """Run an arbitrary shell script as a job.
+def run_args_to_keywords(args):
+    """Parse the results of the run_modes parser to create keyword args.
 
-    Args:
-        args (Namespace): Argparse command line arguments defined in main.
+    Parameters
+    ----------
+    args : Namespace
+        Argparse command line arguments defined in main.
+
+    Returns
+    -------
+    fyrd_keywords : dict
     """
+    if not args.wait and args.clean:
+        raise ValueError('--clean requires --wait, use `fyrd clean` to clean '
+                         'without waiting')
     kwargs = {}
     if args.args:
         for arg in args.args.split(','):
@@ -353,16 +437,88 @@ def run(args):
                 raise TypeError(
                     'Invalid argument: {arg}, must be key=value, or just key'
                 )
+    if args.cores:
+        kwargs['cores'] = args.cores
+    if args.mem:
+        kwargs['memory'] = args.mem
+    if args.time:
+        kwargs['time'] = args.time
+    kwargs['clean_files'] = args.keep
+    kwargs['clean_outputs'] = args.clean
+    return kwargs
 
-    command = ' '.join(args.shell_script)
 
-    job = fyrd.job.Job(command, profile=args.profile, **kwargs).submit()
+def run(args):
+    """Run an arbitrary shell script as a job.
 
-    print('Job submitted as job {0}'.format(job.id))
+    Args:
+        args (Namespace): Argparse command line arguments defined in main.
+    """
+    r = re.compile(r'{(.*?)}')
+    jobs = []
+    kwargs = run_args_to_keywords(args)
+    extra_vars = args.extra_vars.split(',') if args.extra_vars else []
 
-    if args.wait:
-        print('Waiting for job to complete')
-        fyrd.wait(job)
+    if args.simple:
+        if args.file_parsing:
+            command = ' '.join([args.shell_script] + args.file_parsing)
+        else:
+            command = args.shell_script
+        job = fyrd.job.Job(command, profile=args.profile, **kwargs).submit()
+        print('Job submitted as job {0}'.format(job.id))
+        jobs.append(job)
+    else:
+        if not args.shell_script:
+            sys.stderr.write('Shell script is required in run mode')
+            return 1
+        script_ints, script_vars = fyrd.run.string_getter(args.shell_script)
+        for fl in args.file_parsing:
+            _, fvars = fyrd.run.string_getter(fl)
+            script_vars.update(fvars)
+        for evar in extra_vars:
+            new_var, orig_var = evar.split(':')[:2]
+            if orig_var not in script_vars:
+                raise ValueError('Original variable from {} not in script or '
+                                 .format(evar) + 'file parsing strings')
+            script_vars.update({new_var, orig_var})
+        # Simple file mode
+        if '{}' in args.shell_script:
+            if not args.file_parsing:
+                sys.stderr.write("Files must be provided if '{}' is in the "
+                                 "command and `--simple` mode is off")
+                return 2
+            # Just in case someone quoted the file glob
+            if len(args.file_parsing) == 1:
+                files = list(fyrd.run.parse_glob(args.file_parsing[0]).keys())
+            else:
+                files = args.file_parsing
+            for fl in files:
+                command = args.shell_script.format(fl)
+                if args.dry_run:
+                    print(command)
+                else:
+                    job = fyrd.job.Job(command, profile=args.profile, **kwargs)
+                    job = job.submit()
+                    print('{0} ({1}): {2}'.format(job.id, job.uuid, fl))
+                    jobs.append(job)
+        else:
+            file_info = fyrd.run.file_getter(
+                args.file_parsing, script_vars,
+                extra_vars=extra_vars, max_count=len(script_ints)
+            )
+            for fls, fvars in file_info:
+                command = args.shell_script.format(*fls, **fvars)
+                if args.dry_run:
+                    print(command)
+                else:
+                    job = fyrd.job.Job(command, profile=args.profile, **kwargs)
+                    job = job.submit()
+                    print('{0} ({1}): {2}'.format(job.id, job.uuid, fls))
+                    jobs.append(job)
+
+    if args.wait and not args.dry_run:
+        print('Waiting for job(s) to complete')
+        fyrd.wait(jobs)
 
 
 def sub_files(args):
@@ -371,12 +527,12 @@ def sub_files(args):
     Args:
         args (Namespace): Argparse command line arguments defined in main.
     """
-    for job in args.shell_scripts:
+    for job in args.job_files:
         if not os.path.isfile(job):
             sys.stderr.write('Job file {0} does not exist'.format(job))
             sys.exit(1)
     job_nos = []
-    for job in args.shell_scripts:
+    for job in args.job_files:
         job_no = fyrd.basic.submit_file(job)
         print('{0}: {1}'.format(job_no, job))
         job_nos.append(job_no)
@@ -619,25 +775,50 @@ def command_line_parser():
         metavar='{run,submit,wait,queue,conf,prof,keywords,clean}'
     )
 
+    #################################
+    #  Parent Parser for Run Modes  #
+    #################################
+
+    run_modes = argparse.ArgumentParser(add_help=False)
+    run_opts = run_modes.add_argument_group("Run Options")
+    run_opts.add_argument('-p', '--profile',
+                          help='The profile to use to run')
+    run_opts.add_argument('-c', '--cores', type=int,
+                          help='The number of cores to request')
+    run_opts.add_argument('-m', '--mem',
+                          help='The amount of memory to request')
+    run_opts.add_argument('-t', '--time',
+                          help='The amount of walltime to request')
+    run_opts.add_argument('-a', '--args',
+                          help='Submission args, e.g.: ' +
+                          "'time=00:20:00,mem=20G,cores=10'")
+    run_opts.add_argument('-w', '--wait', action='store_true',
+                          help='Wait for the job to complete')
+    run_opts.add_argument('-k', '--keep', action='store_false',
+                          help='Keep submission scripts')
+    run_opts.add_argument('-l', '--clean', action='store_true',
+                          help='Delete STDOUT and STDERR files when done')
+
     ######################
     #  Run Shell Script  #
     ######################
 
     run_sub = modes.add_parser(
-        'run', description=RUN_HELP, help="Run simple shell scripts",
-        aliases=['r'],
+        'run', description=RUN_HELP, epilog=RUN_EPI, parents=[run_modes],
+        help="Run simple shell scripts", aliases=['r'],
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
-    run_sub.add_argument('shell_script', nargs='+',
+    run_sub.add_argument('-s', '--simple', action='store_true',
+                         help='The amount of walltime to request')
+    run_sub.add_argument('-x', '--extra-vars',
+                         help='Regex in form "new_var:orig_var:regex:sub,..."')
+    run_sub.add_argument('-d', '--dry-run', action='store_true',
+                         help='Print commands instead of running them')
+    run_sub.add_argument('shell_script', nargs='?',
                          help="The script to run")
-    run_sub.add_argument('-w', '--wait', action='store_true',
-                         help='Wait for the job to complete')
-    run_sub.add_argument('-p', '--profile',
-                         help='The profile to use to run')
-    run_sub.add_argument('-a', '--args',
-                         help='Submission args, e.g.: ' +
-                         "'time=00:20:00,mem=20G,cores=10'")
+    run_sub.add_argument('file_parsing', nargs='*',
+                         help="The script to run")
 
     # Set function
     run_sub.set_defaults(func=run)
@@ -648,14 +829,12 @@ def command_line_parser():
 
     run_job_sub = modes.add_parser(
         'submit', description=RUN_HELP, help="Submit existing job files",
-        aliases=['sub', 's'],
+        parents=[run_modes], aliases=['sub', 's'],
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
-    run_job_sub.add_argument('shell_scripts', nargs='+',
-                         help="The script to run")
-    run_job_sub.add_argument('-w', '--wait',  action='store_true',
-                         help='Wait for the job to complete')
+    run_job_sub.add_argument('job_files', nargs='+',
+                             help="The script to run")
 
     # Set function
     run_job_sub.set_defaults(func=sub_files)

@@ -456,13 +456,20 @@ def options_to_string(option_dict, qtype=None):
     parse_strange_options function of each batch system, before using the
     option_to_string function to parse the remaining options.
 
-    Args:
-        option_dict (dict): Dict in format {option: value} where value can be
-                            None. If value is None, default used.
-        qtype (str):        The defined batch system
+    Parameters
+    ----------
+    option_dict : dict
+        Dict in format {option: value} where value can be None. If value is
+        None, default used.
+    qtype : str
+        The defined batch system
 
-    Returns:
-        str: A multi-line string of torque or slurm options.
+    Returns
+    -------
+    parsed_options : str
+        A multi-line string of parsed options
+    runtime_options : list
+        A list of parsed options to be used at submit time
     """
     qtype = qtype if qtype else MODE
     batch = get_batch_system(qtype)
@@ -487,13 +494,15 @@ def options_to_string(option_dict, qtype=None):
             option_dict['errfile'] = _os.path.join(
                 filepath, _os.path.basename(option_dict['errfile']))
 
-    outlist, option_dict = batch.parse_strange_options(option_dict)
+    outlist, option_dict, other_args = batch.parse_strange_options(option_dict)
 
     # Loop through all remaining options
     for option, value in option_dict.items():
         outlist.append(option_to_string(option, value, qtype))
 
-    return _re.sub(r'[\n]+', '\n', '\n'.join(outlist))
+    optstring = _re.sub(r'[\n]+', '\n', '\n'.join(outlist))
+
+    return optstring, other_args
 
 
 def option_help(mode='string', qtype=None, tablefmt='simple'):

@@ -14,12 +14,14 @@ import re as _re
 import sys as _sys
 import inspect as _inspect
 import argparse as _argparse
+from collections import OrderedDict as _OD
 
 import bz2
 import gzip
 from subprocess import Popen
 from subprocess import PIPE
 from time import sleep
+from glob import glob as _glob
 
 from six.moves import input as _get_input
 
@@ -34,6 +36,8 @@ except NameError:
     _pb = tqdm
 
 from . import logme as _logme
+
+STRPRSR = _re.compile(r'{(.*?)}')
 
 
 def get_pbar(iterable, name=None, unit=None, **kwargs):
@@ -76,6 +80,249 @@ class CommandError(Exception):
 ###############################################################################
 #                               Misc Functions                                #
 ###############################################################################
+
+
+def string_getter(string):
+    """Parse a string for '{}', '{#}', and '{string}'.
+
+    Parameters
+    ----------
+    string : str
+
+    Returns
+    -------
+    ints : set
+        A set of ints containing all '{#}' values
+    vrs : set
+        A set of '{string}' values
+
+    Raises
+    ------
+    ValueError
+        If both {} and {#} are passed
+    """
+    locs = STRPRSR.findall(string)
+    ints = {int(i) for i in locs if i.isdigit()}
+    strs = {i for i in locs if not i.isdigit()}
+    if ints and '{}' in string:
+        raise ValueError('Cannot parse string with both numbered and '
+                         'unnumbered braces')
+    return ints, strs
+
+
+def parse_glob(string, get_vars=None):
+    """Return a list of files that match a simple regex glob.
+
+    Parameters
+    ----------
+    string : str
+    get_vars : list
+        A list of variable names to search for. The string must contain these
+        variables in the form '{variable}'. These variables will be temporarily
+        replaced with a '*' and then run through `glob.glob` to generate a list
+        of files. This list is then parsed to create the output.
+
+    Returns
+    -------
+    dict
+        Keys are all files that match the string, values are None if `get_vars`
+        is not passed. If `get_vars` is passed, the values are dictionaries
+        of {'variable': 'result'}. e.g. for '{name}.txt' and 'hi.txt':
+            {hi.txt: {name: 'hi'}}
+
+    Raises
+    ------
+    ValueError
+        If blank or numeric variable names are used or if get_vars returns
+        multiple different names for a file.
+    """
+    get_vars = listify(get_vars)
+    test_string = STRPRSR.sub('*', string)
+    files = _glob(test_string)
+    if not get_vars:
+        return _OD([(f, None) for f in files])
+    results = _OD([(f, {}) for f in files])
+
+    int_vars, str_vars = string_getter(string)
+    if '{}' in string or int_vars:
+        raise ValueError('Cannot have numeric placeholders in file strings ',
+                         "i.e. no '{0}', '{1}', '{}', etc")
+    for var in get_vars:
+        if var not in str_vars:
+            _logme.log('Variable {0} not in search string: {1}'
+                       .format(var, string), 'warn')
+            continue
+        # Turn search string into a regular expression
+        test_var = var if var.startswith('{') else '{' + var + '}'
+        test_string = STRPRSR.sub('.*?', string.replace(test_var, '(.*?)'))
+        test_string = _re.sub(r'([^.])\*', r'\1.*', test_string)
+        test_string = _re.sub(r'^\*', r'.*', test_string)
+        # Replace terminal non-greedy operators so we parse the whole string
+        if test_string.endswith('?'):
+            test_string = test_string[:-1]
+        if test_string.endswith('?)'):
+            test_string = test_string[:-2] + ')'
+        test_regex = _re.compile(test_string)
+        # Add to file dict
+        for fl in files:
+            vrs = test_regex.findall(fl)
+            ulen = len(set(vrs))
+            if ulen != 1:
+                _logme.log('File {0} has multiple values for {1}: {2}'
+                           .format(fl, test_var, vrs), 'critical')
+                raise ValueError('Invalid file search string')
+            if ulen == 0:
+                _logme.log('File {0} has no results for {1}'
+                           .format(fl, test_var), 'error')
+                continue
+            results[fl][var] = vrs[0]
+    return results
+
+
+def file_getter(file_strings, variables, extra_vars=None, max_count=None):
+    """Get a list of files and variable values using the search string.
+
+    The file strings can contain standard unix glob (like *) and variable
+    containing strings in the form '{name}'.
+
+    For example, a file_string of '{dir}/*.txt' will match every file that
+    ends in '.txt' in every directory relative to the current path.
+
+    The result for a directory name test with two files named 1.txt and 2.txt
+    is a list of::
+
+        [(('dir/1.txt'), {'dir': 'test'}),
+         (('dir/2.txt'), {'dir': 'test'})]
+
+    This is repeated for every file_string in file_strings, and the following
+    tests are done:
+
+        1. All file_strings must result in identical numbers of files
+        2. All variables must have only a single value in every file string
+
+    If there are multiple file_strings, they are added to the result x in
+    order, but the dictionary remains the same as variables must be shared. If
+    multiple file_strings are provided the results are combined by alphabetical
+    order.
+
+    Parameters
+    ----------
+    file_strings : list of str
+        List of search strings, e.g. '*/*', '*/*.txt', '{dir}/*.txt' or
+        '{dir}/{file}.txt'
+    variables : list of str
+        List of variables to look for
+    extra_vars : list of str, optional
+        A list of additional variables specified in a very precise format::
+
+            'new_var:orig_var:regex:sub_str'
+
+        The orig_var must correspond to a variable in variables. var will be
+        generated by running re.sub(regex, sub_str, string) where string is
+        the result of orig_var for the given file set
+    max_count : int, optional
+        Max number of file_strings to parse, default is all.
+
+    Returns
+    -------
+    list
+        A list of files. Each list item will be a two-item tuple of
+        `(files, variables)`. Files will be a tuple with the same length as
+        max_count, or file_strings if max_count is None. Variables will be
+        a dictionary of all variables and extra_vars for this file set. e.g.::
+
+            [((file1, dir1, file2), {'var1': val, 'var2': val})]
+
+    Raises
+    ------
+    ValueError
+        Raised if any of the above tests are not met.
+    """
+    # Make extra_var an empty list if None
+    extra_vars = listify(extra_vars) if extra_vars else []
+
+    # Get all file information
+    files = []
+    count = 0
+    for file_string in file_strings:
+        files.append(parse_glob(file_string, variables))
+        count += 1
+        if max_count and count == max_count:
+            break
+
+    # Make sure all files have variables
+    var_vals = {i: [] for i in variables}
+    empty = {}
+    for f in files:
+        for pvars in f.values():
+            for var, val in pvars.items():
+                if not val:
+                    if var in empty:
+                        empty[var].append(f)
+                    else:
+                        empty[var] = [f]
+                else:
+                    var_vals[var].append(val)
+    fail = False
+    if empty:
+        _logme.log('The following variables had no '
+                   'result in some files, cannot continue:\n'
+                   '\n'.join(
+                       ['{0} files: {1}'.format(i, j) for i, j in empty.items()]
+                   ), 'critical')
+        fail = True
+
+    # Join files
+    bad = []
+
+    results = []
+    for file_info in zip(*[fl.items() for fl in files]):
+        good = True
+        # Make sure dicts are compatible and make combined dict
+        final_dict = {}
+        final_files = tuple([_os.path.abspath(fl[0]) for fl in file_info])
+        bad_dcts = []
+        for dct in [f[1] for f in file_info]:
+            final_dict.update(dct)
+            bad_dcts.append(dct)
+            for var, val in dct.items():
+                for fl in file_info:
+                    if var in fl[1] and val != fl[1][var]:
+                        good = False
+        if not good:
+            bad.append((final_files, bad_dcts))
+            break
+        for extra_var in extra_vars:
+            try:
+                var, orig_var, parse_str, sub_str = extra_var.split(':')
+            except ValueError:
+                _logme.log(
+                    '{} is malformatted should be: '.format(extra_var) +
+                    'new_var:orig_var:regex:sub', 'critical'
+                )
+                raise
+            if orig_var not in final_dict:
+                raise ValueError(
+                    'Extra variable {0} sets {1} as '.format(var, orig_var) +
+                    'the original variable, but it is not in the dict for '
+                    '{0}'.format(final_files)
+                )
+            final_dict[var] = _re.sub(parse_str, sub_str, final_dict[orig_var])
+        results.append((final_files, final_dict))
+
+    # Take care of bad items
+    if empty:
+        _logme.log('The following file combinations had mismatched variables, '
+                   'cannot continue:\n'
+                   '\n'.join(
+                       ['{0} dicts: {1}'.format(i, j) for i, j in bad]
+                   ), 'critical')
+        fail = True
+
+    if fail:
+        raise ValueError('File parsing failure')
+
+    return results
 
 
 def listify(iterable):
