@@ -160,7 +160,7 @@ class Queue(object):
             elif state in BAD_STATES or state in UNCERTAIN_STATES:
                 return 'bad'
 
-    def wait(self, jobs):
+    def wait(self, jobs, return_disp=False):
         """Block until all jobs in jobs are complete.
 
         Update time is dependant upon the queue_update parameter in
@@ -171,13 +171,21 @@ class Queue(object):
         time. This allows time for any copy operations to complete after
         the job exits.
 
-        Args:
-            jobs:  A job or list of jobs to check. Can be one of: Job or
-                   multiprocessing.pool.ApplyResult objects, job ID (int/str),
-                   or a object or a list/tuple of multiple Jobs or job IDs.
+        Parameters
+        ----------
+        jobs : list
+            A job or list of jobs to check. Can be one of: Job or
+            multiprocessing.pool.ApplyResult objects, job ID (int/str), or a
+            object or a list/tuple of multiple Jobs or job IDs.
+        return_disp : bool, optional
+            If a job disappeares from the queue, return 'disapeared' instead of
+            True
 
-        Returns:
-            True on success False or None on failure.
+        Returns
+        -------
+        bool or str
+            True on success False or None on failure unless return_disp is True
+            and the job disappeares, then returns 'disappeared'
         """
         self.update()
         _logme.log('Queue waiting.', 'debug')
@@ -204,10 +212,12 @@ class Queue(object):
                 _logme.log('Checking {}'.format(job_id), 'debug')
                 lgd = False
                 # Allow 12 seconds to elapse before job is found in queue,
-                # if it is not in the queue by then, assume completion.
+                # if it is not in the queue by then, assume failure.
                 if not self.test_job_in_queue(job_id):
-                    jobs.pop(jobs.index(job))
-                    break
+                    if return_disp:
+                        return 'disappeared'
+                    else:
+                        return False
                 ## Actually look for job in running/queued queues
                 lgd      = False
                 lgd2     = False
@@ -259,7 +269,6 @@ class Queue(object):
                                'trying to resolve', 'debug')
                     count += 1
             _sleep(self.sleep_len)
-
         return True
 
     def get(self, jobs):

@@ -789,7 +789,7 @@ class Job(object):
         self.update(fetch_info=False)
         if not self.done:
             _logme.log('Waiting for self {}'.format(self.name), 'debug')
-            status = self.queue.wait(self.id)
+            status = self.queue.wait(self.id, return_disp=True)
             if status == 'disappeared':
                 self.state = status
             elif status is not True:
@@ -844,39 +844,31 @@ class Job(object):
                     ), 'debug')
         # Wait for queue
         status = self.wait()
-        if status == 'disappeared':
-            _logme.log('Job disappeared from queue, attempting to get outputs',
-                       'debug')
+        if status is not True:
+            if status == 'disappeared':
+                msg = 'Job disappeared from queue'
+                _logme.log(msg + ', attempting to get '
+                           'outputs', 'debug')
+            else:
+                msg = 'Wait failed'
+                _logme.log(msg + ', attempting to get outputs anyway',
+                           'debug')
             try:
                 self.fetch_outputs(save=save, delete_files=False,
                                    get_stats=False)
             except IOError:
-                _logme.log('Job disappeared from the queue and files could not'
-                           ' be found, job must have died and been deleted '
-                           'from the queue', 'critical')
-                raise IOError('Job {} disappeared, output files missing'
-                              .format(self))
-        elif status is not True:
-            _logme.log('Wait failed, cannot get outputs, aborting', 'error')
-            self.update()
-            if _os.path.isfile(self.errfile):
-                if _logme.MIN_LEVEL in ['debug', 'verbose']:
-                    _sys.stderr.write('STDERR of Job:\n')
-                    _sys.stderr.write(self.get_stderr(delete_file=False,
-                                                      update=False))
-            if self.poutfile and _os.path.isfile(self.poutfile):
-                _logme.log('Getting pickled output', 'debug')
-                self.get_output(delete_file=False, update=False,
-                                raise_on_error=raise_on_error)
-            else:
-                _logme.log('Pickled out file does not exist, cannot get error',
-                           'debug')
-            return
+                _logme.log(msg + ' and files could not be found, job must '
+                           'have failed', 'error')
+                if raise_on_error:
+                    raise
+                return
+            if status != 'disappeared':
+                return
         else:
             # Get output
             _logme.log('Wait complete, fetching outputs', 'debug')
             self.fetch_outputs(save=save, delete_files=False)
-        out = self.out if save else self.get_output(save=save)
+        out = self.out if save else self.get_output(save=save, update=False)
         # Cleanup
         if cleanup is None:
             cleanup = self.clean_files
@@ -1140,10 +1132,7 @@ class Job(object):
             return 0
         if update and not self._updating and not self.done:
             self.update()
-        if self.done:
-            if update:
-                self._wait_for_files()
-        else:
+        if not self.done:
             _logme.log('Job is not complete, no exit code yet', 'info')
             return None
         _logme.log('Getting exitcode from queue', 'debug')
