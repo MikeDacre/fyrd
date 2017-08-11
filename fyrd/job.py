@@ -68,6 +68,7 @@ class Job(object):
     submitted : bool
     written : bool
     done : bool
+    running : bool
     dependencies : list
         A list of dependencies associated with this job
     out : str
@@ -120,6 +121,8 @@ class Job(object):
         Submit the job if it is ready and the queue is sufficiently open.
     resubmit(wait_on_max_queue=True)
         Clean all internal states with `scrub()` and then resubmit
+    kill(confirm=True)
+        Immediately kill the currently running job
     clean(delete_outputs=True, get_outputs=True)
         Delete any files created by this object
     scrub(confirm=True)
@@ -322,11 +325,29 @@ class Job(object):
             Bool: True if complete, False otherwise.
         """
         # We have the same statement twice to try and avoid updating.
-        if self.state in _queue.DONE_STATES:
+        if self.state in _batch.DONE_STATES:
             return True
         if not self._updating:
             self.update()
-            if self.state in _queue.DONE_STATES:
+            if self.state in _batch.DONE_STATES:
+                return True
+        return False
+
+    @property
+    def running(self):
+        """Check if completed or not.
+
+        Updates the Job and Queue.
+
+        Returns:
+            Bool: True if complete, False otherwise.
+        """
+        # We have the same statement twice to try to avoid updating.
+        if self.state in _batch.ACTIVE_STATES:
+            return True
+        if not self._updating:
+            self.update()
+            if self.state in _batch.ACTIVE_STATES:
                 return True
         return False
 
@@ -589,7 +610,8 @@ class Job(object):
 
         # Wait on the queue if necessary
         if wait_on_max_queue:
-            self.update()
+            if not self._updating:
+                self.update()
             self.queue.wait_to_submit()
 
         # Only include queued or running dependencies
@@ -646,13 +668,16 @@ class Job(object):
 
         return self
 
-    def resubmit(self, wait_on_max_queue=True):
+    def resubmit(self, wait_on_max_queue=True, cancel_running=None):
         """Attempt to auto resubmit, deletes prior files.
 
         Parameters
         ----------
-        wait_on_max_queue : bool
-        Block until queue limit is below the maximum before submitting.
+        wait_on_max_queue : bool, optional
+            Block until queue limit is below the maximum before submitting.
+        cancel_running : bool or None, optional
+            If the job is currently running, cancel it before resubmitting.
+            If None (default), will ask the user.
 
         To disable max_queue_len, set it to 0. None will allow override by
         the default settings in the config file, and any positive integer will
@@ -662,12 +687,44 @@ class Job(object):
         -------
         self : Job
         """
+        if self.running:
+            if cancel_running is None:
+                cancel_running = _run.get_yesno(
+                    'Job currently running, cancel before resubmitting?', 'y'
+                )
+            if cancel_running:
+                self.kill(confirm=False)
         self.scrub(confirm=False)
         # Rerun
         self.initialize()
         self.gen_scripts()
         self.write()
         return self.submit(wait_on_max_queue)
+
+    def kill(self, confirm=True):
+        """Kill the running job.
+
+        Parameters
+        ----------
+        confirm : bool
+
+        Returns
+        -------
+        self : Job
+        """
+        if not self.submitted:
+            _logme.log('Job not submitted, cannot kill', 'warn')
+            return self
+        if self.done:
+            _logme.log('Job completed, cannot kill', 'warn')
+            return self
+        if confirm:
+            if not _run.get_yesno(
+                'This will terminate the running job, continue?', 'n'
+            ):
+                return self
+        self.batch.kill(self.id)
+        return self
 
     def clean(self, delete_outputs=None, get_outputs=True):
         """Delete all scripts created by this module, if they were written.
@@ -795,13 +852,15 @@ class Job(object):
             elif status is not True:
                 return False
             else:
-                self.update()
+                if not self._updating:
+                    self.update()
                 if self.get_exitcode(update=False) != 0:
                     _logme.log('Job failed with exitcode {}'
                                .format(self.exitcode), 'debug')
                     return False
         if self._wait_for_files(caution_message=False):
-            self.update()
+            if not self._updating:
+                self.update()
             if self.state == 'disappeared':
                 _logme.log('Job files found for disappered job, assuming '
                            'success', 'info')
@@ -1166,7 +1225,8 @@ class Job(object):
         """
         _logme.log('Saving outputs to self, delete_files={}'
                    .format(delete_files), 'debug')
-        self.update()
+        if not self._updating:
+            self.update()
         if delete_files is None:
             delete_files = self.clean_outputs
         if not self._got_exitcode and get_stats:
@@ -1321,7 +1381,8 @@ class Job(object):
                 _logme.log('Job files have not appeared for ' +
                            '>{} seconds'.format(btme), lvl)
                 return False
-            self.update()
+            if not self._updating:
+                self.update()
             if runtime > 2 and self.get_exitcode(update=False) != 0:
                 _logme.log('Job failed with exit code {}.'
                            .format(self.exitcode) + ' Cannot find files.',
@@ -1399,7 +1460,8 @@ class Job(object):
 
     def __str__(self):
         """Print job name and ID + status."""
-        self.update()
+        if not self._updating:
+            self.update()
         return "Job: {name} ID: {id}, state: {state}".format(
             name=self.name, id=self.id, state=self.state)
 

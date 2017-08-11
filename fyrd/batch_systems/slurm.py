@@ -128,6 +128,31 @@ def submit(file_name, dependencies=None, job=None, args=None, kwds=None):
 
 
 ###############################################################################
+#                               Job Management                                #
+###############################################################################
+
+
+def kill(job_ids):
+    """Terminate all jobs in job_ids.
+
+    Parameters
+    ----------
+    job_ids : list or str
+        A list of valid job ids or a single valid job id
+
+    Returns
+    -------
+    success : bool
+    """
+    o = _run.cmd('scancel {0}'.format(' '.join(_run.listify(job_ids))),
+                 tries=5)
+    if o[0] == 0:
+        return True
+    else:
+        return False
+
+
+###############################################################################
 #                                Queue Parsing                                #
 ###############################################################################
 

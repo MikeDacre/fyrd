@@ -59,8 +59,8 @@ be determined by the contents of the shell script.
     file, and the remaining positional arguments will be parsed to determine
     the files to use. e.g.::
 
-        fyrd run "zcat {0} | my_algorithm --stats {1}" \
-                 "my_dir/*.txt" "my_dir/*.stat"
+        fyrd run "zcat {0} | my_algorithm --vcf {2} --stats {1}" \\
+                 "my_dir/*.txt" "my_dir/*.stat" my_dir/info.vcf
 
     Note, in this mode the file blobs must interpret to be the same lengths,
     i.e. there must be as many .txt files in the directory as .stat files, and
@@ -77,9 +77,16 @@ be determined by the contents of the shell script.
     files: {'sample_1.info.txt', 'sdata.sample_1.bat', 'sample_2.info.txt',
     'sdata.sample_2.bat'}. The following script would work::
 
-        fyrd run "C=$(echo {sample} | sed 's/.*_//); \
-                  algorithm -n {sample} -c $C -b {1} {0} > {sample}.done" \
+        fyrd run "C=$(echo {sample} | sed 's/.*_//); \\
+                  algorithm -n {sample} -c $C -b {1} {0} > {sample}.done" \\
                   "my_dir/{sample}.info.txt" "my_dir/sdata.{sample}.bat"
+
+    In this case it would make more sense for the script to be a separate file,
+    by putting the contents of the script into the file `my_script.sh`, the
+    following command is equivalent to the last one::
+
+        fyrd run my_script.sh "my_dir/{sample}.info.txt" \\
+                              "my_dir/sdata.{sample}.bat"
 
 Note: all of these 'modes' are actually compatible with each other and are
 simply detected by parsing the arguments to fyrd. Only running a non-quoted
@@ -464,6 +471,7 @@ def run(args):
             command = ' '.join([args.shell_script] + args.file_parsing)
         else:
             command = args.shell_script
+        command = fyrd.run.cmd_or_file(command)
         job = fyrd.job.Job(command, profile=args.profile, **kwargs).submit()
         print('Job submitted as job {0}'.format(job.id))
         jobs.append(job)
@@ -471,7 +479,8 @@ def run(args):
         if not args.shell_script:
             sys.stderr.write('Shell script is required in run mode')
             return 1
-        script_ints, script_vars = fyrd.run.string_getter(args.shell_script)
+        command = fyrd.run.cmd_or_file(args.shell_script)
+        script_ints, script_vars = fyrd.run.string_getter(command)
         for fl in args.file_parsing:
             _, fvars = fyrd.run.string_getter(fl)
             script_vars.update(fvars)
@@ -493,7 +502,7 @@ def run(args):
             else:
                 files = args.file_parsing
             for fl in files:
-                command = args.shell_script.format(fl)
+                command = command.format(fl)
                 if args.dry_run:
                     print(command)
                 else:
@@ -507,7 +516,7 @@ def run(args):
                 extra_vars=extra_vars, max_count=len(script_ints)
             )
             for fls, fvars in file_info:
-                command = args.shell_script.format(*fls, **fvars)
+                command = command.format(*fls, **fvars)
                 if args.dry_run:
                     print(command)
                 else:

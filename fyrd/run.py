@@ -127,7 +127,8 @@ def parse_glob(string, get_vars=None):
     dict
         Keys are all files that match the string, values are None if `get_vars`
         is not passed. If `get_vars` is passed, the values are dictionaries
-        of {'variable': 'result'}. e.g. for '{name}.txt' and 'hi.txt':
+        of `{'variable': 'result'}`. e.g. for '{name}.txt' and 'hi.txt'::
+
             {hi.txt: {name: 'hi'}}
 
     Raises
@@ -250,11 +251,14 @@ def file_getter(file_strings, variables, extra_vars=None, max_count=None):
         if max_count and count == max_count:
             break
 
-    # Make sure all files have variables
+    # Make sure all files have values for variables
     var_vals = {i: [] for i in variables}
     empty = {}
     for f in files:
         for pvars in f.values():
+            # It's fine if the file string has no variables
+            if not pvars:
+                continue
             for var, val in pvars.items():
                 if not val:
                     if var in empty:
@@ -283,6 +287,8 @@ def file_getter(file_strings, variables, extra_vars=None, max_count=None):
         final_files = tuple([_os.path.abspath(fl[0]) for fl in file_info])
         bad_dcts = []
         for dct in [f[1] for f in file_info]:
+            if not dct:
+                continue
             final_dict.update(dct)
             bad_dcts.append(dct)
             for var, val in dct.items():
@@ -294,11 +300,16 @@ def file_getter(file_strings, variables, extra_vars=None, max_count=None):
             break
         for extra_var in extra_vars:
             try:
-                var, orig_var, parse_str, sub_str = extra_var.split(':')
+                evari = extra_var.split(':')
+                if len(evari) == 2:
+                    final_dict[evari[1]] = evari[2]
+                    continue
+                var, orig_var, parse_str, sub_str = evari
             except ValueError:
                 _logme.log(
                     '{} is malformatted should be: '.format(extra_var) +
-                    'new_var:orig_var:regex:sub', 'critical'
+                    'either new_var:orig_var:regex:sub '
+                    'or variable:value', 'critical'
                 )
                 raise
             if orig_var not in final_dict:
@@ -409,6 +420,28 @@ def open_zipped(infile, mode='r'):
             else:
                 return bz2.BZ2File(infile, mode)
         return open(infile, mode)
+
+
+def cmd_or_file(string):
+    """If string is a file, return the contents, else return the string.
+
+    Parameters
+    ----------
+    string : str
+        Path to a file or any other string
+
+    Returns
+    -------
+    script : str
+        Either the contents of the file if string is a file or just the
+        contents of string.
+    """
+    if _os.path.isfile(string):
+        with open_zipped(string) as fin:
+            command = fin.read().strip()
+    else:
+        command = string.strip()
+    return command
 
 
 def block_read(files, size=65536):

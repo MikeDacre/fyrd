@@ -219,6 +219,19 @@ is currently ignored by all batch scripts.
 Please add as much error catching code as possible in the submit function, the
 `torque.py` example is a good one.
 
+kill(job_ids)
+~~~~~~~~~~~~~
+
+Input:
+
+- job_ids: list, A list of job numbers
+
+Output:
+
+- bool: True on success, False on failure
+
+Immediately terminate the running jobs
+
 queue_parser(user=None, partition=None)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
