@@ -202,6 +202,7 @@ class Job(object):
     _got_stdout   = False
     _got_stderr   = False
     _got_exitcode = False
+    _found_files  = False
     _out          = None
     _stdout       = None
     _stderr       = None
@@ -732,6 +733,7 @@ class Job(object):
         self._exitcode     = None
         self._got_times    = False
         self._updating     = False
+        self._found_files  = False
         self.start         = None
         self.end           = None
         return self.update()
@@ -1274,6 +1276,9 @@ class Job(object):
             _logme.log("Cannot wait for files if we aren't complete",
                        'warn')
             return False
+        if self._found_files:
+            _logme.log('Already found files, not waiting again', 'debug')
+            return True
         wait_time = 0.1 # seconds
         if btme:
             lvl = 'debug'
@@ -1318,6 +1323,7 @@ class Job(object):
                            .format(self.exitcode) + ' Cannot find files.',
                            'error')
                 return False
+        self._found_files = True
         return True
 
     def _update_name(self, name=None):
