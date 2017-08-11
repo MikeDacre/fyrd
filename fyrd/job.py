@@ -1288,7 +1288,7 @@ class Job(object):
             lvl = 'debug'
         else:
             lvl = 'warn'
-            btme = _conf.get_option('jobs', 'file_block_time')
+            btme = _conf.get_option('jobs', 'file_block_time', 30)
         start = _dt.now()
         dsp   = False
         _logme.log('Checking for output files', 'debug')

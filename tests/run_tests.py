@@ -7,7 +7,7 @@ Run all applicable tests.
 
         AUTHOR: Michael D Dacre, mike.dacre@gmail.com
        CREATED: 2016-54-22 15:06
- Last modified: 2017-08-05 23:54
+ Last modified: 2017-08-10 19:07
 
    DESCRIPTION: Run multiple kinds of tests, provide options to skip some.
 
@@ -55,9 +55,9 @@ def main(argv=None):
     if args.local:
         print('Skipping remote queue tests')
         pytt += ['tests/test_options.py', 'tests/test_queue.py',
-                 'tests/test_local.py', 'tests/test_config.py']
+                 'tests/test_config.py']
     outcode = call(pytt)
-    print('py.test tests complete with code {}, running local queue test.'
+    print('py.test tests complete with code {}'
           .format(outcode))
 
     return outcode

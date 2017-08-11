@@ -69,7 +69,7 @@ DEFAULTS = {
         'max_jobs':     1000,
         'sleep_len':    1,
         'queue_update': 2,
-        'res_time':     2700,
+        'res_time':     2700, # Time to wait if job is postponed before fail
         'queue_type':   'auto',
         'sbatch':       None, # Path to sbatch command
         'qsub':         None, # Path to qsub command
@@ -80,7 +80,7 @@ DEFAULTS = {
     'jobs': {
         'clean_files':     True,
         'clean_outputs':   False,
-        'file_block_time': 200,
+        'file_block_time': 30,
         'scriptpath':      None,
         'outpath':         None,
         'suffix':          'cluster',
