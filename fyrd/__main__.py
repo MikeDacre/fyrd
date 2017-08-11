@@ -601,14 +601,32 @@ def queue(args):
         print("{0}".format('\n'.join([str(i) for i in jobs.keys()])))
     else:
         out_table = []
+        arr = False
         for jid, job in jobs.items():
             cols = [jid, job.name, job.state]
+            if job.array_job:
+                arr = True
+                cols.append(str(len(job.children)))
             if args.users or args.all_users:
                 cols.append(job.owner)
+            if args.nodes:
+                nodes = {}
+                for node in job.nodes:
+                    node = node.split('/')[0]
+                    if node in nodes:
+                        nodes[node] += 1
+                    else:
+                        nodes[node] = 1
+                cols.append(','.join(['{0}({1})'.format(n,c)
+                                      for n, c in nodes.items()]))
             out_table.append(cols)
         headers = ['ID', 'Name', 'State']
         if args.users or args.all_users:
             headers.append('User')
+        if arr:
+            headers.append('Array Job Count')
+        if args.nodes:
+            headers.append('Node(s)')
         print('\n' + tabulate(out_table, headers=headers) + '\n')
 
 
@@ -909,6 +927,8 @@ def command_line_parser():
                             "xargs")
     queue_disp.add_argument('-c', '--count', action='store_true',
                             help="Print job count only")
+    queue_disp.add_argument('-n', '--nodes', action='store_true',
+                            help='Also display node list (normal mode only)')
 
     # Set function
     queue_sub.set_defaults(func=queue)

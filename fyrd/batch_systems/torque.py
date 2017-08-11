@@ -218,6 +218,7 @@ def queue_parser(user=None, partition=None):
                 pass
             # Get rid of the Variable_List as it is just the environment
             # and can sometimes have nonsensical characters.
+            xmlstr = xmlstr.replace('\x1b', '')
             xmlstr = r.sub('', xmlstr)
             xmlqueue = _ET.fromstring(xmlstr)
         except _CalledProcessError:

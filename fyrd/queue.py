@@ -174,9 +174,7 @@ class Queue(object):
         Parameters
         ----------
         jobs : list
-            A job or list of jobs to check. Can be one of: Job or
-            multiprocessing.pool.ApplyResult objects, job ID (int/str), or a
-            object or a list/tuple of multiple Jobs or job IDs.
+            List of either fyrd.job.Job, fyrd.queue.QueueJob, job_id
         return_disp : bool, optional
             If a job disappeares from the queue, return 'disapeared' instead of
             True
@@ -208,7 +206,7 @@ class Queue(object):
                     job_id = job.id
                 else:
                     job_id = str(job)
-                job_id, _ = self.batch_system.normalize_job_id(job_id)
+                job_id, array_id = self.batch_system.normalize_job_id(job_id)
                 _logme.log('Checking {}'.format(job_id), 'debug')
                 lgd = False
                 # Allow 12 seconds to elapse before job is found in queue,
@@ -323,11 +321,20 @@ class Queue(object):
             results.append(done[i])
         return results[0] if singular else results
 
-    def test_job_in_queue(self, job):
+    def test_job_in_queue(self, job_id, array_id=None):
         """Check to make sure job is in self.
 
         Tries 12 times with 1 second between each. If found returns True,
         else False.
+
+        Parameters
+        ----------
+        job_id : str
+        array_id : str, optional
+
+        Returns
+        -------
+        exists : bool
         """
         lgd = False
         not_found = 0
@@ -336,6 +343,8 @@ class Queue(object):
             # Allow 12 seconds to elapse before job is found in queue,
             # if it is not in the queue by then, assume completion.
             if job in self.jobs:
+                if array_id and array_id not in job.children:
+                    return False
                 return True
             else:
                 if lgd:
@@ -655,7 +664,8 @@ class _QueueJob(object):
         states = [i.lower() for i in _run.listify(state)]
         if self.array_job:
             if state:
-                return sum([j.threads for j in self.children if j.state in states])
+                return sum([j.threads for j in self.children.values()
+                            if j.state in states])
             return len(self.children)
         if state:
             return self.threads if self.state in states else 0
@@ -666,7 +676,7 @@ class _QueueJob(object):
         if self.array_job:
             code = 0
             some_done = False
-            for child in self.children:
+            for child in self.children.values():
                 if child.state in DONE_STATES:
                     some_done = True
                     code += child.exitcode
@@ -680,7 +690,8 @@ class _QueueJob(object):
         states = [i.lower() for i in _run.listify(state)]
         if self.array_job:
             if state:
-                return len([j for j in self.children if j.state in states])
+                return len([j for j in self.children.values()
+                            if j.state in states])
             return len(self.children)
         if state:
             return 1 if self.state in states else 0
@@ -741,6 +752,14 @@ class QueueJob(_QueueJob):
         """Initialize."""
         self._cname   = 'QueueJob'
         self.children = {}
+
+    def __getitem__(self, key):
+        """Allow direct accessing of child jobs by job id."""
+        key = str(key)
+        if not self.array_job:
+            _logme.log('Not an array job', 'error')
+            return
+        return self.children[key]
 
 
 class QueueChild(_QueueJob):
