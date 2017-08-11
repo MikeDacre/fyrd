@@ -338,11 +338,14 @@ class Queue(object):
         """
         lgd = False
         not_found = 0
+        if isinstance(job_id, _QueueJob):
+            job_id = job_id.id
         while True:
             self._update()
             # Allow 12 seconds to elapse before job is found in queue,
             # if it is not in the queue by then, assume completion.
-            if job in self.jobs:
+            if job_id in self.jobs:
+                job = self.jobs[job_id]
                 if array_id and array_id not in job.children:
                     return False
                 return True
@@ -360,7 +363,7 @@ class Queue(object):
                 if not_found == 12:
                     _logme.log(
                         '{} not in queue, tried 12 times over 12s'
-                        .format(job) + '. Job likely completed, ' +
+                        .format(job_id) + '. Job likely completed, ' +
                         'assuming completion, stats will be ' +
                         'unavailable.','warn'
                     )
@@ -679,7 +682,8 @@ class _QueueJob(object):
             for child in self.children.values():
                 if child.state in DONE_STATES:
                     some_done = True
-                    code += child.exitcode
+                    if child.exitcode:
+                        code += child.exitcode
             if some_done:
                 return code
             return None
