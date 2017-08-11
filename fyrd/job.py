@@ -164,6 +164,7 @@ class Job(object):
     submitted     = False
     written       = False
     found         = False
+    disappeared   = False
     submit_time   = None
     state         = None
     kind          = None
@@ -781,13 +782,11 @@ class Job(object):
             if _conf.get_option('jobs', 'auto_submit'):
                 _logme.log('Auto-submitting as not submitted yet', 'debug')
                 self.submit()
-                _sleep(0.5)
             else:
                 _logme.log('Cannot wait for result as job has not been ' +
                            'submitted', 'warn')
                 return False
-        _sleep(0.1)
-        self.update(False)
+        self.update(fetch_info=False)
         if not self.done:
             _logme.log('Waiting for self {}'.format(self.name), 'debug')
             status = self.queue.wait(self.id)
@@ -1235,27 +1234,47 @@ class Job(object):
                 self.found = True
                 self.queue_info = queue_info
                 self.state = self.queue_info.state
-                if self.done and fetch_info:
-                    if self._wait_for_files(btme=1, caution_message=False):
-                        if not self._got_exitcode:
-                            self.get_exitcode(update=False)
-                        if not self._got_times:
-                            self.get_times(update=False)
             elif self.found:
                 _logme.log('Job appears to have disappeared, waiting for '
                            'reappearance, this may take a while', 'warn')
                 status = self.wait()
                 if status == 'disappeared':
                     _logme.log('Job disappeared, but the output files are '
-                               'present', 'info')
+                               'present assuming completion', 'info')
+                    self.state = 'completed'
+                    self.disappeared = True
                 elif not status:
                     _logme.log('Job appears to have failed and disappeared',
                                'error')
-            # If job not found after 360 seconds, assume trouble
-            elif self.submitted and (_dt.now()-self.submit_time).seconds > 1000:
-                s = (_dt.now()-self.submit_time).seconds
-                _logme.log('Job not in queue after {} seconds of searching.'
-                           .format(s), 'warn')
+            # If job not found after 30 seconds, assume trouble, check for
+            # completion
+            elif self.submitted and (_dt.now()-self.submit_time).seconds > 360:
+                if self._wait_for_files(btme=4, caution_message=False):
+                    self.state = 'completed'
+                    self.disappeared = True
+                    _logme.log('Job never appeared in the queue, but '
+                               'outfiles still exist, assuming completion.',
+                               'warn')
+                else:
+                    self.state = 'failed'
+                    self.disappeared = True
+                    s = (_dt.now()-self.submit_time).seconds
+                    _logme.log('Job not in queue after {} seconds '.format(s) +
+                               'of searching and no outputs found, assuming '
+                               'failure.', 'error')
+            elif self.submitted and (_dt.now()-self.submit_time).seconds > 30:
+                if self._wait_for_files(btme=1, caution_message=False):
+                    self.state = 'completed'
+                    self.disappeared = True
+                    _logme.log('Job never appeared in the queue, but '
+                               'outfiles still exist, assuming completion.',
+                               'warn')
+        if self.done and fetch_info:
+            if self._wait_for_files(btme=1, caution_message=False):
+                if not self._got_exitcode:
+                    self.get_exitcode(update=False)
+                if not self._got_times:
+                    self.get_times(update=False)
         self._updating = False
 
     def _wait_for_files(self, btme=None, caution_message=False):
@@ -1272,10 +1291,6 @@ class Job(object):
         Returns:
             bool: True if files found
         """
-        if not self.done:
-            _logme.log("Cannot wait for files if we aren't complete",
-                       'warn')
-            return False
         if self._found_files:
             _logme.log('Already found files, not waiting again', 'debug')
             return True
@@ -1314,7 +1329,7 @@ class Job(object):
                 break
             _sleep(wait_time)
             if runtime > btme:
-                _logme.log('Job completed but files have not appeared for ' +
+                _logme.log('Job files have not appeared for ' +
                            '>{} seconds'.format(btme), lvl)
                 return False
             self.update()

@@ -114,7 +114,7 @@ class Queue(object):
 
         # Get sleep time and update time
         self.queue_update_time = _conf.get_option('queue', 'queue_update', 2)
-        self.sleep_len         = _conf.get_option('queue', 'sleep_len', 2)
+        self.sleep_len         = _conf.get_option('queue', 'sleep_len', 0.5)
 
         # Set type
         if qtype:
@@ -191,24 +191,22 @@ class Queue(object):
                 raise _ClusterError('job must be int, string, or Job, ' +
                                     'is {}'.format(type(job)))
 
-        # Wait for 0.1 second before checking, as jobs take a while to be
-        # queued sometimes
-        _sleep(0.1)
         pbar = _run.get_pbar(jobs, name="Waiting for job completion",
                              unit='jobs')
-        for job in jobs:
-            _logme.log('Checking {}'.format(job), 'debug')
-            if isinstance(job, (self._Job, QueueJob)):
-                job = job.id
-            if isinstance(job, self._Job):
-                job = job.id
-            job, _ = self.batch_system.normalize_job_id(job)
-            lgd = False
-            while True:
-                self._update()
+        while jobs:
+            self.update()
+            for job in jobs:
+                if isinstance(job, (self._Job, QueueJob)):
+                    job_id = job.id
+                else:
+                    job_id = str(job)
+                job_id, _ = self.batch_system.normalize_job_id(job_id)
+                _logme.log('Checking {}'.format(job_id), 'debug')
+                lgd = False
                 # Allow 12 seconds to elapse before job is found in queue,
                 # if it is not in the queue by then, assume completion.
-                if not self.test_job_in_queue(job):
+                if not self.test_job_in_queue(job_id):
+                    jobs.pop(jobs.index(job))
                     break
                 ## Actually look for job in running/queued queues
                 lgd      = False
@@ -217,23 +215,24 @@ class Queue(object):
                 res_time = _conf.get_option('queue', 'res_time')
                 count    = 0
                 # Get job state
-                job_state = self.jobs[job].state
+                job_state = self.jobs[job_id].state
                 # Check the state
                 if job_state in GOOD_STATES:
                     _logme.log('Queue wait for {} complete'
-                               .format(job), 'debug')
-                    _sleep(0.1)
+                               .format(job_id), 'debug')
+                    if isinstance(job, self._Job):
+                        job.update()
+                    jobs.pop(jobs.index(job))
                     pbar.update()
                     break
                 elif job_state in ACTIVE_STATES:
                     if lgd:
                         _logme.log('{} not complete yet, waiting'
-                                   .format(job), 'debug')
+                                   .format(job_id), 'debug')
                         lgd = True
                     else:
                         _logme.log('{} still not complete, waiting'
-                                   .format(job), 'verbose')
-                    _sleep(self.sleep_len)
+                                   .format(job_id), 'verbose')
                 elif job_state in BAD_STATES:
                     _logme.log('Job {} failed with state {}'
                                .format(job, job_state), 'error')
@@ -248,7 +247,6 @@ class Queue(object):
                         _logme.log('Job {} still in state {}, aborting'
                                    .format(job, job_state), 'error')
                         return False
-                    _sleep(self.sleep_len)
                 else:
                     if count == 5:
                         _logme.log('Job {} in unknown state {} '
@@ -260,10 +258,8 @@ class Queue(object):
                                .format(job, job_state) +
                                'trying to resolve', 'debug')
                     count += 1
-                    _sleep(self.sleep_len)
+            _sleep(self.sleep_len)
 
-        # Sleep an extra half second to allow post-run scripts to run
-        _sleep(0.5)
         return True
 
     def get(self, jobs):
@@ -341,7 +337,7 @@ class Queue(object):
                                .format(job) +
                                'for it to appear', 'info')
                     lgd = True
-                _sleep(1)
+                _sleep(self.sleep_len)
                 not_found += 1
                 if not_found == 12:
                     _logme.log(
