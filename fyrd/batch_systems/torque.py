@@ -194,16 +194,28 @@ def queue_parser(user=None, partition=None):
 
     Use the `qstat -x -t` command to get an XML queue for compatibility.
 
-    Args:
-        user:     optional user name to pass to qstat to filter queue with
-        partiton: optional partition to filter the queue with
+    Parameters
+    ----------
+    user : str, optional
+        User name to pass to qstat to filter queue with
+    partiton : str, optional
+        Partition to filter the queue with
 
-    Yields:
-        tuple: job_id, array_id, name, userid, partition, state, nodelist,
-               numnodes, ntpernode, exit_code
+    Yields
+    ------
+    job_id : str
+    array_id : str or None
+    name : str
+    userid : str
+    partition : str
+    state :str
+    nodelist : list
+    numnodes : int
+    cntpernode : int or None
+    exit_code : int or Nonw
 
-    numcpus is currently always 1 as most torque queues treat every core as a
-    node.
+    cntpernode is currently always 1 as most torque queues treat every core as
+    a node.
     """
     # I am not using run.cmd because I want to catch XML errors also
     try_count = 0

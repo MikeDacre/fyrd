@@ -5,17 +5,22 @@ Available options for job submission.
 All keyword arguments that can be used with Job() objects are defined in this
 file. These can be edited by the end user to increase functionality.
 
-Options are defined in dictionaries with the syntax:
-    'name': {'slurm': The command to be used for slurm
-             'torque': The command to be used for torque
-             'default': The default to use if not set
-             'type': The python object type for the option
-             'help': A string with help information}
+Options are defined in dictionaries with the syntax::
+
+    {'name': {
+        'slurm': The command to be used for slurm
+        'torque': The command to be used for torque
+        'default': The default to use if not set
+        'type': The python object type for the option
+        'help': A string with help information
+        }
+    }
 
 All of these fields are required except in the case that:
-    1. The option is managed in options_to_string explicitly
-    2. The option is in TORQUE or SLURM dictionaries, in which case
-       flags used by other queue systems can be skipped.
+
+1. The option is managed in options_to_string explicitly
+2. The option is in TORQUE or SLURM dictionaries, in which case flags used by
+   other queue systems can be skipped.
 """
 import os  as _os
 import re  as _re
@@ -262,8 +267,9 @@ def split_keywords(kwargs):
     The first dictionary will contain valid arguments for fyrd, the second will
     contain all others.
 
-    Returns:
-        tuple: (dict, dict) —  valid args for fyrd, other args
+    Returns
+    -------
+    valid_args, other_args: dict
     """
     if not isinstance(kwargs, dict):
         raise ValueError('Invalid argument. Should be a dictionary, is {}'
@@ -395,13 +401,19 @@ def check_arguments(kwargs):
 def option_to_string(option, value=None, qtype=None):
     """Return a string with an appropriate flag for slurm or torque.
 
-    Args:
-        option: An allowed option definied in options.all_options
-        value:  A value for that option if required (if None, default used)
-        qtype:  One of the defined batch systems
+    Parameters
+    ----------
+    option : str
+        An allowed option definied in options.all_options
+    value : str, optional
+        A value for that option if required (if None, default used)
+    qtype : str, optional
+        One of the defined batch systems
 
-    Returns:
-        str: A string with the appropriate flags for the active queue.
+    Returns
+    -------
+    str
+        A string with the appropriate flags for the active queue.
     """
     # Import a couple of queue functions here
     qtype = qtype if qtype else MODE
@@ -508,20 +520,31 @@ def options_to_string(option_dict, qtype=None):
 def option_help(mode='string', qtype=None, tablefmt='simple'):
     """Print a sting to stdout displaying information on all options.
 
-    Args:
-        mode (str):     string:       Return a formatted string
-                        print:        Print the string to stdout
-                        list:         Return a simple list of keywords
-                        table:        Return a table of lists
-                        merged_table: Combine all keywords into a single table
-        qtype (str):    If provided only return info on that queue type.
-        tablefmt (str): A tabulate-style table format, one of::
+    The possible run modes for this extension are:
+
+    ============ =========================================
+    string       Return a formatted string
+    print        Print the string to stdout
+    list         Return a simple list of keywords
+    table        Return a table of lists
+    merged_table Combine all keywords into a single table
+    ============ =========================================
+
+    Parameters
+    ----------
+    mode : {'string', 'print', 'list', 'table', 'merged_table'}, optional
+    qtype : str, optional
+        If provided only return info on that queue type.
+    tablefmt : str, optional
+        A tabulate-style table format, one of::
 
             'plain', 'simple', 'grid', 'pipe', 'orgtbl',
             'rst', 'mediawiki', 'latex', 'latex_booktabs'
 
-    Returns:
-        str: A formatted string
+    Returns
+    -------
+    str
+        A formatted string
     """
 
     hlp = _OD()

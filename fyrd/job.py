@@ -233,23 +233,27 @@ class Job(object):
                  profile=None, **kwds):
         """Initialization function arguments.
 
-        Args:
-            command (function/str): The command or function to execute.
-            args (tuple/dict):      Optional arguments to add to command,
-                                    particularly useful for functions.
-            kwargs (dict):          Optional keyword arguments to pass to the
-                                    command, only used for functions.
-            name (str):             Optional name of the job. If not defined,
-                                    guessed. If a job of the same name is
-                                    already queued, an integer job number (not
-                                    the queue number) will be added, ie.
-                                    <name>.1
-            qtype (str):            Override the default queue type
-            profile (str):          The name of a profile saved in the
-                                    conf
-
-            *All other keywords are parsed into cluster keywords by the
-            options system. For available keywords see `fyrd.option_help()`*
+        Parameters
+        ----------
+        command : function/str
+            The command or function to execute.
+        args : tuple/dict, optional
+            Optional arguments to add to command, particularly useful for
+            functions.
+        kwargs : dict, optional
+            Optional keyword arguments to pass to the command, only used for
+            functions.
+        name : str, optional
+            Optional name of the job. If not defined, guessed. If a job of the
+            same name is already queued, an integer job number (not the queue
+            number) will be added, ie.  <name>.1
+        qtype : str, optional
+            Override the default queue type
+        profile : str, optional
+            The name of a profile saved in the conf
+        kwds
+            *All other keywords are parsed into cluster keywords by the options
+            system.* For available keywords see `fyrd.option_help()`
         """
 
         ########################
@@ -321,8 +325,9 @@ class Job(object):
 
         Updates the Job and Queue.
 
-        Returns:
-            Bool: True if complete, False otherwise.
+        Returns
+        -------
+        done : bool
         """
         # We have the same statement twice to try and avoid updating.
         if self.state in _batch.DONE_STATES:
@@ -335,12 +340,13 @@ class Job(object):
 
     @property
     def running(self):
-        """Check if completed or not.
+        """Check if running or not.
 
         Updates the Job and Queue.
 
-        Returns:
-            Bool: True if complete, False otherwise.
+        Returns
+        -------
+        running : bool
         """
         # We have the same statement twice to try to avoid updating.
         if self.state in _batch.ACTIVE_STATES:
@@ -548,7 +554,7 @@ class Job(object):
 
         Parameters
         ----------
-        overwrite : bool
+        overwrite : bool, optional
             Overwrite existing files, defaults to True.
 
         Returns
@@ -706,7 +712,7 @@ class Job(object):
 
         Parameters
         ----------
-        confirm : bool
+        confirm : bool, optional
 
         Returns
         -------
@@ -729,11 +735,16 @@ class Job(object):
     def clean(self, delete_outputs=None, get_outputs=True):
         """Delete all scripts created by this module, if they were written.
 
-        Args:
-            delete_outputs (bool): also delete all output and err files,
-                                   but get their contents first.
-            get_outputs (bool):    if delete_outputs, save outputs before
-                                   deleting.
+        Parameters
+        ----------
+        delete_outputs : bool, optional
+            also delete all output and err files, but get their contents first.
+        get_outputs : bool, optional
+            if delete_outputs, save outputs before deleting.
+
+        Returns
+        -------
+        self : Job
         """
         _logme.log('Cleaning outputs, delete_outputs={}'
                    .format(delete_outputs), 'debug')
@@ -758,7 +769,7 @@ class Job(object):
 
         Parameters
         ----------
-        confirm : bool
+        confirm : bool, optional
             Get user input before proceeding
 
         Returns
@@ -805,8 +816,12 @@ class Job(object):
 
         Parameters
         ----------
-        fetch_info : bool
+        fetch_info : bool, optional
             Fetch basic job info if complete.
+
+        Returns
+        -------
+        self : Job
         """
         if not self._updating:
             self._update(fetch_info)
@@ -815,7 +830,7 @@ class Job(object):
         return self
 
     def update_queue_info(self):
-        """Set queue_info from the queue even if done."""
+        """Set (and return) queue_info from the queue even if done."""
         _logme.log('Updating queue_info', 'debug')
         queue_info1 = self.queue[self.id]
         self.queue.update()
@@ -834,7 +849,14 @@ class Job(object):
     #################################
 
     def wait(self):
-        """Block until job completes."""
+        """Block until job completes.
+
+        Returns
+        -------
+        success : bool or str
+            True if exitcode == 0, False if not, 'disappeared' if job lost from
+            queue.
+        """
         if not self.submitted:
             if _conf.get_option('jobs', 'auto_submit'):
                 _logme.log('Auto-submitting as not submitted yet', 'debug')
@@ -881,15 +903,15 @@ class Job(object):
 
         Parameters
         ----------
-        save : bool
+        save : bool, optional
             Save all outputs to the class also (advised)
-        cleanup : bool
+        cleanup : bool, optional
             Clean all intermediate files after job completes.
-        delete_outfiles : bool
+        delete_outfiles : bool, optional
             Clean output files after job completes.
-        del_no_save : bool
+        del_no_save : bool, optional
             Delete output files even if `save` is `False`
-        raise_on_error : bool
+        raise_on_error : bool, optional
             If the returned output is an Exception, raise it.
 
         Returns
@@ -953,19 +975,19 @@ class Job(object):
 
         Parameters
         ----------
-        save : bool
+        save : bool, optional
             Save the output to self.out, default True.  Would be a good idea to
             set to False if the output is huge.
-        delete_file : bool
+        delete_file : bool, optional
             Delete the output file when getting
-        update : bool
+        update : bool, optional
             Update job info from queue first.
-        raise_on_error : bool
+        raise_on_error : bool, optional
             If the returned output is an Exception, raise it.
 
         Returns
         -------
-        output
+        output : anything
             The output of the script or function. Always a string if script.
         """
         _logme.log(('Getting output, save={}, clean_files={}, '
@@ -1022,12 +1044,12 @@ class Job(object):
 
         Returns
         -------
-        save : bool
+        save : bool, optional
             Save the output to self.stdout, default True.  Would be a good idea
             to set to False if the output is huge.
-        delete_file : bool
+        delete_file : bool, optional
             Delete the stdout file when getting
-        update : bool
+        update : bool, optional
             Update job info from queue first.
 
         Returns
@@ -1081,15 +1103,20 @@ class Job(object):
         By default, output file is kept unless delete_file is True or
         self.clean_files is True.
 
-        Args:
-            save (bool):        Save the output to self.stdout, default True.
-                                Would be a good idea to set to False if the
-                                output is huge.
-            delete_file (bool): Delete the stdout file when getting
-            update (bool):      Update job info from queue first.
+        Parameters
+        ----------
+        save : bool, optional
+            Save the output to self.stdout, default True.  Would be a good idea
+            to set to False if the output is huge.
+        delete_file : bool, optional
+            Delete the stdout file when getting
+        update : bool, optional
+            Update job info from queue first.
 
-        Returns:
-            str: The contents of STDERR, with trailing newline removed.
+        Returns
+        -------
+        str
+            The contents of STDERR, with trailing newline removed.
         """
         if delete_file is None:
             delete_file = self.clean_outputs
@@ -1129,14 +1156,18 @@ class Job(object):
     def get_times(self, update=True):
         """Get stdout of function or script, same for both.
 
-        Args:
-            update (bool): Update job info from queue first.
-
-        Returns:
-            tuple: start, end as two datetime objects.
-
-        Also sets self.start and self.end from the contents of STDOUT if
+        Sets self.start and self.end from the contents of STDOUT if
         possible.
+
+        Parameters
+        ----------
+        update : bool, optional
+            Update job info from queue first.
+
+        Returns
+        -------
+        start : datetime.datetime
+        end : datetime.datetime
         """
         _logme.log('Getting times', 'debug')
         if self.done and self._got_times:
@@ -1176,11 +1207,14 @@ class Job(object):
     def get_exitcode(self, update=True):
         """Try to get the exitcode.
 
-        Args:
-            update (bool): Update job info from queue first.
+        Parameters
+        ----------
+        update : bool, optional
+            Update job info from queue first.
 
-        Returns:
-            int: The exitcode of the running process.
+        Returns
+        -------
+        exitcode : int
         """
         _logme.log('Getting exitcode', 'debug')
         if self.done and self._got_exitcode:
@@ -1217,11 +1251,14 @@ class Job(object):
         This method does not wait for job completion, but merely gets the
         outputs. To wait for job completion, use `get()` instead.
 
-        Args:
-            save (bool):         Save all outputs to the class also (advised)
-            delete_files (bool): Delete the output files when getting, only
-                                 used if save is True
-            get_stats (bool):    Try to get exitcode.
+        Parameters
+        ----------
+        save : bool, optional
+            Save all outputs to the class also (advised)
+        delete_files : bool, optional
+            Delete the output files when getting, only used if save is True
+        get_stats : bool, optional
+            Try to get exitcode.
         """
         _logme.log('Saving outputs to self, delete_files={}'
                    .format(delete_files), 'debug')
@@ -1249,9 +1286,12 @@ class Job(object):
     def set_keywords(self, kwds, replace=False):
         """Set the job keywords, just updates self.kwds.
 
-        Attributes:
-            kwds (dict):    Set of valid arguments.
-            replace (bool): Overwrite the keword arguments instead of updating.
+        Parameters
+        ----------
+        kwds : dict
+            Set of valid arguments.
+        replace : bool, optional
+            Overwrite the keword arguments instead of updating.
         """
         kwds = _options.check_arguments(kwds)
         if replace:
@@ -1267,8 +1307,10 @@ class Job(object):
     def _update(self, fetch_info=True):
         """Update status from the queue.
 
-        Args:
-            fetch_info (bool): Fetch basic job info if complete.
+        Parameters
+        ----------
+        fetch_info : bool, optional
+            Fetch basic job info if complete.
         """
         _logme.log('Updating job.', 'debug')
         self._updating = True
@@ -1331,14 +1373,18 @@ class Job(object):
 
         Aborts after 2 seconds if job exit code is not 0.
 
-        Args:
-            btme (int):             Number of seconds to try for before giving
-                                    up, default set in config file.
-            caution_message (bool): Display a message if this is taking
-                                    a while.
+        Parameters
+        ----------
+        btme : int, optional
+            Number of seconds to try for before giving up, default set in
+            config file.
+        caution_message : bool, optional
+            Display a message if this is taking a while.
 
-        Returns:
-            bool: True if files found
+        Returns
+        -------
+        bool
+            True if files found
         """
         if self._found_files:
             _logme.log('Already found files, not waiting again', 'debug')
@@ -1394,14 +1440,18 @@ class Job(object):
     def _update_name(self, name=None):
         """Make sure the job name is unique.
 
-        Attributes:
-            name (str): A name override, if no provided self.name used
+        Sets
+        ----
+        self.name
 
-        Returns:
-            name
+        Parameters
+        ----------
+        name : str, optional
+            A name override, if no provided self.name used
 
-        Sets:
-            self.name
+        Returns
+        -------
+        name : str
         """
         # Set name
         name = name if name else self.name

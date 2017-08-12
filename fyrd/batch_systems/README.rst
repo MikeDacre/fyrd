@@ -9,11 +9,13 @@ options.
 To add a new batch system, you will need to:
 
 1. Edit `__init__.py` to:
+
    1. Update `DEFINED_SYSTEMS` to include your batch system
    2. Edit `get_cluster_environment()` to detect your batch system, this function
       is ordered, meaning that it checks for slurm before torque, as slurm
       implements torque aliases. You should add a sensible way of detecting your
       batch system here.
+
 2. Create a file in this directory with the name of your batch system (must match
    the name in `DEFINED_SYSTEMS`). This file must contain all constants and functions
    described below in the `Batch Script <#Batch_Script>`_ section.
@@ -163,6 +165,7 @@ job runtimes and exit codes.
 Here is an example function:
 
 .. code:: python
+
    def gen_scripts(job_object, command, args, precmd, modstr):
    """Create script object for job, does not create a sep. exec script."""
    scrpt = _os.path.join(job_object.scriptpath,

@@ -166,13 +166,25 @@ def queue_parser(user=None, partition=None):
     returned by squeue are added with sacct, and they are added to *the end* of
     the returned queue, i.e. *out of order with respect to the actual queue*.
 
-    Args:
-        user:      optional user name to filter queue with
-        partition: optional partition to filter queue with
+    Parameters
+    ----------
+    user : str, optional
+        User name to pass to qstat to filter queue with
+    partiton : str, optional
+        Partition to filter the queue with
 
-    Yields:
-        tuple: job_id, name, userid, partition, state, nodelist, numnodes,
-               ntpernode, exit_code
+    Yields
+    ------
+    job_id : str
+    array_id : str or None
+    name : str
+    userid : str
+    partition : str
+    state :str
+    nodelist : list
+    numnodes : int
+    cntpernode : int or None
+    exit_code : int or Nonw
     """
     nodequery = _re.compile(r'([^\[,]+)(\[[^\[]+\])?')
     qargs = ['squeue', '-h', '-O',

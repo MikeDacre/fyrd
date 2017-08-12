@@ -71,9 +71,9 @@ def submit(command, args=None, kwargs=None, name=None, qtype=None,
         Override the default queue type
     profile : str
         The name of a profile saved in the conf
-
-    *All other keywords are parsed into cluster keywords by the options system.
-    For available keywords see `fyrd.option_help()`*
+    kwds
+        *All other keywords are parsed into cluster keywords by the options
+        system.* For available keywords see `fyrd.option_help()`
 
     Returns
     -------
@@ -119,9 +119,9 @@ def make_job(command, args=None, kwargs=None, name=None, qtype=None,
         Override the default queue type
     profile : str
         The name of a profile saved in the conf
-
-    *All other keywords are parsed into cluster keywords by the options system.
-    For available keywords see `fyrd.option_help()`*
+    kwds
+        *All other keywords are parsed into cluster keywords by the options
+        system.* For available keywords see `fyrd.option_help()`
 
     Returns
     -------
@@ -159,9 +159,9 @@ def make_job_file(command, args=None, kwargs=None, name=None, qtype=None,
         Override the default queue type
     profile : str
         The name of a profile saved in the conf
-
-    *All other keywords are parsed into cluster keywords by the options system.
-    For available keywords see `fyrd.option_help()`*
+    kwds
+        *All other keywords are parsed into cluster keywords by the options
+        system.* For available keywords see `fyrd.option_help()`
 
     Returns
     -------

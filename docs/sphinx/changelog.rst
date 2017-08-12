@@ -2,7 +2,7 @@ Change Log
 ==========
 
 Version 0.6.2a1
---------------
+---------------
 
 This version brings a major overhaul to the structure of the code, while leaving the
 API *mostly* intact.

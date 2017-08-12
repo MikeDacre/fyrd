@@ -63,26 +63,62 @@ class Queue(object):
 
     """A wrapper for all defined batch systems.
 
-    Attributes:
-        jobs (dict)             A dictionary of all jobs in this queue
-                                {jobid: Queue.QueueJob}
-        max_jobs (int):         The maximum number of jobs allowed in the queue
-        job_states (int):       A list of the different states of jobs in this
-                                queue
-        active_job_count (int): A count of all jobs that are either queued or
-                                running in the current queue
-        can_submit (bool):      True if total active jobs is less than max_jobs
+    Attributes
+    ----------
+    jobs : dict
+        A dictionary of all jobs in this queue in the form:
+        `{jobid: Queue.QueueJob}`
+    finished : dict
+        A dictionary of all completed jobs, same format as jobs
+    bad : dict
+        A dictionary of all jobs with failed or unknown states, same format as
+        jobs
+    active_job_count : int
+        Total jobs in the queue (including array job children)
+    max_jobs : int
+        The maximum number of jobs allowed in the queue
+    can_submit : bool
+        True if active_job_count < max_jobs, False otherwise
+    job_states : list
+        A list of the different states of jobs in this queue
+    active_job_count : int
+        A count of all jobs that are either queued or running in the current
+        queue
+    can_submit : bool
+        True if total active jobs is less than max_jobs
+    users : set
+        A set of all users with active jobs
+    job_states : set
+        A set of all current job states
+
+    Methods
+    -------
+    wait(jobs, return_disp=False)
+        Block until all jobs in jobs are complete.
+    get(jobs)
+        Get all results from a bunch of Job objects.
+    wait_to_submit(max_jobs=None)
+        Block until fewer running/queued jobs in queue than max_jobs.
+    update()
+        Refresh the list of jobs from the server.
+    get_jobs(key)
+        Return a dict of jobs where state matches key.
+    get_user_jobs(users)
+        Return a dict of jobs for all all jobs by each user in users.
     """
 
     def __init__(self, user=None, partition=None, qtype=None,):
         """Can filter by user, queue type or partition on initialization.
 
-        Args:
-            user (str):      Optional usernameto filter the queue with.
-                             If user='self' or 'current', the current user will
-                             be used.
-            partition (str): Optional partition to filter the queue with.
-            qtype (str):     one of the defined batch queues (e.g. 'slurm')
+        Parameters
+        ----------
+        user : str
+            Optional usernameto filter the queue with.  If user='self' or
+            'current', the current user will be used.
+        partition : str
+            Optional partition to filter the queue with.
+        qtype : str
+            one of the defined batch queues (e.g. 'slurm')
         """
         # Get user ID as an int UID
         if user:
@@ -140,13 +176,17 @@ class Queue(object):
     def check_dependencies(self, dependencies):
         """Check if dependencies are running.
 
-        Args:
-            dependencies (list): List of job IDs
+        Parameters
+        ----------
+        dependencies : list
+            List of job IDs
 
-        Returns:
-            str: 'active' if dependencies are running or queued, 'good' if
-                 completed, 'bad' if failed, cancelled, or suspended, 'absent'
-                 otherwise.
+        Returns
+        -------
+        str
+            'active' if dependencies are running or queued, 'good' if
+            completed, 'bad' if failed, cancelled, or suspended, 'absent'
+            otherwise.
         """
         for dep in _run.listify(dependencies):
             dep = str(dep)
@@ -163,13 +203,8 @@ class Queue(object):
     def wait(self, jobs, return_disp=False):
         """Block until all jobs in jobs are complete.
 
-        Update time is dependant upon the queue_update parameter in
-        your ~/.fyrd file.
-
-        In addition, wait() will not return until between 1 and 3
-        seconds after a job has completed, irrespective of queue_update
-        time. This allows time for any copy operations to complete after
-        the job exits.
+        Update time is dependant upon the queue_update parameter in your
+        ~/.fyrd/config.txt file.
 
         Parameters
         ----------
@@ -272,14 +307,20 @@ class Queue(object):
     def get(self, jobs):
         """Get all results from a bunch of Job objects.
 
-        Attributes:
-            jobs (list): List of fyrd.Job objects
+        Parameters
+        ----------
+        jobs : list
+            List of fyrd.Job objects
 
-        Returns:
-            job_results (dict): {job_id: Job}
+        Returns
+        -------
+        job_results : dict
+            `{job_id: Job}`
 
-        Raises:
-            fyrd.ClusterError if any job fails or goes missing.
+        Raises
+        ------
+        fyrd.ClusterError
+            If any job fails or goes missing.
         """
         self.update()
         _logme.log('Queue waiting.', 'debug')
@@ -373,8 +414,10 @@ class Queue(object):
     def wait_to_submit(self, max_jobs=None):
         """Block until fewer running/queued jobs in queue than max_jobs.
 
-        Args:
-            max_jobs (int): Override self.max_jobs
+        Parameters
+        ----------
+        max_jobs : int
+            Override self.max_jobs
         """
         count   = 50
         written = False
@@ -417,12 +460,16 @@ class Queue(object):
     def get_user_jobs(self, users):
         """Filter jobs by user.
 
-        Args:
-            users (list): A list of users/owners
+        Parameters
+        ----------
+        users : list
+            A list of users/owners
 
-        Returns:
-            dict: A filtered job dictionary of {job_id: QueueJob} for all jobs
-                  owned by the queried users.
+        Returns
+        -------
+        dict
+            A filtered job dictionary of `{job_id: QueueJob}` for all jobs
+            owned by the queried users.
         """
         try:
             if isinstance(users, (str, int)):
@@ -601,18 +648,28 @@ class _QueueJob(object):
 
     """A very simple class to store info about jobs in the queue.
 
-    Attributes:
-        id (int):           Job ID
-        name (str):         Job name
-        children (dict):    If array job, list of child job numbers
-        owner (str):        User who owns the job
-        threads (int):      Number of cores used by the job
-        queue (str):        The queue/partition the job is running in
-        state (str):        Current state of the job, normalized to slurm
-                            states
-        nodes (list):       List of nodes job is running on
-        exitcode (int):     Exit code of completed job
-        disappeared (bool): Job cannot be found in the queue anymore
+    Attributes
+    ----------
+    id : int
+        Job ID
+    name : str
+        Job name
+    children : dict
+        If array job, list of child job numbers
+    owner : str
+        User who owns the job
+    threads : int
+        Number of cores used by the job
+    queue : str
+        The queue/partition the job is running in
+    state : str
+        Current state of the job, normalized to slurm states
+    nodes : list
+        List of nodes job is running on
+    exitcode : int
+        Exit code of completed job
+    disappeared : bool
+        Job cannot be found in the queue anymore
     """
 
     id          = None
@@ -737,19 +794,30 @@ class QueueJob(_QueueJob):
 
     Only used for torque and slurm queues.
 
-    Attributes:
-        id (int):           Job ID
-        name (str):         Job name
-        owner (str):        User who owns the job
-        threads (int):      Number of cores used by the job
-        queue (str):        The queue/partition the job is running in
-        state (str):        Current state of the job, normalized to slurm
-                            states
-        nodes (list):       List of nodes job is running on
-        exitcode (int):     Exit code of completed job
-        disappeared (bool): Job cannot be found in the queue anymore
-        array_job (bool):   This job is an array job and has children
-        children (dict):    If array job, list of child job numbers
+    Attributes
+    ----------
+    id : int
+        Job ID
+    name : str
+        Job name
+    owner : str
+        User who owns the job
+    threads : int
+        Number of cores used by the job
+    queue : str
+        The queue/partition the job is running in
+    state : str
+        Current state of the job, normalized to slurm states
+    nodes : list
+        List of nodes job is running on
+    exitcode : int
+        Exit code of completed job
+    disappeared : bool
+        Job cannot be found in the queue anymore
+    array_job : bool
+        This job is an array job and has children
+    children : dict
+        If array job, list of child job numbers
     """
 
     def __init__(self):
@@ -772,18 +840,28 @@ class QueueChild(_QueueJob):
 
     Only used for torque and slurm queues.
 
-    Attributes:
-        id (int):           Job ID
-        name (str):         Job name
-        owner (str):        User who owns the job
-        threads (int):      Number of cores used by the job
-        queue (str):        The queue/partition the job is running in
-        state (str):        Current state of the job, normalized to slurm
-                            states
-        nodes (list):       List of nodes job is running on
-        exitcode (int):     Exit code of completed job
-        disappeared (bool): Job cannot be found in the queue anymore
-        parent (QueueJob):  Backref to parent job
+    Attributes
+    ----------
+    id : int
+        Job ID
+    name : str
+        Job name
+    owner : str
+        User who owns the job
+    threads : int
+        Number of cores used by the job
+    queue : str
+        The queue/partition the job is running in
+    state : str
+        Current state of the job, normalized to slurm states
+    nodes : list
+        List of nodes job is running on
+    exitcode : int
+        Exit code of completed job
+    disappeared : bool
+        Job cannot be found in the queue anymore
+    parent : QueueJob
+        Backref to parent job
     """
 
     def __init__(self, parent):

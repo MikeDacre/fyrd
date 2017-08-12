@@ -76,20 +76,27 @@ class Function(Script):
         NOTE: Function submission will fail if the parent file's code is not
         wrapped in an if __main__ wrapper.
 
-        Args:
-            file_name (str):     A root name to the outfiles
-            function (callable): Function handle.
-            args (tuple):        Arguments to the function as a tuple.
-            kwargs (dict):       Named keyword arguments to pass in the
-                                 function call
-            imports (list):      A list of imports, if not provided, defaults
-                                 to all current imports, which may not work if
-                                 you use complex imports.  The list can include
-                                 the import call, or just be a name, e.g
-                                 ['from os import path', 'sys']
-            syspaths (list):     Paths to be included in submitted function
-            pickle_file (str):   The file to hold the function.
-            outfile (str):       The file to hold the output.
+        Parameters
+        ----------
+        file_name : str
+            A root name to the outfiles
+        function : callable
+            Function handle.
+        args : tuple, optional
+            Arguments to the function as a tuple.
+        kwargs : dict, optional
+            Named keyword arguments to pass in the function call
+        imports : list, optional
+            A list of imports, if not provided, defaults to all current
+            imports, which may not work if you use complex imports.  The list
+            can include the import call, or just be a name, e.g ['from os
+            import path', 'sys']
+        syspaths : list, optional
+            Paths to be included in submitted function
+        pickle_file : str, optional
+            The file to hold the function.
+        outfile : str, optional
+            The file to hold the output.
         """
         _logme.log('Building Function for {}'.format(function), 'debug')
         self.function = function
@@ -140,8 +147,10 @@ class Function(Script):
     def clean(self, delete_output=False):
         """Delete the input pickle file and any scripts.
 
-        Args:
-            delete_output (bool): Delete the output pickle file too.
+        Parameters
+        ----------
+        delete_output : bool, optional
+            Delete the output pickle file too.
         """
         if self.written:
             if _os.path.isfile(self.pickle_file):

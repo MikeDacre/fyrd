@@ -61,31 +61,33 @@ def log(message, level='info', logfile=None, also_write=None,
         min_level=None, kind=None):
     """Print a string to logfile.
 
-    Args:
-        message:     The message to print.
-        logfile:     Optional file to log to, defaults to STDERR. Can provide a
-                     logging object
-        level:       'debug'|'info'|'warn'|'error'|'normal'
-                     Will only print if level > MIN_LEVEL
+    Levels display as::
 
-                     =========== ============================
-                     'verbose':  '<timestamp> VERBOSE --> '
-                     'debug':    '<timestamp> DEBUG --> '
-                     'info':     '<timestamp> INFO --> '
-                     'warn':     '<timestamp> WARNING --> '
-                     'error':    '<timestamp> ERROR --> '
-                     'critical': '<timestamp> CRITICAL --> '
-                     =========== ============================
+        verbose:  <timestamp> VERBOSE -->
+        debug:    <timestamp> DEBUG -->
+        info:     <timestamp> INFO -->
+        warn:     <timestamp> WARNING -->
+        error:    <timestamp> ERROR -->
+        critical: <timestamp> CRITICAL -->
 
-        also_write:  'stdout': print to STDOUT also.
-                     'stderr': print to STDERR also.
-                     These only have an effect if the output is not already set
-                     to the same device.
-
-        min_level:   Retained for backwards compatibility, min_level should be
-                     set using the logme.MIN_LEVEL constant.
-
-        kind:        synonym for level, kept to retain backwards compatibility
+    Parameters
+    ----------
+    message : str, optional
+        The message to print.
+    logfile : file or logging object, optional
+        Optional file to log to, defaults to STDERR. Can provide a logging
+        object
+    level : {'debug', 'info', 'warn', 'error', 'normal'}, optional
+        Will only print if level > MIN_LEVEL
+    also_write : {'stdout', 'stderr'}, optional
+        Print to STDOUT or STDERR also.
+        These only have an effect if the output is not already set to the same
+        device.
+    min_level : str, deprecated
+        Retained for backwards compatibility, min_level should be set using the
+        logme.MIN_LEVEL constant.
+    kind : str, deprecated
+        synonym for level, kept to retain backwards compatibility
     """
     stdout = False
     stderr = False

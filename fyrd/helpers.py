@@ -59,8 +59,8 @@ def parapply(jobs, df, func, args=(), profile=None, applymap=False,
     the keywords accepted by by pandas.DataFrame.apply(), found
     `here <http://pandas.pydata.org/pandas-docs/stable/generated/pandas.DataFrame.apply.html>`_
 
-    Parapply
-    --------
+    Parameters
+    ----------
     jobs : int
         Number of pieces to split the dataframe into
     df : DataFrame
@@ -410,6 +410,20 @@ def splitrun(jobs, infile, inheader, command, args=None, kwargs=None,
 
     Any header line is kept at the top of the file.
 
+    Primary return value varies and is decided in this order:
+
+    If outfile:
+        the absolute path to that file
+
+    If merge_func:
+        the result of merge_func(list), where list is the list of outputs.
+
+    Else:
+        a list of results
+
+    If direct is False, this function returns a fyrd.job.Job object which
+    will return the results described above on get().
+
     Parameters
     ----------
     jobs : int
@@ -444,20 +458,13 @@ def splitrun(jobs, infile, inheader, command, args=None, kwargs=None,
     direct : bool
         Whether to run the function directly or to return a Job. Default True.
 
-    *All other keywords are parsed into cluster keywords by the
-    options system. For available keywords see `fyrd.option_help()`*
+    *All other keywords are parsed into cluster keywords by the options
+    system. For available keywords see `fyrd.option_help()` *
 
     Returns
     -------
-    Primary return value varies and is decided in this order:
-
-    If outfile:    the absolute path to that file
-    If merge_func: the result of merge_func(list), where list
-                    is the list of outputs.
-    Else:          a list of results
-
-    If direct is False, this function returns a fyrd.job.Job object which
-    will return the results described above on get().
+    Varies
+        See description above
     """
     kwds = _options.check_arguments(kwds)
     if direct:

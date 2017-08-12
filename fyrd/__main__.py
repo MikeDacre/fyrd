@@ -360,32 +360,17 @@ def list_profiles(_=None):
 
 
 def add_profile(args):
-    """Add a profile.
-
-    Args:
-        args (Namespace): Argparse command line arguments defined in main.
-
-    """
+    """Add a profile."""
     add_edit_profile(args, False)
 
 
 def edit_profile(args):
-    """Edit a profile.
-
-    Args:
-        args (Namespace): Argparse command line arguments defined in main.
-
-    """
+    """Edit a profile."""
     add_edit_profile(args, True)
 
 
 def del_profile(args):
-    """Delete a profile.
-
-    Args:
-        args (Namespace): Argparse command line arguments defined in main.
-
-    """
+    """Delete a profile."""
     args.name = 'DEFAULT' if args.name.lower() == 'default' else args.name
 
     print('This will delete the {} profile.'.format(args.name))
@@ -402,11 +387,7 @@ def del_profile(args):
 
 
 def delete_profile_option(args):
-    """Remove an option from a profile.
-
-    Args:
-        args (Namespace): Argparse command line arguments defined in main.
-    """
+    """Remove an option from a profile."""
     for opt in args.options:
         print('Removing {} from {}'.format(opt, args.section))
         fyrd.conf.profiles.remove_option(args.section, opt)
@@ -456,11 +437,7 @@ def run_args_to_keywords(args):
 
 
 def run(args):
-    """Run an arbitrary shell script as a job.
-
-    Args:
-        args (Namespace): Argparse command line arguments defined in main.
-    """
+    """Run an arbitrary shell script as a job."""
     r = re.compile(r'{(.*?)}')
     jobs = []
     kwargs = run_args_to_keywords(args)
@@ -531,11 +508,7 @@ def run(args):
 
 
 def sub_files(args):
-    """Run any number of existing job files and optionally wait for them.
-
-    Args:
-        args (Namespace): Argparse command line arguments defined in main.
-    """
+    """Run any number of existing job files and optionally wait for them."""
     for job in args.job_files:
         if not os.path.isfile(job):
             sys.stderr.write('Job file {0} does not exist'.format(job))
@@ -680,10 +653,12 @@ def clean_dir(args):
 def add_edit_profile(args, overwrite):
     """Add or edit a profile.
 
-    Arguments:
-        args:      Command line arguments defined in main.
-        overwrite: Edit a profile instead of adding one.
-
+    Parameters
+    ----------
+    args : Namespace
+        Command line arguments from argparse
+    overwrite : bool
+        Edit a profile instead of adding one.
     """
     args.name = 'DEFAULT' if args.name.lower() == 'default' else args.name
     # Parse values
@@ -706,12 +681,15 @@ def add_edit_profile(args, overwrite):
 def get_values(keywords):
     """Return a dictionary of {keyword: arg} from a list of 'keyword:arg'.
 
-    Args:
-        keywords (list): A list of strings in the format keyword:arg.
+    Parameters
+    ----------
+    keywords : list
+        A list of strings in the format keyword:arg.
 
     Returns
-    dict: A dictionary of keyword arguments.
-
+    -------
+    dict
+        A dictionary of keyword arguments.
     """
     values = {}
     for arg in keywords:
