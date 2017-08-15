@@ -18,9 +18,7 @@ _Script = _sscrpt.Script
 
 
 PREFIX = '#SBATCH'
-# This will be appended to job submission scripts, e.g. '.qsub' for torque or
-# '.sbatch' for slurm
-SUFFIX = '.sbatch'
+SUFFIX = 'sbatch'
 
 
 ###############################################################################
@@ -210,7 +208,7 @@ def kill(job_ids):
     """
     o = _run.cmd('scancel {0}'.format(' '.join(_run.listify(job_ids))),
                  tries=5)
-    return o[0] == 0:
+    return o[0] == 0
 
 
 ###############################################################################

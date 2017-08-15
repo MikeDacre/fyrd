@@ -100,9 +100,10 @@ setup(
 
     keywords='slurm torque multiprocessing cluster job_management',
 
-    requires=['dill', 'tabulate', 'six', 'tblib', 'tqdm'],
-    install_requires=['dill', 'tabulate', 'six',
-                      'tblib', 'tqdm', 'versioneer'],
+    requires=['dill', 'tabulate', 'six', 'tblib',
+              'tqdm', 'Pyro4', 'daemonocle'],
+    install_requires=['dill', 'tabulate', 'six', 'Pyro4',
+                      'tblib', 'tqdm', 'daemonocle'],
     tests_require=['pytest'],
     packages=['fyrd', 'fyrd/batch_systems'],
     cmdclass=cmdclass,

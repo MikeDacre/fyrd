@@ -19,9 +19,7 @@ _Script = _sscrpt.Script
 
 
 PREFIX = '#PBS'
-SUFFIX = '.qsub'
-PATH = _os.path.dirname(_conf.get_executable('queue', 'qsub', 'qsub'))
-
+SUFFIX = 'qsub'
 
 # Define torque-to-slurm mappings
 TORQUE_SLURM_STATES = {
@@ -224,7 +222,7 @@ def kill(job_ids):
     success : bool
     """
     o = _run.cmd('qdel {0}'.format(' '.join(_run.listify(job_ids))), tries=5)
-    return o[0] == 0:
+    return o[0] == 0
 
 
 ###############################################################################

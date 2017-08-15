@@ -92,7 +92,7 @@ CLEAN_OLDER_THAN = 7
 # Fyrd file prefix, we don't use file commands so this is empty
 PREFIX = ''
 # This will be appended to job submission scripts
-SUFFIX = '.job'
+SUFFIX = 'job'
 
 # Reset broken multithreading
 # Some of the numpy C libraries can break multithreading, this command
