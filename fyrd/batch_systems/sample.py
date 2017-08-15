@@ -44,13 +44,19 @@ def normalize_state(state):
 def gen_scripts(job_object, command, args, precmd, modstr):
     """Build the submission script objects.
 
+    This script should almost certainly work by formatting `_scrpts.CMND_RUNNER_TRACK`.
+    The result should be a script that can be executed on a node by the batch system.
+    The format of the output is important, which is why `_scrpts.CMND_RUNNER_TRACK`
+    should be used; if it is not used, then be sure to copy the format of the outfile
+    in that script.
+
     Parameters
     ---------
     job_object : fyrd.job.Job
     command : str
         Command to execute
     args : list
-        List of additional arguments, not used in this script.
+        List of additional arguments
     precmd : str
         String from options_to_string() to add at the top of the file, should
         contain batch system directives
@@ -67,6 +73,7 @@ def gen_scripts(job_object, command, args, precmd, modstr):
     """
     pass
 
+
 def submit(file_name, dependencies=None, job=None, args=None, kwds=None):
     """Submit any file with dependencies.
 
@@ -77,17 +84,15 @@ def submit(file_name, dependencies=None, job=None, args=None, kwds=None):
     ----------
     file_name : str
         Path to an existing file
-    dependencies : list
+    dependencies : list, optional
         List of dependencies
-    job : fyrd.job.Job, not implemented
-        A job object for the calling job, not used by this functions
-    args : list, not implemented
-        A list of additional command line arguments to pass when submitting,
-        not used by this function
-    kwds : dict or str, not implemented
+    job : fyrd.job.Job, optional, not required
+        A job object for the calling job
+    args : list, optional, not required
+        A list of additional command line arguments to pass when submitting
+    kwds : dict or str, optional, not required
         A dictionary of keyword arguments to parse with options_to_string, or
-        a string of option:value,option,option:value,.... Not used by this
-        function.
+        a string of option:value,option,option:value,....
 
     Returns
     -------
@@ -163,8 +168,8 @@ def parse_strange_options(option_dict):
     dict
         Altered version of option_dict with all options that can't be handled
         by `fyrd.batch_systems.options.option_to_string()` removed.
-    None
-        Would contain additional arguments to pass to sbatch, but these are not
-        needed so we just return None
+    list
+        A list of command line arguments to pass straight to the submit
+        function
     """
     pass
