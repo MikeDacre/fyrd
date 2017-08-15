@@ -9,6 +9,7 @@ import pwd as _pwd     # Used to get usernames for queue
 from subprocess import CalledProcessError as _CalledProcessError
 
 from .. import run as _run
+from .. import conf as _conf
 from .. import logme as _logme
 from .. import ClusterError as _ClusterError
 from .. import script_runners as _scrpts
@@ -20,6 +21,46 @@ PREFIX = '#SBATCH'
 # This will be appended to job submission scripts, e.g. '.qsub' for torque or
 # '.sbatch' for slurm
 SUFFIX = '.sbatch'
+
+
+###############################################################################
+#                             Functionality Test                              #
+###############################################################################
+
+
+def queue_test(warn=True):
+    """Check that slurm can be used.
+
+    Just looks for sbatch and squeue.
+
+    Parameters
+    ----------
+    warn : bool
+        log a warning on fail
+
+    Returns
+    -------
+    batch_system_functional : bool
+    """
+    log_level = 'error' if warn else 'debug'
+    sbatch = _conf.get_option('queue', 'sbatch')
+    if sbatch is not None and _os.path.dirname(sbatch) and not _run.is_exe(sbatch):
+        _logme.log(
+            'Cannot use slurm as sbatch path set in conf to {0}'
+            .format(sbatch) + ' but that path is not an executable',
+            log_level
+        )
+        return False
+    sbatch = sbatch if sbatch else 'sbatch'
+    sbatch = _run.which(sbatch) if not _os.path.dirname(sbatch) else sbatch
+    if not sbatch:
+        _logme.log(
+            'Cannot use slurm as cannot find sbatch', log_level
+        )
+        return False
+    qpath = _os.path.dirname(sbatch)
+    squeue = _os.path.join(qpath, 'squeue')
+    return _run.is_exe(squeue)
 
 
 ###############################################################################
@@ -169,10 +210,7 @@ def kill(job_ids):
     """
     o = _run.cmd('scancel {0}'.format(' '.join(_run.listify(job_ids))),
                  tries=5)
-    if o[0] == 0:
-        return True
-    else:
-        return False
+    return o[0] == 0:
 
 
 ###############################################################################

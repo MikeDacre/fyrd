@@ -236,6 +236,32 @@ __all__ = ['set_option', 'get_option', 'delete', 'create_config',
 ###############################################################################
 
 
+def get_executable(section, key, default):
+    """Get an executable (e.g. qsub) from the conf if it exists.
+
+    Parameters
+    ----------
+    section : str
+        The config section to use (e.g. queue), if None, all sections returned.
+    key : str
+        The config key to get (e.g. 'max_jobs'), if None, whole section
+        returned.
+    default
+        If the key does not exist, create it with this default value.
+
+    Returns
+    -------
+    str or None
+        Path to executable if found, else None
+    """
+    exe = get_option(section, key, default)
+    if not _os.path.dirname(exe):
+        exe = _run.which(exe)
+    if _run.is_exe(exe):
+        return exe
+    return None
+
+
 def get_option(section=None, key=None, default=None):
     """Get a single key or section.
 

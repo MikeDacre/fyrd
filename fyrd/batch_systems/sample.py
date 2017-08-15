@@ -25,6 +25,27 @@ SUFFIX = '.sh'
 
 
 ###############################################################################
+#                             Functionality Test                              #
+###############################################################################
+
+
+def queue_test(warn=True):
+    """Check that this batch system can be used.
+
+    Parameters
+    ----------
+    warn : bool
+        log a warning on fail
+
+    Returns
+    -------
+    batch_system_functional : bool
+    """
+    log_level = 'error' if warn else 'debug'
+    pass
+
+
+###############################################################################
 #                           Normalization Functions                           #
 ###############################################################################
 

@@ -10,6 +10,7 @@ from subprocess import check_output as _check_output
 from subprocess import CalledProcessError as _CalledProcessError
 
 from .. import run as _run
+from .. import conf as _conf
 from .. import logme as _logme
 from .. import ClusterError as _ClusterError
 from .. import script_runners as _scrpts
@@ -19,6 +20,8 @@ _Script = _sscrpt.Script
 
 PREFIX = '#PBS'
 SUFFIX = '.qsub'
+PATH = _os.path.dirname(_conf.get_executable('queue', 'qsub', 'qsub'))
+
 
 # Define torque-to-slurm mappings
 TORQUE_SLURM_STATES = {
@@ -31,6 +34,46 @@ TORQUE_SLURM_STATES = {
     'W': 'running',
     'S': 'suspended',
 }
+
+
+###############################################################################
+#                             Functionality Test                              #
+###############################################################################
+
+
+def queue_test(warn=True):
+    """Check that torque can be used.
+
+    Just looks for qsub and qstat.
+
+    Parameters
+    ----------
+    warn : bool
+        log a warning on fail
+
+    Returns
+    -------
+    batch_system_functional : bool
+    """
+    log_level = 'error' if warn else 'debug'
+    qsub = _conf.get_option('queue', 'qsub')
+    if qsub is not None and _os.path.dirname(qsub) and not _run.is_exe(qsub):
+        _logme.log(
+            'Cannot use torque as qsub path set in conf to {0}'
+            .format(qsub) + ' but that path is not an executable',
+            log_level
+        )
+        return False
+    qsub = qsub if qsub else 'qsub'
+    qsub = _run.which(qsub) if not _os.path.dirname(qsub) else qsub
+    if not qsub:
+        _logme.log(
+            'Cannot use torque as cannot find qsub', log_level
+        )
+        return False
+    qpath = _os.path.dirname(qsub)
+    qstat = _os.path.join(qpath, 'qstat')
+    return _run.is_exe(qstat)
 
 
 ###############################################################################
@@ -181,10 +224,7 @@ def kill(job_ids):
     success : bool
     """
     o = _run.cmd('qdel {0}'.format(' '.join(_run.listify(job_ids))), tries=5)
-    if o[0] == 0:
-        return True
-    else:
-        return False
+    return o[0] == 0:
 
 
 ###############################################################################

@@ -81,6 +81,40 @@ Constants
 Functions
 .........
 
+queue_test(warn=True)
+~~~~~~~~~~~~~~~~~~~~~
+
+Input:
+
+- warn: bool, warn on failure, optional
+
+Output:
+
+- functional: bool, True if this system can be used
+
+Description:
+
+Use this function to write code to test that your system can function. If you are
+using a specific command line tool in your code, consider adding it to the config
+file to allow users to specify an absolute path or alternate name.
+
+Use a combination of `_run.which()` (which returns a full path to an executable if
+the executable is in the user's `PATH` and is executable) and `_run.is_exe()` (which
+tests if a file is executable) to check your command line tools.
+
+Use the warn parameter with `_logme.log()` to set a log level, e.g.:
+
+.. code:: python
+    log_level = 'error' if warn else 'debug'
+    _logme.log('Cannot use me :-(', log_level)
+
+Try not to raise any `Exceptions`, instead try to just log the problem and return
+`False`.
+
+This code is run very frequently to test that the queue is usable, so make your code
+as simple and efficient as possible.
+
+
 normalize_job_id(job_id)
 ~~~~~~~~~~~~~~~~~~~~~~~~
 

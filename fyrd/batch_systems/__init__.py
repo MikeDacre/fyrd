@@ -19,7 +19,7 @@ from .. import run as _run
 from .. import logme as _logme
 from .. import ClusterError as _ClusterError
 
-DEFINED_SYSTEMS = {'torque', 'slurm'}
+DEFINED_SYSTEMS = {'torque', 'slurm', 'local'}
 
 MODE = None
 
@@ -40,8 +40,8 @@ def get_batch_system(qtype=None):
     qtype = qtype if qtype else get_cluster_environment()
     if qtype not in DEFINED_SYSTEMS:
         raise _ClusterError(
-            'qtype value {} is not recognized, '.format(qtype) +
-            'should be: local, torque, or slurm'
+            'qtype value {0} is not recognized, '.format(qtype) +
+            'should be one of {0}'.format(DEFINED_SYSTEMS)
         )
     return _import('fyrd.batch_systems.{}'.format(qtype))
 
@@ -82,14 +82,22 @@ def get_cluster_environment():
         elif _run.which(qsub_cmnd):
             MODE = 'torque'
         else:
-            MODE = None
+            try:
+                batch = get_batch_system('local')
+            except Exeception as e:
+                _logme.log('Could not import local queue with Exception: {0}'
+                           .format(e), 'warn')
+            if batch.queue_test(warn=True):
+                MODE = 'local'
+            else:
+                MODE = None
     else:
         MODE = conf_queue
     if MODE == 'local':
         _logme.log('No cluster environment detected, using multiprocessing',
                    'debug')
     else:
-        _logme.log('{} detected, using for cluster submissions'.format(MODE),
+        _logme.log('{0} detected, using for cluster submissions'.format(MODE),
                    'debug')
     return MODE
 
@@ -100,7 +108,35 @@ def get_cluster_environment():
 
 
 def check_queue(qtype=None):
-    """Raise exception if MODE is incorrect."""
+    """Check if *both* MODE and qtype are valid.
+
+    First checks the MODE global and autodetects its value, if that fails, no
+    other tests are done, the qtype argument is ignored.
+
+    After MODE is found to be a reasonable value, the queried queue is tested
+    for functionality. If qtype is defined, this queue is tested, else the
+    queue in MODE is tested.
+
+    Tests are defined per batch system.
+
+    Parameters
+    ----------
+    qtype : str
+
+    Returns
+    ------
+    batch_system_functional : bool
+
+    Raises
+    ------
+    ClusterError
+        If MODE or qtype is not in DEFINED_SYSTEMS
+
+    See Also
+    --------
+    get_cluster_environment : Auto detect the batch environment
+    get_batch_system : Return the batch system module
+    """
     if 'MODE' not in globals():
         global MODE
         MODE = get_cluster_environment()
@@ -109,17 +145,20 @@ def check_queue(qtype=None):
     if not MODE:
         _logme.log('Queue system not detected', 'error')
         return False
-    if qtype:
-        if qtype not in DEFINED_SYSTEMS:
-            raise _ClusterError('qtype value {} is not recognized, '
-                                .format(qtype) +
-                                'should be one of {}'.format(DEFINED_SYSTEMS))
-        else:
-            MODE = qtype
-            return True
-    elif MODE not in DEFINED_SYSTEMS:
-        raise _ClusterError('MODE value {} is not recognized, '.format(MODE) +
-                            'should be: local, torque, or slurm')
+    if MODE not in DEFINED_SYSTEMS:
+        raise _ClusterError(
+            'MODE value {0} is not recognized, '.format(MODE) +
+            'should be one of {0}'.format(DEFINED_SYSTEMS)
+        )
+    if qtype and qtype not in DEFINED_SYSTEMS:
+        raise _ClusterError(
+            'qtype value {0} is not recognized, '.format(qtype) +
+            'should be one of {0}'.format(DEFINED_SYSTEMS)
+        )
+    qtype = qtype if qtype else MODE
+    batch_system = get_batch_system(qtype)
+    return batch_system.queue_test(warn=True)
+
 
 # Make options easily available everywhere
 from . import options

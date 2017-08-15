@@ -55,7 +55,7 @@ from sqlalchemy.ext.declarative import declarative_base as _base
 from .. import run as _run
 from .. import conf as _conf
 from .. import logme as _logme
-from .. import ClusterError as _ClusterError
+from .. import options as _options
 from .. import script_runners as _scrpts
 from .. import submission_scripts as _sscrpt
 _Script = _sscrpt.Script
@@ -516,7 +516,7 @@ class QueueManager(object):
         self.check_runner()
         self.inqueue.put(
             ('queue',
-             (jobno, command, threads, depends, outfile, errfile, runpath))
+             (jobno, command, threads, depends, stdout, stderr, runpath))
         )
         self.jobs[jobno] = job
         self.all_jobs.append(jobno)
@@ -871,6 +871,31 @@ def daemon_manager(mode):
 #                               Fyrd Functions                                #
 ###############################################################################
 
+
+###############################################################################
+#                             Functionality Test                              #
+###############################################################################
+
+
+def queue_test(warn=True):
+    """Check that this batch system can be used.
+
+    Parameters
+    ----------
+    warn : bool
+        log a warning on fail
+
+    Returns
+    -------
+    batch_system_functional : bool
+    """
+    log_level = 'error' if warn else 'debug'
+    try:
+        batch_system = get_server()
+    except:
+        _logme.log('Cannot get local queue sever address', log_level)
+        return False
+    return True
 
 
 ###############################################################################
