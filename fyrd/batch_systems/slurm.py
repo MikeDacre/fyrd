@@ -49,6 +49,26 @@ def gen_scripts(job_object, command, args, precmd, modstr):
     """Build the submission script objects.
 
     Creates an exec script as well as a submission script.
+
+    Parameters
+    ---------
+    job_object : fyrd.job.Job
+    command : str
+        Command to execute
+    args : list
+        List of additional arguments, not used in this script.
+    precmd : str
+        String from options_to_string() to add at the top of the file, should
+        contain batch system directives
+    modstr : str
+        String to add after precmd, should contain module directives.
+
+    Returns
+    -------
+    fyrd.script_runners.Script
+        The submission script
+    fyrd.script_runners.Script
+        The execution script
     """
     scrpt = _os.path.join(
         job_object.scriptpath, '{}.{}.sbatch'.format(
