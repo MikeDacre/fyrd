@@ -17,6 +17,9 @@ _Script = _sscrpt.Script
 
 
 PREFIX = '#SBATCH'
+# This will be appended to job submission scripts, e.g. '.qsub' for torque or
+# '.sbatch' for slurm
+SUFFIX = '.sbatch'
 
 
 ###############################################################################
@@ -71,8 +74,8 @@ def gen_scripts(job_object, command, args, precmd, modstr):
         The execution script
     """
     scrpt = _os.path.join(
-        job_object.scriptpath, '{}.{}.sbatch'.format(
-            job_object.name, job_object.suffix
+        job_object.scriptpath, '{}.{}.{}'.format(
+            job_object.name, job_object.suffix, SUFFIX
         )
     )
 

@@ -19,6 +19,9 @@ _Script = _sscrpt.Script
 # This will be prepended to parsed text in script files
 # e.g. #SBATCH for slurm
 PREFIX = ''
+# This will be appended to job submission scripts, e.g. '.qsub' for torque or
+# '.sbatch' for slurm
+SUFFIX = '.sh'
 
 
 ###############################################################################
@@ -71,7 +74,16 @@ def gen_scripts(job_object, command, args, precmd, modstr):
         As execution script that will be called by the submission script,
         optional
     """
-    pass
+    scrpt = _os.path.join(
+        job_object.scriptpath,
+        '{0}.{1}.{2}'.format(job_object.name, job_object.suffix, SUFFIX)
+    )
+
+    sub_script = _scrpts.CMND_RUNNER_TRACK.format(
+        precmd=precmd, usedir=job_object.runpath, name=job_object.name,
+        command=command
+    )
+    return _Script(script=sub_script, file_name=scrpt), None
 
 
 def submit(file_name, dependencies=None, job=None, args=None, kwds=None):

@@ -18,6 +18,7 @@ _Script = _sscrpt.Script
 
 
 PREFIX = '#PBS'
+SUFFIX = '.qsub'
 
 # Define torque-to-slurm mappings
 TORQUE_SLURM_STATES = {
@@ -86,8 +87,10 @@ def gen_scripts(job_object, command, args, precmd, modstr):
     None
         Would be the exec_script, not used here.
     """
-    scrpt = _os.path.join(job_object.scriptpath,
-                          '{}.cluster.qsub'.format(job_object.name))
+    scrpt = _os.path.join(
+        job_object.scriptpath,
+        '{0}.{1}.{2}'.format(job_object.name, job_object.suffix, SUFFIX)
+    )
 
     sub_script = _scrpts.CMND_RUNNER_TRACK.format(
         precmd=precmd, usedir=job_object.runpath, name=job_object.name,

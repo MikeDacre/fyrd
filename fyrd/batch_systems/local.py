@@ -91,6 +91,8 @@ CLEAN_OLDER_THAN = 7
 
 # Fyrd file prefix, we don't use file commands so this is empty
 PREFIX = ''
+# This will be appended to job submission scripts
+SUFFIX = '.job'
 
 # Reset broken multithreading
 # Some of the numpy C libraries can break multithreading, this command
@@ -138,6 +140,10 @@ class Job(Base):
         The requested number of cores
     exitcode : int
         The exit code of the job if state in {'completed', 'failed'}
+    runpath : str, optional
+        Path to the directory to run in
+    outfile, errfile : str, optional
+        Paths to the output files
     """
 
     __tablename__ = 'jobs'
@@ -149,6 +155,9 @@ class Job(Base):
     threads     = _Column(_Integer, nullable=False)
     state       = _Column(_String, nullable=False, index=True)
     exitcode    = _Column(_Integer)
+    runpath     = _Column(_String)
+    outfile     = _Column(_String)
+    errfile     = _Column(_String)
 
     def __repr__(self):
         """Display summary."""
@@ -455,7 +464,8 @@ class QueueManager(object):
     ##########################################################################
 
     @Pyro4.expose
-    def submit(self, command, name, threads=1, dependencies=None):
+    def submit(self, command, name, threads=1, dependencies=None,
+               stdout=None, stderr=None, runpath=None):
         """Submit a job and add it to the database.
 
         Parameters
@@ -468,6 +478,10 @@ class QueueManager(object):
             The number of cores required by the job
         dependencies : list of int, optional
             A list of job numbers that must be complete prior to execution
+        stdout, stderr : str, optional
+            A path to a file to write STDOUT and STDERR to respectively
+        runpath : str, optional
+            A path to execute the command in
 
         Returns
         -------
@@ -488,13 +502,22 @@ class QueueManager(object):
                 depends.append(dep)
         job = Job(name=name, command=command, threads=threads, state='queued',
                   submit_time=_dt.now())
+        if stdout:
+            job.outfile = stdout
+        if stderr:
+            job.errfile = stderr
+        if runpath:
+            job.runpath = runpath
         session.add(job)
         session.flush()
         jobno = int(job.jobno)
         session.commit()
         session.close()
         self.check_runner()
-        self.inqueue.put(('queue', (jobno, command, threads, depends)))
+        self.inqueue.put(
+            ('queue',
+             (jobno, command, threads, depends, outfile, errfile, runpath))
+        )
         self.jobs[jobno] = job
         self.all_jobs.append(jobno)
         return jobno
@@ -737,7 +760,7 @@ def job_runner(inqueue, outqueue, max_jobs):
                 continue
             if info[0] != 'queue':
                 raise QueueError('Invalid argument: {0}'.format(info[0]))
-            jobno, command, threads, depends = info[1]
+            jobno, command, threads, depends, stdout, stderr, runpath = info[1]
             jobno = int(jobno)
             threads = int(threads)
             # Run anyway
@@ -749,7 +772,8 @@ def job_runner(inqueue, outqueue, max_jobs):
                 raise QueueError('Job already submitted!')
             jobs.append(jobno)
             queued[jobno] = {'command': command, 'threads': threads,
-                             'depends': depends}
+                             'depends': depends, 'stdout': stdout,
+                             'stderr': stderr, 'runpath': runpath}
             qserver.update_job(jobno, state='queued')
         # Update running and done queues
         for jobno, process in running.items():
@@ -782,14 +806,22 @@ def job_runner(inqueue, outqueue, max_jobs):
             if info['threads'] <= available_cores:
                 print(info['command'])
                 assert isinstance(info['command'], str)
+                if info['runpath']:
+                    curpath = _os.path.abspath('.')
+                    _os.chdir(info['runpath'])
                 p = mp.Process(
-                    target=subprocess.call,
+                    target=_run.cmd,
                     args=(info['command'],),
-                    kwargs={'shell': True}
+                    kwargs={
+                        'stdout': info['stdout'],
+                        'stderr': info['stderr'],
+                    }
                 )
                 p.start()
                 running[jobno] = p
                 available_cores -= info['threads']
+                if info['runpath']:
+                    _os.chdir(curpath)
             qserver.update_job(jobno, state='running')
         # Clear running jobs from queue
         for jobno in running:
@@ -882,17 +914,39 @@ def gen_scripts(job_object, command, args, precmd, modstr):
     -------
     fyrd.script_runners.Script
         The submission script
-    fyrd.script_runners.Script, or None if unneeded
-        As execution script that will be called by the submission script,
-        optional
+    None
+        Would be the exec_script, not used here.
     """
-    pass
+    scrpt = _os.path.join(
+        job_object.scriptpath,
+        '{0}.{1}.{2}'.format(job_object.name, job_object.suffix, SUFFIX)
+    )
+
+    sub_script = _scrpts.CMND_RUNNER_TRACK.format(
+        precmd=precmd, usedir=job_object.runpath, name=job_object.name,
+        command=command
+    )
+    return _Script(script=sub_script, file_name=scrpt), None
+
 
 def submit(file_name, dependencies=None, job=None, args=None, kwds=None):
     """Submit any file with dependencies.
 
-    If your batch system does not handle dependencies, then raise a
-    NotImplemented error if dependencies are passed.
+    .. note:: this function can only use the following fyrd keywords:
+        cores, name, outfile, errfile, runpath
+
+    We get those in the following order:
+        1. Job object
+        2. args
+        3. kwds
+
+    Any keyword in a later position will overwrite the earlier position. ie.
+    'name' in kwds would overwrite 'name' in args which would overwrite 'name'
+    in Job.
+
+    None of these keywords are required. If they do not exist, cores is set to
+    1, name is set to `file_name`, no runpath is used, and STDOUT/STDERR are
+    not saved
 
     Parameters
     ----------
@@ -900,21 +954,56 @@ def submit(file_name, dependencies=None, job=None, args=None, kwds=None):
         Path to an existing file
     dependencies : list
         List of dependencies
-    job : fyrd.job.Job, not implemented
-        A job object for the calling job, not used by this functions
-    args : list, not implemented
-        A list of additional command line arguments to pass when submitting,
-        not used by this function
-    kwds : dict or str, not implemented
+    job : fyrd.job.Job, optional
+        A job object for the calling job, used to get cores, outfile, errfile,
+        runpath, and name if available
+    args : list, optional
+        A list of additional arguments, only parsed if list of tuple in the
+        format `[(key, value)]`. Comes from output of `parse_strange_options()`
+    kwds : dict or str, optional
         A dictionary of keyword arguments to parse with options_to_string, or
-        a string of option:value,option,option:value,.... Not used by this
-        function.
+        a string of option:value,option,option:value,....
+        Used to get any of cores, outfile, errfile, runpath, or name
 
     Returns
     -------
     job_id : str
     """
-    pass
+    params = {}
+    needed_params = ['cores', 'outfile', 'errfile', 'runpath', 'name']
+    if job:
+        params['cores'] = job.cores
+        params['outfile'] = job.outfile
+        params['errfile'] = job.errfile
+        params['runpath'] = job.runpath
+        params['name'] = job.name
+    if kwds:
+        if not isinstance(kwds, dict):
+            kwds = {k: v for k, v in [i.split(':') for i in kwds.split(',')]}
+        _, extra_args = _options.options_to_string(kwds)
+        for k, v in extra_args:
+            if k in needed_params:
+                params[k] = v
+    if args and isinstance(args[0], (list, tuple)):
+        for k, v in args:
+            if k in needed_params:
+                params[k] = v
+    if 'cores' not in params:
+        params['cores'] = 1
+    if 'name' not in params:
+        params['name'] = _os.path.basename(file_name)
+    for param in needed_params:
+        if param not in params:
+            params[param] = None
+    # Submit the job
+    server = get_server()
+    command = 'bash {0}'.format(_os.path.abspath(file_name))
+    jobno = server.submit(
+        command, params['name'], threads=params['cores'],
+        dependencies=dependencies, stdout=params['outfile'],
+        stderr=params['errfile'], runpath=params['runpath']
+    )
+    return str(jobno)
 
 
 ###############################################################################
@@ -989,6 +1078,9 @@ def queue_parser(user=None, partition=None):
 def parse_strange_options(option_dict):
     """Parse all options that cannot be handled by the regular function.
 
+    Because we do not parse the submission file, all keywords will be placed
+    into the final return list.
+
     Parameters
     ----------
     option_dict : dict
@@ -998,15 +1090,19 @@ def parse_strange_options(option_dict):
     Returns
     -------
     list
-        A list of strings to be added at the top of the script file
+        An empty list
     dict
-        Altered version of option_dict with all options that can't be handled
-        by `fyrd.batch_systems.options.option_to_string()` removed.
+        An empty dictionary
     list
-        A list of command line arguments to pass straight to the submit
-        function
+        A list of options that can be used by `submit()`
+        Ends up in the `args` parameter of the submit function
     """
-    pass
+    outlist = []
+    good_items = ['outfile', 'cores', 'errfile', 'runpath']
+    for opt, var in option_dict.items():
+        if opt in good_items:
+            outlist.append((opt, var))
+    return [], {}, outlist
 
 
 ###############################################################################
