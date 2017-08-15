@@ -66,16 +66,15 @@ Where the main config will be kept.
 # Set default options
 DEFAULTS = {
     'queue': {
-        'max_jobs':     1000,
-        'sleep_len':    1,
-        'queue_update': 2,
-        'res_time':     2700, # Time to wait if job is postponed before fail
-        'queue_type':   'auto',
-        'sbatch':       None, # Path to sbatch command
-        'qsub':         None, # Path to qsub command
-        'progressbar':  True,
-        # Not implemented yet
-        #  'db':           _os.path.join(CONFIG_PATH, 'db.sql'),
+        'max_jobs':         1000,
+        'sleep_len':        1,
+        'queue_update':     2,
+        'res_time':         2700, # Time to wait if job is postponed before fail
+        'queue_type':       'auto',
+        'sbatch':           None, # Path to sbatch command
+        'qsub':             None, # Path to qsub command
+        'progressbar':      True,
+        'local_clean_days': 7,
     },
     'jobs': {
         'clean_files':     True,
@@ -109,29 +108,35 @@ CONF_HELP = {
         [queue]
         Define options for queue handling
 
-        Options:
-            max_jobs (int):     sets the maximum number of running jobs before
-                                submission will pause and wait for the queue to
-                                empty
-            sleep_len (int):    sets the amount of time the program will wait
-                                between submission attempts
-            queue_update (int): sets the amount of time between refreshes of
-                                the queue.
-            res_time (int):     Time in seconds to wait if a job is in an
-                                uncertain state, usually preempted or
-                                suspended. These jobs often resolve into
-                                running or completed again after some time so
-                                it makes sense to wait a bit, but not forever.
-                                The default is 45 minutes: 2700 seconds.
-            queue_type (str):   the type of queue to use, one of the batch
-                                systems (e.g. 'slurm') or 'auto'. Default is
-                                auto to auto-detect the queue.
-            sbatch (str):       A path to the sbatch executable, only required
-                                for slurm mode if sbatch is not in the PATH.
-            qsub (str):         A path to the qsub executable, only required
-                                for torque mode if sbatch is not in the PATH.
-            progressbar (bool): Show a progress bar when waiting for jobs
-            db_path (str):      Where to put the job database (Not implemented)
+        Options
+        -------
+        max_jobs : int
+            sets the maximum number of running jobs before submission will
+            pause and wait for the queue to empty
+        sleep_len : int
+            sets the amount of time the program will wait between submission
+            attempts
+        queue_update : int
+            sets the amount of time between refreshes of the queue.
+        res_time : int
+            Time in seconds to wait if a job is in an uncertain state, usually
+            preempted or suspended. These jobs often resolve into running or
+            completed again after some time so it makes sense to wait a bit,
+            but not forever.  The default is 45 minutes: 2700 seconds.
+        queue_type : str
+            the type of queue to use, one of the batch systems (e.g. 'slurm')
+            or 'auto'. Default is auto to auto-detect the queue.
+        sbatch : str
+            A path to the sbatch executable, only required for slurm mode if
+            sbatch is not in the PATH.
+        qsub : str
+            A path to the qsub executable, only required for torque mode if
+            sbatch is not in the PATH.
+        progressbar : bool
+            Show a progress bar when waiting for jobs
+        local_clean_days : int
+            The number of days to keep jobs in the local queue. Any jobs older
+            than this will be purged from the database
         """
     ),
     'jobs': _dnt(
@@ -139,33 +144,34 @@ CONF_HELP = {
         [jobs]
         Set the options for managing job submission and getting
 
-        Options:
-            clean_files (bool):    means that by default files will be deleted
-                                   when job completes
-            clean_outputs (bool):  is the same but for output files (they are
-                                   saved first)
-            file_block_time (int): Max amount of time to block after job
-                                   completes in the queue while waiting for
-                                   output files to appear.  Some queues can
-                                   take a long time to copy files under load,
-                                   so it is worth setting this high, it won't
-                                   block unless the files do not appear.
-            scriptpath (str):      Path to write all script files by
-                                   default, must be globally cluster
-                                   accessible. Note: this is *not* the runtime
-                                   path, just where files are written to.
-            outpath (str):         Path to write all output files to by
-                                   by default, must be globally cluster
-                                   accessible.
-            suffix (str):          The suffix to use when writing scripts and
-                                   output files
-            auto_submit (bool):    If wait() or get() are called prior to
-                                   submission, auto-submit the job. Otherwise
-                                   throws an error and returns None
-            generic_python (bool): Use /usr/bin/env python instead of the
-                                   current executable, not advised, but
-                                   sometimes necessary.
-            profile_file (str):    the config file where profiles are defined.
+        Options
+        -------
+        clean_files : bool
+            means that by default files will be deleted when job completes
+        clean_outputs : bool
+            is the same but for output files (they are saved first)
+        file_block_time : int
+            Max amount of time to block after job completes in the queue while
+            waiting for output files to appear.  Some queues can take a long
+            time to copy files under load, so it is worth setting this high, it
+            won't block unless the files do not appear.
+        scriptpath : str
+            Path to write all script files by default, must be globally cluster
+            accessible. Note: this is *not* the runtime path, just where files
+            are written to.
+        outpath : str
+            Path to write all output files to by by default, must be globally
+            cluster accessible.
+        suffix : str
+            The suffix to use when writing scripts and output files
+        auto_submit : bool
+            If wait() or get() are called prior to submission, auto-submit the
+            job. Otherwise throws an error and returns None
+        generic_python : bool
+            Use /usr/bin/env python instead of the current executable, not
+            advised, but sometimes necessary.
+        profile_file : str
+            the config file where profiles are defined.
         """
     ),
 }

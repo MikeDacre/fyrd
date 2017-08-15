@@ -33,6 +33,8 @@ import argparse as _argparse
 import subprocess
 import multiprocessing as mp
 from time import sleep as _sleep
+from datetime import datetime as _dt
+from datetime import timedelta as _td
 from collections import OrderedDict as _OD
 
 from queue import Empty
@@ -45,6 +47,7 @@ from sqlalchemy import Column as _Column
 from sqlalchemy import String as _String
 from sqlalchemy import Integer as _Integer
 
+from sqlalchemy.types import DateTime as _DateTime
 from sqlalchemy.orm import sessionmaker as _sessionmaker
 from sqlalchemy.ext.declarative import declarative_base as _base
 
@@ -76,6 +79,10 @@ SLEEP_LEN = 0.1
 # Time in seconds to wait for QueueManager to terminate
 # Must be at least 10
 STOP_WAIT = 30
+
+# Number of days to wait before cleaning out old jobs, obtained from the
+# config file, this just sets the default
+CLEAN_OLDER_THAN = 7
 
 ############################
 #  Do Not Edit Below Here  #
@@ -135,12 +142,13 @@ class Job(Base):
 
     __tablename__ = 'jobs'
 
-    jobno    = _Column(_Integer, primary_key=True, index=True)
-    name     = _Column(_String, nullable=False)
-    command  = _Column(_String, nullable=False)
-    threads  = _Column(_Integer, nullable=False)
-    state    = _Column(_String, nullable=False, index=True)
-    exitcode = _Column(_Integer)
+    jobno       = _Column(_Integer, primary_key=True, index=True)
+    name        = _Column(_String, nullable=False)
+    command     = _Column(_String, nullable=False)
+    submit_time = _Column(_DateTime, nullable=False)
+    threads     = _Column(_Integer, nullable=False)
+    state       = _Column(_String, nullable=False, index=True)
+    exitcode    = _Column(_Integer)
 
     def __repr__(self):
         """Display summary."""
@@ -478,7 +486,8 @@ class QueueManager(object):
                 dep = int(dep)
                 self.check_jobno(dep)
                 depends.append(dep)
-        job = Job(name=name, command=command, threads=threads, state='queued')
+        job = Job(name=name, command=command, threads=threads, state='queued',
+                  submit_time=_dt.now())
         session.add(job)
         session.flush()
         jobno = int(job.jobno)
@@ -491,7 +500,7 @@ class QueueManager(object):
         return jobno
 
     @Pyro4.expose
-    def get(self, jobs=None, this_session_only=False):
+    def get(self, jobs=None, this_session_only=False, preclean=True):
         """Return a list of updated jobs as Job objects.
 
         Parameters
@@ -500,11 +509,15 @@ class QueueManager(object):
             A list of job numbers, a single job number is also fine
         this_session_only : bool, optional
             If True, limit results to those from this class instance only
+        preclean : bool
+            If True run `clean()` first to remove old jobs
 
         Returns
         -------
         jobs : list of Job
         """
+        if preclean:
+            self.clean()
         q = self.db.query()
         if jobs:
             jobs = [jobs] if isinstance(jobs, (int, str)) else jobs
@@ -513,6 +526,35 @@ class QueueManager(object):
         if this_session_only:
             q = q.filter(Job.jobno.in_(self.all_jobs))
         return q.all()
+
+    @Pyro4.expose
+    def clean(self, days=None):
+        """Delete all jobs in the queue older than days days.
+
+        Very fast if no jobs are older than the cutoff as the query returns
+        an empty set.
+
+        Parameters
+        ----------
+        days : int, optional
+            Set number of days to clean, default set in the config file.
+        """
+        if days:
+            clean_days = int(days)
+        else:
+            clean_days = _conf.get_option(
+                'queue', 'local_clean_days',CLEAN_OLDER_THAN
+            )
+        current_time = _dt.now()
+        cutoff = current_time - _td(days=clean_days)
+        jobs = self.db.query().filter(Job.submit_time < cutoff).all()
+        if not jobs:
+            return
+        session = self.db.get_session()
+        for job in jobs:
+            session.delete(job)
+        session.commit()
+        session.close()
 
     @Pyro4.expose
     def kill(self, jobs):
