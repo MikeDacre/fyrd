@@ -84,7 +84,7 @@ def get_cluster_environment():
         else:
             try:
                 batch = get_batch_system('local')
-            except Exeception as e:
+            except Exception as e:
                 _logme.log('Could not import local queue with Exception: {0}'
                            .format(e), 'warn')
             if batch.queue_test(warn=True):
