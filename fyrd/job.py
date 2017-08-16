@@ -572,7 +572,7 @@ class Job(object):
         self.written = True
         return self
 
-    def submit(self, wait_on_max_queue=True, additional_keywords=None):
+    def submit(self, wait_on_max_queue=True, additional_keywords=None, max_jobs=None):
         """Submit this job.
 
         To disable max_queue_len, set it to 0. None will allow override by
@@ -586,6 +586,8 @@ class Job(object):
         additional_keywords : dict, optional
             Pass this dictionary to the batch system submission function,
             not necessary.
+        max_jobs : int, optional
+            Override the maximum number of jobs to wait for
 
         Returns
         -------
@@ -618,7 +620,7 @@ class Job(object):
         if wait_on_max_queue:
             if not self._updating:
                 self.update()
-            self.queue.wait_to_submit()
+            self.queue.wait_to_submit(max_jobs)
 
         # Only include queued or running dependencies
         self.queue._update()  # Force update
