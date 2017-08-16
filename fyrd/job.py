@@ -448,12 +448,13 @@ class Job(object):
                     _logme.log('Deleteing {}'.format(f), 'debug')
                     _os.remove(f)
 
-    def submit(self, wait_on_max_queue=True):
+    def submit(self, wait_on_max_queue=True, max_jobs=None):
         """Submit this job.
 
         Args:
             wait_on_max_queue (bool): Block until queue limit is below the
                                       maximum before submitting.
+            max_jobs (int):           Override the maximum number of jobs
 
         To disable max_queue_len, set it to 0. None will allow override by
         the default settings in the config file, and any positive integer will
@@ -488,7 +489,7 @@ class Job(object):
         # Wait on the queue if necessary
         if wait_on_max_queue:
             self.update()
-            self.queue.wait_to_submit()
+            self.queue.wait_to_submit(max_jobs)
 
         # Only include queued or running dependencies
         self.queue._update()  # Force update
