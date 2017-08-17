@@ -1,0 +1,17 @@
+#!/bin/bash
+
+
+
+mkdir -p $LOCAL_SCRATCH > /dev/null 2>/dev/null
+cd /Users/dacre/Code/fyrd
+date +'%y-%m-%d-%H:%M:%S'
+echo "Running export_run.0ce0b50c"
+/Users/dacre/anaconda/envs/fyrd/bin/python /Users/dacre/Code/fyrd/export_run.0ce0b50c_func.cluster.py
+exitcode=$?
+echo Done
+date +'%y-%m-%d-%H:%M:%S'
+if [[ $exitcode != 0 ]]; then
+    echo Exited with code: $exitcode >&2
+fi
+exit $exitcode
+

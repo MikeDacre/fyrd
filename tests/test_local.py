@@ -8,7 +8,7 @@ import pytest
 sys.path.append(os.path.abspath('.'))
 import fyrd
 env = 'local'
-fyrd.batch_system.MODE = 'local'
+fyrd.batch_systems.MODE = 'local'
 
 fyrd.logme.MIN_LEVEL = 'debug'
 
@@ -30,13 +30,15 @@ def raise_me(number, power=2):
     return number**power
 
 
-@fyrd.jobify(name='test', mem='1000MB', time='00:20:00', submit=True)
+@fyrd.jobify(name='test', mem='1000MB', time='00:20:00', submit=True,
+             qtype='local')
 def raise_me_deco(number, power=2):
     """Raise number to power."""
     return number**power
 
 
-@fyrd.jobify(name='test', mem='1000MB', time='00:20:00', submit=False)
+@fyrd.jobify(name='test', mem='1000MB', time='00:20:00', submit=False,
+             qtype='local')
 def raise_me_deco2(number, power=2):
     """Raise number to power."""
     return number**power
@@ -95,7 +97,7 @@ SCRIPT = r"""zcat {file} | sed 's/\t/  ' > {outfile}"""
                     reason="No valid batch system detected")
 def test_job_creation():
     """Make a job and print it."""
-    fyrd.batch_system.MODE = 'local'
+    fyrd.batch_systems.MODE = 'local'
     job = fyrd.Job('echo hi', cores=2, time='00:02:00', mem='2000')
     assert job.qtype == env
 
@@ -331,7 +333,8 @@ def test_multi_job_cleaning():
                     reason="No valid batch system detected")
 def test_function_submission():
     """Submit a function."""
-    job = fyrd.Job(write_to_file, ('42', 'bobfile'), clean_files=False, qtype='local')
+    job = fyrd.Job(write_to_file, ('42', 'bobfile'), clean_files=False,
+                   qtype='local')
     job.submit()
     job.wait()
     job.fetch_outputs()
@@ -373,7 +376,8 @@ def test_method_submission():
                     reason="No valid batch system detected")
 def test_function_keywords():
     """Submit a simple function with keyword arguments."""
-    job = fyrd.Job(raise_me, (10,), kwargs={'power': 10}, qtype='local').submit()
+    job = fyrd.Job(raise_me, (10,), kwargs={'power': 10},
+                   qtype='local').submit()
     assert job.get() == 10**10
     job.clean(delete_outputs=True)
 
@@ -382,7 +386,7 @@ def test_function_keywords():
                     reason="No valid batch system detected")
 def test_function_deco():
     """Submit a simple decorated function."""
-    fyrd.batch_system.MODE = 'local'
+    fyrd.batch_systems.MODE = 'local'
     job = raise_me_deco(10, power=10)
     assert job.get() == 10**10
     job.clean(delete_outputs=True)
@@ -392,7 +396,7 @@ def test_function_deco():
                     reason="No valid batch system detected")
 def test_function_deco2():
     """Submit a simple decorated function."""
-    fyrd.batch_system.MODE = 'local'
+    fyrd.batch_systems.MODE = 'local'
     job = raise_me_deco2(10)
     job.submit()
     assert job.get() == 10**2
@@ -403,8 +407,10 @@ def test_function_deco2():
                     reason="No valid batch system detected")
 def test_splitfile():
     """Use the splitfile helper function."""
-    out = fyrd.helpers.splitrun(2, 'tests/test.txt.gz', qtype='local',
-                                False, dosomething, ('{file}',))
+    out = fyrd.helpers.splitrun(
+        2, 'tests/test.txt.gz', False, dosomething, ('{file}',),
+        qtype='local'
+    )
     assert out == dosomething('tests/test.txt.gz')
 
 
@@ -412,8 +418,10 @@ def test_splitfile():
                     reason="No valid batch system detected")
 def test_splitfile_script():
     """Test splitfile() with a script and outfile."""
-    out = fyrd.helpers.splitrun(2, 'tests/test.txt.gz',qtype='local',
-                                False, dosomething, ('{file}',))
+    out = fyrd.helpers.splitrun(
+        2, 'tests/test.txt.gz', False, dosomething, ('{file}',),
+        qtype='local'
+    )
     assert out == dosomething('tests/test.txt.gz')
 
 
@@ -421,7 +429,7 @@ def test_splitfile_script():
                     reason="No valid batch system detected")
 def test_splitfile_indirect():
     """Use the splitfile helper function."""
-    fyrd.batch_system.MODE = 'local'
+    fyrd.batch_systems.MODE = 'local'
     job = fyrd.helpers.splitrun(
         2, 'tests/test.txt.gz', False, SCRIPT, name='test',
         outfile='test.out.txt', direct=False
