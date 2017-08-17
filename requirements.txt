@@ -7,3 +7,4 @@ tqdm>=4.15.0
 versioneer>=0.18
 Pyro4>=4.62
 daemonocle>=1.0
+sqlalchemy>=1.1.13

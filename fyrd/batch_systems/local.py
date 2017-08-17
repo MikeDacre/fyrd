@@ -51,13 +51,14 @@ from sqlalchemy.types import DateTime as _DateTime
 from sqlalchemy.orm import sessionmaker as _sessionmaker
 from sqlalchemy.ext.declarative import declarative_base as _base
 
-# Fyrd imports (not necessary for main functionality)
-from .. import run as _run
-from .. import conf as _conf
-from .. import logme as _logme
-from .. import options as _options
-from .. import script_runners as _scrpts
-from .. import submission_scripts as _sscrpt
+# Fyrd imports (not necessary for main functionality) no relative imports
+# as we run as a script also
+from fyrd import run as _run
+from fyrd import conf as _conf
+from fyrd import logme as _logme
+from fyrd import options as _options
+from fyrd import script_runners as _scrpts
+from fyrd import submission_scripts as _sscrpt
 _Script = _sscrpt.Script
 
 # For SQLAlchemy DB
@@ -78,7 +79,7 @@ SLEEP_LEN = 0.1
 
 # Time in seconds to wait for QueueManager to terminate
 # Must be at least 10
-STOP_WAIT = 30
+STOP_WAIT = 10
 
 # Number of days to wait before cleaning out old jobs, obtained from the
 # config file, this just sets the default
@@ -210,8 +211,8 @@ class LocalQueue(object):
         args
             Any arguments allowed by session.query. If blank, Job is used,
             which will return the whole database. To limit by columns, simply
-            pass columns: query(self, self.table.rsID) would return only a list
-            of rsids.
+            pass columns: `query(Job.jobno)` would return only a list of job
+            numbers.
         """
         if not args:
             args = (Job,)
@@ -439,7 +440,7 @@ class QueueManager(object):
 
     _job_runner = None
 
-    def __init__(self, max_jobs=None):
+    def __init__(self, max_jobs=None, register_atexit=False):
         """Create the QueueManager
 
         Paramenters
@@ -456,7 +457,8 @@ class QueueManager(object):
         self.check_runner()
 
         # Properly shutdown if process terminated
-        _atexit.register(self.shutdown)
+        if register_atexit:
+            _atexit.register(self.shutdown)
 
 
     ##########################################################################
@@ -523,32 +525,37 @@ class QueueManager(object):
         return jobno
 
     @Pyro4.expose
-    def get(self, jobs=None, this_session_only=False, preclean=True):
-        """Return a list of updated jobs as Job objects.
+    def get(self, jobs=None, preclean=True):
+        """Return a list of updated jobs.
 
         Parameters
         ----------
         jobs : list of int, optional
             A list of job numbers, a single job number is also fine
-        this_session_only : bool, optional
-            If True, limit results to those from this class instance only
         preclean : bool
             If True run `clean()` first to remove old jobs
 
         Returns
         -------
-        jobs : list of Job
+        jobs : list of tuple
+            [(jobno, name, command, state, threads,
+              exitcode, runpath, outfile, errfile)]
         """
         if preclean:
             self.clean()
-        q = self.db.query()
+        session = self.db.get_session()
+        # Pyro cannot serialize Job objects, so we get a tuple instead
+        q = session.query(
+            Job.jobno, Job.name, Job.command, Job.state, Job.threads,
+            Job.exitcode, Job.runpath, Job.outfile, Job.errfile
+        )
         if jobs:
             jobs = [jobs] if isinstance(jobs, (int, str)) else jobs
             jobs = [int(j) for j in jobs]
             q = q.filter(Job.jobno.in_(jobs))
-        if this_session_only:
-            q = q.filter(Job.jobno.in_(self.all_jobs))
-        return q.all()
+        res = q.all()
+        session.close()
+        return res
 
     @Pyro4.expose
     def clean(self, days=None):
@@ -636,30 +643,41 @@ class QueueManager(object):
     ##########################################################################
 
     @Pyro4.expose
-    def shutdown(self):
+    def shutdown(self, notify=False):
         """Kill all jobs and terminate."""
-        self.inqueue.put('stop')
+        result = None
+        if not self.inqueue._closed:
+            self.inqueue.put('stop')
+            try:
+                result = self.outqueue.get(STOP_WAIT-5)
+            except Empty:
+                pass
+        killproc = mp.Process(target=self._job_runner.terminate)
+        killproc.start()
+        killproc.join(timeout=2)
         try:
-            result = self.outqueue.get(STOP_WAIT-5)
-        except Empty:
-            result = None
-        try:
-            self._job_runner.terminate()
             self.inqueue.close()
             self.outqueue.close()
         except AttributeError:
             pass
         if _pid_exists(self._job_runner.pid):
             _os.kill(self._job_runner.pid, _signal.SIGKILL)
-        _logme.log('Local queue terminated.', 'info')
+        if _pid_exists(killproc.pid):
+            _os.kill(killproc.pid, _signal.SIGKILL)
+        if notify:
+            _logme.log('Local queue terminated.', 'info')
         if result is None:
-            _logme.log('Could not determine process completeion state',
-                       'warn')
+            if notify:
+                _logme.log('Could not determine process completion state',
+                        'warn')
+            return None
         elif result:
-            _logme.log('All jobs completed', 'debug')
+            if notify:
+                _logme.log('All jobs completed', 'debug')
             return True
         else:
-            _logme.log('Some jobs failed!', 'error', also_write='stderr')
+            if notify:
+                _logme.log('Some jobs failed!', 'error', also_write='stderr')
             return False
 
     ##########################################################################
@@ -851,7 +869,7 @@ def daemonizer():
 def shutdown_queue():
     """Kill the queue."""
     server = get_server()
-    server.shutdown()
+    server.shutdown(notify=True)
     _os.remove(URI_FILE)
 
 
@@ -909,7 +927,7 @@ def normalize_job_id(job_id):
 
 
 def normalize_state(state):
-    """Convert state into standadized (slurm style) state."""
+    """Convert state into standardized (slurm style) state."""
     # Already normalized
     return state
 
@@ -1066,7 +1084,7 @@ def queue_parser(user=None, partition=None):
     ----------
     user : str, NOT IMPLEMENTED
         User name to pass to qstat to filter queue with
-    partiton : str, NOT IMPLEMENTED
+    partition : str, NOT IMPLEMENTED
         Partition to filter the queue with
 
     Yields
@@ -1082,20 +1100,20 @@ def queue_parser(user=None, partition=None):
     cntpernode : int or None
     exit_code : int or Nonw
     """
-    server = get_server()
+    server = QueueManager()
     user = _getpass.getuser()
     host = _socket.gethostname()
     for job in server.get():  # Get all jobs in the database
-        job_id     = job.jobno
+        job_id     = str(job[0])
         array_id   = None
-        name       = job.name
+        name       = job[1]
         userid     = user
         partition  = None
-        state      = job.state
+        state      = job[3]
         nodelist   = [host]
         numnodes   = 1
-        cntpernode = job.threads
-        exit_code  = job.exitcode
+        cntpernode = job[4]
+        exit_code  = job[5]
         yield (job_id, array_id, name, userid, partition, state, nodelist,
                numnodes, cntpernode, exit_code)
 

@@ -379,6 +379,9 @@ class Queue(object):
         """
         lgd = False
         not_found = 0
+        job_id = str(job_id)
+        if array_id is not None:
+            array_id = str(array_id)
         if isinstance(job_id, _QueueJob):
             job_id = job_id.id
         while True:
@@ -396,7 +399,7 @@ class Queue(object):
                                'debug')
                 else:
                     _logme.log('{} not in queue, waiting up to 12s '
-                               .format(job) +
+                               .format(job_id) +
                                'for it to appear', 'info')
                     lgd = True
                 _sleep(self.sleep_len)
@@ -539,6 +542,7 @@ class Queue(object):
              job_state, job_nodelist, job_nodecount,
              job_cpus, job_exitcode] in self.batch_system.queue_parser(
                  self.user, self.partition):
+            job_id = str(job_id)
             job_state = job_state.lower()
             if job_nodecount and job_cpus:
                 job_threads = int(job_nodecount) * int(job_cpus)
@@ -636,7 +640,7 @@ class Queue(object):
 
     def __str__(self):
         """A list of keys."""
-        return str(self.jobs.keys())
+        return str(list(self.jobs.keys()))
 
 
 ##############################################
