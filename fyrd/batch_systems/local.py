@@ -25,7 +25,8 @@ from __future__ import print_function
 import os as _os
 import sys
 import errno as _errno
-import atexit as _atexit
+#  import atexit as _atexit
+import psutil as _psutil
 import signal as _signal
 import socket as _socket    # Used to get hostname
 import getpass as _getpass  # Used to get usernames for queue
@@ -40,7 +41,6 @@ from collections import OrderedDict as _OD
 from queue import Empty
 
 import Pyro4
-import daemonocle as _daemon
 
 from sqlalchemy import create_engine as _create_engine
 from sqlalchemy import Column as _Column
@@ -49,6 +49,7 @@ from sqlalchemy import Integer as _Integer
 
 from sqlalchemy.types import DateTime as _DateTime
 from sqlalchemy.orm import sessionmaker as _sessionmaker
+from sqlalchemy.orm import scoped_session as _scoped_session
 from sqlalchemy.ext.declarative import declarative_base as _base
 
 # Fyrd imports (not necessary for main functionality) no relative imports
@@ -88,7 +89,7 @@ CLEAN_OLDER_THAN = 7
 ############################
 #  Do Not Edit Below Here  #
 ############################
-
+_WE_ARE_A_SERVER = False
 
 # Fyrd file prefix, we don't use file commands so this is empty
 PREFIX = ''
@@ -180,7 +181,9 @@ class LocalQueue(object):
         """Attach to a database, create if does not exist."""
         db_file = db_file if db_file else self.db_file
         self.db_file = _os.path.abspath(db_file)
-        self.engine  = _create_engine('sqlite:///{}'.format(self.db_file))
+        self.engine  = _create_engine(
+            'sqlite:///{}?check_same_thread=False'.format(self.db_file)
+        )
         if not _os.path.isfile(self.db_file):
             self.create_database(confirm=False)
 
@@ -190,7 +193,8 @@ class LocalQueue(object):
 
     def get_session(self):
         """Return session for this database."""
-        Session = _sessionmaker(bind=self.engine)
+        session_factory = _sessionmaker(bind=self.engine)
+        Session = _scoped_session(session_factory)
         return Session()
 
     @property
@@ -343,21 +347,44 @@ def server_running():
     return _pid_exists(pid)
 
 
-def get_server_uri(round_2=False):
-    """Check status and return a server URI."""
-    check_conf()
+def start_server():
+    """Call ourself as a script to start the server."""
+    _logme.log('Starting local queue server with 2 second sleep', 'info')
+    _sleep(2)
+    if _os.path.isfile(PID_FILE):
+        with open(PID_FILE) as fin:
+            pid = int(fin.read().strip())
+        if _pid_exists(pid):
+            _logme.log('Server already running', 'info')
+            return pid
+        else:
+            _os.remove(PID_FILE)
     us = _os.path.realpath(__file__)
-    if not _os.path.isfile(PID_FILE):
-        subprocess.check_call([sys.executable, us, 'server', 'start'])
-    if not _os.path.isfile(PID_FILE):
-        raise OSError('Cannot start server')
+    subprocess.check_call([sys.executable, us, 'server', 'restart'])
     with open(PID_FILE) as fin:
         pid = int(fin.read().strip())
-        if round_2:
-            return pid
+    if not _pid_exists(pid):
+        _logme.log('Cannot start server', 'error')
+
+
+def get_server_uri(start=True):
+    """Check status and return a server URI."""
+    check_conf()
+    if (_WE_ARE_A_SERVER or not start) and not _os.path.isfile(PID_FILE):
+        return False
+    if not _os.path.isfile(PID_FILE):
+        if _os.path.isfile(URI_FILE):
+            _os.remove(URI_FILE)
+        start_server()
+    with open(PID_FILE) as fin:
+        pid = int(fin.read().strip())
     if not _pid_exists(pid):
         _os.remove(PID_FILE)
-        pid = get_server_uri(round_2=True)
+        if _os.path.isfile(URI_FILE):
+            _os.remove(URI_FILE)
+        if _WE_ARE_A_SERVER or not start:
+            return False
+        pid = start_server()
         if not _pid_exists(pid):
             raise OSError('Server not starting')
     # Server running now
@@ -365,9 +392,11 @@ def get_server_uri(round_2=False):
         return fin.read().strip()
 
 
-def get_server():
+def get_server(start=True):
     """Return a client-side QueueManager instance."""
     uri = get_server_uri()
+    if not uri:
+        return None
     return Pyro4.Proxy(uri)
 
 
@@ -457,8 +486,8 @@ class QueueManager(object):
         self.check_runner()
 
         # Properly shutdown if process terminated
-        if register_atexit:
-            _atexit.register(self.shutdown)
+        #  if register_atexit:
+            #  _atexit.register(self.shutdown)
 
 
     ##########################################################################
@@ -643,7 +672,7 @@ class QueueManager(object):
     ##########################################################################
 
     @Pyro4.expose
-    def shutdown(self, notify=False):
+    def shutdown_jobs(self):
         """Kill all jobs and terminate."""
         result = None
         if not self.inqueue._closed:
@@ -652,32 +681,17 @@ class QueueManager(object):
                 result = self.outqueue.get(STOP_WAIT-5)
             except Empty:
                 pass
-        killproc = mp.Process(target=self._job_runner.terminate)
-        killproc.start()
-        killproc.join(timeout=2)
+        _os.kill(self._job_runner.pid, _signal.SIGKILL)
         try:
             self.inqueue.close()
             self.outqueue.close()
         except AttributeError:
             pass
-        if _pid_exists(self._job_runner.pid):
-            _os.kill(self._job_runner.pid, _signal.SIGKILL)
-        if _pid_exists(killproc.pid):
-            _os.kill(killproc.pid, _signal.SIGKILL)
-        if notify:
-            _logme.log('Local queue terminated.', 'info')
         if result is None:
-            if notify:
-                _logme.log('Could not determine process completion state',
-                        'warn')
             return None
         elif result:
-            if notify:
-                _logme.log('All jobs completed', 'debug')
             return True
         else:
-            if notify:
-                _logme.log('Some jobs failed!', 'error', also_write='stderr')
             return False
 
     ##########################################################################
@@ -739,6 +753,8 @@ def job_runner(inqueue, outqueue, max_jobs):
     QueueError
         If invalid argument put into inqueue
     """
+    if not _WE_ARE_A_SERVER:
+        return
     qserver = get_server()
     running = {}    # {jobno: Process}
     queued  = _OD()  # {jobno: {'command': command, 'depends': depends}
@@ -800,7 +816,6 @@ def job_runner(inqueue, outqueue, max_jobs):
             # Completed
             process.join()
             code = process.exitcode
-            print(code)
             state = 'completed' if code == 0 else 'failed'
             qserver.update_job(jobno, state=state, exitcode=code)
             done[jobno] = process
@@ -822,7 +837,6 @@ def job_runner(inqueue, outqueue, max_jobs):
                 if not_done:
                     continue
             if info['threads'] <= available_cores:
-                print(info['command'])
                 assert isinstance(info['command'], str)
                 if info['runpath']:
                     curpath = _os.path.abspath('.')
@@ -856,34 +870,85 @@ def job_runner(inqueue, outqueue, max_jobs):
 
 def daemonizer():
     """Create the server daemon."""
-    daemon = Pyro4.Daemon()
-    uri = daemon.register(QueueManager)
+    with Pyro4.Daemon() as daemon:
+        uri = daemon.register(QueueManager)
 
-    with open(URI_FILE, 'w') as fout:
-        fout.write(str(uri))
+        with open(PID_FILE, 'w') as fout:
+            fout.write(str(_os.getpid()))
+        with open(URI_FILE, 'w') as fout:
+            fout.write(str(uri))
 
-    print("Ready. Object uri =", uri)
-    daemon.requestLoop()
+        print("Ready. Object uri =", uri)
+        daemon.requestLoop()
 
 
 def shutdown_queue():
     """Kill the queue."""
-    server = get_server()
-    server.shutdown(notify=True)
-    _os.remove(URI_FILE)
+    good = True
+    server = get_server(start=False)
+    if server:
+        res = server.shutdown_jobs()
+        _logme.log('Local queue runner terminated.', 'debug')
+        if res is None:
+            _logme.log('Could not determine process completion state',
+                       'warn')
+            good = False
+        elif res:
+            _logme.log('All jobs completed', 'debug')
+        else:
+            _logme.log('Some jobs failed!', 'error', also_write='stderr')
+            good = False
+    else:
+        _logme.log('Server appears already stopped', 'info')
+    if _os.path.isfile(PID_FILE):
+        with open(PID_FILE) as fin:
+            pid = int(fin.read().strip())
+        _os.remove(PID_FILE)
+        _kill_proc_tree(pid, including_parent=True)
+        if _pid_exists(pid):
+            _os.kill(pid, _signal.SIGKILL)
+    if _os.path.isfile(URI_FILE):
+        _os.remove(URI_FILE)
+    _logme.log('Local queue terminated', 'info')
+    return 0 if good else 1
 
 
 def daemon_manager(mode):
     """Manage the daemon process"""
+    global _WE_ARE_A_SERVER
+    _WE_ARE_A_SERVER = True
     check_conf()
-    daemon = _daemon.Daemon(
-        worker=daemonizer,
-        shutdown_callback=shutdown_queue,
-        pidfile=PID_FILE,
-        stop_timeout=STOP_WAIT,
-    )
-    return daemon.do_action(mode)
+    if mode == 'start':
+        if _os.path.isfile(PID_FILE):
+            with open(PID_FILE) as fin:
+                pid = fin.read().strip()
+            if _pid_exists(pid):
+                _logme.log('Local queue already running with pid {0}'
+                           .format(pid), 'info')
+                return 1
+        pid = _os.fork()
+        if pid == 0: # The first child.
+            daemonizer()
+        else:
+            _logme.log('Local queue starting', 'info')
+            return 0
+    if mode == 'stop':
+        if not _os.path.isfile(PID_FILE):
+            _logme.log('Queue does not appear to be running, cannot stop',
+                       'info')
+            return 1
+        return shutdown_queue()
 
+
+def _kill_proc_tree(pid, including_parent=True):
+    """Kill an entire process tree."""
+    parent = _psutil.Process(int(pid))
+    if hasattr(parent, 'get_children'):
+        parent.children = parent.get_children
+    for child in parent.children(recursive=True):
+        child.kill()
+    if including_parent:
+        parent.kill()
 
 ###############################################################################
 #                               Fyrd Functions                                #

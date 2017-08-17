@@ -8,7 +8,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
         LICENSE: MIT License, property of Stanford, use as you wish
         VERSION: 0.6.2a1
         CREATED: 2015-12-11 22:19
-  Last modified: 2017-08-16 16:40
+  Last modified: 2017-08-16 23:48
  =============== ===================================================
 
 Allows simple job submission with *dependency tracking and queue waiting* with
@@ -200,4 +200,3 @@ __all__ = ['Job', 'Queue', 'wait', 'get', 'submit', 'submit_file', 'jobify',
 ##########################
 
 batch_systems.MODE = get_cluster_environment()
-check_queue()

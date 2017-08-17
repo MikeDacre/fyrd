@@ -1063,6 +1063,20 @@ def command_line_parser():
     # Set function
     clean.set_defaults(func=clean_dir)
 
+    ############################
+    #  Local Queue Management  #
+    ############################
+
+    server_mode = modes.add_parser(
+        'local', help='Manage the local queue server'
+    )
+    server_mode.add_argument(
+        'mode', choices={'start', 'stop', 'status', 'restart'},
+        metavar='{start,stop,status,restart}', help='Server command')
+
+    # Set function
+    server_mode.set_defaults(func=manage_daemon)
+
     return parser
 
 

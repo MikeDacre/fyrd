@@ -59,8 +59,9 @@ def get_cluster_environment():
 
     Paths to files can also be set in the config file.
 
-    Returns:
-        tuple: MODE variable ('torque', 'slurm', or 'local')
+    Returns
+    -------
+    MODE : str
     """
     global MODE
     from .. import conf as _conf
@@ -82,16 +83,7 @@ def get_cluster_environment():
         elif _run.which(qsub_cmnd):
             MODE = 'torque'
         else:
-            try:
-                batch = get_batch_system('local')
-                if batch.queue_test(warn=True):
-                    MODE = 'local'
-                else:
-                    MODE = None
-            except Exception as e:
-                _logme.log('Could not import local queue with Exception: {0}'
-                           .format(e), 'warn')
-                MODE = None
+            MODE = 'local'
     else:
         MODE = conf_queue
     if MODE == 'local':
