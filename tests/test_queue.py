@@ -21,7 +21,7 @@ def test_queue_inspection():
     elif fyrd.run.which('qsub'):
         assert fyrd.batch_systems.MODE == 'torque'
     else:
-        assert fyrd.batch_systems.MODE == None
+        assert fyrd.batch_systems.MODE == 'local'
     if queue_type != 'auto':
         fyrd.conf.CONFIG_FILE = cfile
         os.remove('conftest')
@@ -34,7 +34,7 @@ def test_queue_inspection():
                     reason="No valid batch system detected")
 def test_queue_creation():
     """Test Queue object creation."""
-    assert env == 'torque' or env == 'slurm'
+    assert env == 'torque' or env == 'slurm' or env == 'local'
     fyrd.check_queue()
     queue = fyrd.Queue()
     assert queue.qtype == env

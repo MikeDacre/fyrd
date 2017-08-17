@@ -572,7 +572,8 @@ class Job(object):
         self.written = True
         return self
 
-    def submit(self, wait_on_max_queue=True, additional_keywords=None, max_jobs=None):
+    def submit(self, wait_on_max_queue=True, additional_keywords=None,
+               max_jobs=None):
         """Submit this job.
 
         To disable max_queue_len, set it to 0. None will allow override by
@@ -656,12 +657,12 @@ class Job(object):
             else:
                 # This shouldn't happen ever
                 raise _ClusterError('fyrd.queue.Queue.check_dependencies() ' +
-                                    'returned an unrecognized value {}'
+                                    'returned an unrecognized value {0}'
                                     .format(dep_check))
 
         self.id = self.batch.submit(
             self.submission.file_name,
-            dependencies=self.depends,
+            dependencies=depends,
             job=self, args=self.submit_args,
             kwds=additional_keywords
         )

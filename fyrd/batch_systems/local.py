@@ -79,8 +79,7 @@ DATABASE = _os.path.join(RUN_DIR, 'local_queue.db')
 SLEEP_LEN = 0.1
 
 # Time in seconds to wait for QueueManager to terminate
-# Must be at least 10
-STOP_WAIT = 10
+STOP_WAIT = 5
 
 # Number of days to wait before cleaning out old jobs, obtained from the
 # config file, this just sets the default
@@ -242,7 +241,7 @@ class LocalQueue(object):
     @property
     def queued(self):
         """All queued jobs."""
-        return self.get_jobs(state='queued')
+        return self.get_jobs(state='pending')
 
     @property
     def completed(self):
@@ -361,9 +360,13 @@ def start_server():
             _os.remove(PID_FILE)
     us = _os.path.realpath(__file__)
     subprocess.check_call([sys.executable, us, 'server', 'start'])
+    _sleep(1)
     if not server_running():
-        _logme.log('Cannot start server', 'error')
-        return False
+        _logme.log('Cannot start server', 'critical')
+        raise QueueError('Cannot start server')
+    with open(PID_FILE) as fin:
+        pid = int(fin.read().strip())
+    return pid
 
 
 def get_server_uri(start=True):
@@ -385,14 +388,14 @@ def get_server_uri(start=True):
         if _WE_ARE_A_SERVER or not start:
             return False
         pid = start_server()
-        if not _pid_exists(pid):
+        if not pid or not _pid_exists(pid):
             raise OSError('Server not starting')
     # Server running now
     with open(URI_FILE) as fin:
         return fin.read().strip()
 
 
-def get_server(start=True):
+def get_server(start=True, raise_on_error=False):
     """Return a client-side QueueManager instance."""
     uri = get_server_uri(start=start)
     if not uri:
@@ -485,6 +488,21 @@ class QueueManager(object):
         self.daemon = daemon
         self.all_jobs = [i[0] for i in self.db.query(Job.jobno).all()]
         self.check_runner()
+        # Set all existing to disappeared, as they must be dead if we are
+        # starting again
+        session = self.db.get_session()
+        q = session.query(Job).filter(
+            Job.state.in_(['running', 'pending', 'queued'])
+        )
+        bad = []
+        for job in q.all():
+            bad.append(str(job.jobno))
+            job.state = 'killed'
+        session.commit()
+        session.close()
+        if bad:
+            _logme.log('Jobs {0} were marked as killed as we are restarting'
+                       .format(','.join(bad)), 'warn')
 
 
     ##########################################################################
@@ -526,9 +544,10 @@ class QueueManager(object):
         if dependencies:
             for dep in dependencies:
                 dep = int(dep)
-                self.check_jobno(dep)
+                if not self.check_jobno(dep):
+                    raise QueueError('Invalid dependencies')
                 depends.append(dep)
-        job = Job(name=name, command=command, threads=threads, state='queued',
+        job = Job(name=name, command=command, threads=threads, state='pending',
                   submit_time=_dt.now())
         if stdout:
             job.outfile = stdout
@@ -614,7 +633,7 @@ class QueueManager(object):
 
     @Pyro4.expose
     def kill(self, jobs):
-        """Kill running or queued jobs.
+        """Kill running or pending jobs.
 
         Parameters
         ----------
@@ -686,11 +705,16 @@ class QueueManager(object):
         result = None
         if not self.inqueue._closed:
             self.inqueue.put('stop')
+            print('waiting for jobs to terminate gracefully')
             try:
-                result = self.outqueue.get(STOP_WAIT-5)
+                result = self.outqueue.get(STOP_WAIT)
             except Empty:
                 pass
-        _os.kill(self._job_runner.pid, _signal.SIGKILL)
+        print('killing runner')
+        _kill_proc_tree(self._job_runner.pid)
+        if _pid_exists(self._job_runner.pid):
+            _os.kill(self._job_runner.pid, _signal.SIGKILL)
+        print('job_runner killing done')
         try:
             self.inqueue.close()
             self.outqueue.close()
@@ -711,7 +735,8 @@ class QueueManager(object):
     def check_jobno(self, jobno):
         """Check if jobno in self.all_jobs, raise QueueError if not."""
         if jobno not in self.all_jobs:
-            raise QueueError('Job number {0} does not exist.'.format(jobno))
+            _logme.log('Job number {0} does not exist.'.format(jobno), 'error')
+            return False
         return True
 
     def check_runner(self):
@@ -743,9 +768,9 @@ class QueueManager(object):
 
     @Pyro4.expose
     @property
-    def queued(self):
-        """Return all queued job ids from the cache, no new database query."""
-        return [job.id for job in self._cache if job.state == 'queued']
+    def pending(self):
+        """Return all pending job ids from the cache, no new database query."""
+        return [job.id for job in self._cache if job.state == 'pending']
 
     @Pyro4.expose
     @property
@@ -761,8 +786,8 @@ class QueueManager(object):
 
     def __repr__(self):
         """Simple information."""
-        return "LocalQueue<running:{0};queued:{1};completed:{2}".format(
-            self.running, self.queued, self.completed
+        return "LocalQueue<running:{0};pending:{1};completed:{2}".format(
+            self.running, self.pending, self.completed
         )
 
     def __str__(self):
@@ -808,7 +833,7 @@ def job_runner(inqueue, outqueue, max_jobs):
     -------
     bool
         If 'stop' is sent, will return `True` if there are no running or
-        queued jobs and `False` if there are still running or queued jobs.
+        pending jobs and `False` if there are still running or pending jobs.
 
     Raises
     ------
@@ -817,11 +842,20 @@ def job_runner(inqueue, outqueue, max_jobs):
     """
     if not _WE_ARE_A_SERVER:
         return
-    qserver = get_server()
-    running = {}    # {jobno: Process}
+    tries = 5
+    while tries:
+        qserver = get_server()
+        if qserver:
+            break
+        _sleep(1)
+        tries -= 1
+        continue
+    if not qserver:
+        qserver = get_server(raise_on_error=True)
+    running = {}     # {jobno: Process}
     queued  = _OD()  # {jobno: {'command': command, 'depends': depends}
-    done    = {}    # {jobno: Process}
-    jobs    = []    # [jobno, ...]
+    done    = {}     # {jobno: Process}
+    jobs    = []     # [jobno, ...]
     put_core_info = False
     while True:
         # Get everything from the input queue first, queue everything
@@ -830,17 +864,23 @@ def job_runner(inqueue, outqueue, max_jobs):
                 break
             info = inqueue.get()  # Will block if input queue empty
             if info == 'stop' or info[0] == 'stop':
+                good = True
+                pids = []
                 if running:
+                    good = False
                     for jobno, job in running.items():
                         qserver.update_job(jobno, state='killed')
+                        pids.append(job.pid)
                         job.terminate()
-                    outqueue.put(False)
-                    return False
                 if queued:
-                    outqueue.put(False)
-                    return False
-                outqueue.put(True)
-                return True
+                    good = False
+                    for jobno, job in queued.items():
+                        qserver.update_job(jobno, state='killed')
+                for pid in pids:
+                    if _pid_exists(pid):
+                        _os.kill(pid, _signal.SIGKILL)
+                outqueue.put(good)
+                return good
             if info == 'available_cores' or info[0] == 'available_cores':
                 put_core_info = True
                 continue
@@ -911,6 +951,7 @@ def job_runner(inqueue, outqueue, max_jobs):
                         'stderr': info['stderr'],
                     }
                 )
+                p.daemon = True
                 p.start()
                 running[jobno] = p
                 available_cores -= info['threads']

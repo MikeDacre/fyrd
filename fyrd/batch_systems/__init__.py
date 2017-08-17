@@ -27,7 +27,7 @@ MODE = None
 GOOD_STATES      = ['complete', 'completed', 'special_exit']
 ACTIVE_STATES    = ['configuring', 'completing', 'pending',
                     'running']
-BAD_STATES       = ['boot_fail', 'cancelled', 'failed',
+BAD_STATES       = ['boot_fail', 'cancelled', 'failed', 'killed',
                     'node_fail', 'timeout', 'disappeared']
 UNCERTAIN_STATES = ['hold', 'preempted', 'stopped',
                     'suspended']

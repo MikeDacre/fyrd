@@ -196,9 +196,12 @@ class Queue(object):
             if state in ACTIVE_STATES:
                 return 'active'
             elif state in GOOD_STATES:
-                return 'good'
+                continue
             elif state in BAD_STATES or state in UNCERTAIN_STATES:
                 return 'bad'
+            else:
+                raise _ClusterError('Invalid state {0}'.format(state))
+        return 'good'
 
     def wait(self, jobs, return_disp=False):
         """Block until all jobs in jobs are complete.
