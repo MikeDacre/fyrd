@@ -173,6 +173,38 @@ default profile is used. It is also important to note that `.out` will contain
 the same contents as `.stdout` for all script submissions, but for function
 submissions, `.out` contains the function output, not STDOUT.
 
+Note, to submit simple functions, I recommend that you use the `jobify`
+decorator instead:
+
+.. code:: python
+
+   >>> import fyrd
+   >>> @fyrd.jobify(name='test_job', mem='1GB')
+   ... def test(string, iterations=4):
+   ...     """This does basically nothing!"""
+   ...     outstring = ""
+   ...     for i in range(iterations):
+   ...         outstring += "Version {0}: {1}".format(i, string)
+   ...     return outstring
+   ... 
+   >>> test?
+   Signature: test(*args, **kwargs)
+   Docstring:
+   This is a fyrd.job.Job decorated function.
+
+   When you call it it will return a Job object from which you can get
+   the results with the `.get()` method.
+
+   Original Docstring:
+
+   This does basically nothing!
+   File:      ~/code/fyrd/fyrd/helpers.py
+   Type:      function
+   >>> j = test('hi')
+   >>> j.get()
+   'Version 0: hiVersion 1: hiVersion 2: hiVersion 3: hi'
+
+
 Command Line Tools
 ------------------
 

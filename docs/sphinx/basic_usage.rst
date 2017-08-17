@@ -70,7 +70,7 @@ package. For example:
    outs = []
    if __name__ == '__main__':
        for i in range(80):
-           outs.append(fyrd.submit(my_function, (i,), {'power': 2},
+           outs.append(fyrd.submit(raise_me, (i,), {'power': 4},
                                    mem='10MB', time='00:00:30'))
        final_sum = 0
        for i in outs:
@@ -106,6 +106,71 @@ it won't be good.
 
 This isn't true when submitting from an interactive session such as ipython
 or jupyter.
+
+Using the Jobify Decorator
+--------------------------
+
+Function submission can be made much easier by using the `jobify` decorator.
+
+Using the example above with a decorator, we can do this:
+ 
+.. code:: python
+
+   import fyrd
+   @fyrd.jobify(mem='10MB', time='00:00:30')
+   def raise_me(something, power=2):
+       return something**power
+   outs = []
+   if __name__ == '__main__':
+       for i in range(80):
+           outs.append(raise_me(i, power=4))
+       final_sum = 0
+       for i in outs:
+           final_sum += i.get()
+       print(final_sum)
+  
+Here is a full, if silly, example with outputs:
+
+.. code:: python
+
+   >>> import fyrd
+   >>> @fyrd.jobify(name='test_job', mem='1GB')
+   ... def test(string, iterations=4):
+   ...     """This does basically nothing!"""
+   ...     outstring = ""
+   ...     for i in range(iterations):
+   ...         outstring += "Version {0}: {1}".format(i, string)
+   ...     return outstring
+   ... 
+   >>> test?
+   Signature: test(*args, **kwargs)
+   Docstring:
+   This is a fyrd.job.Job decorated function.
+
+   When you call it it will return a Job object from which you can get
+   the results with the `.get()` method.
+
+   Original Docstring:
+
+   This does basically nothing!
+   File:      ~/code/fyrd/fyrd/helpers.py
+   Type:      function
+   >>> j = test('hi')
+   >>> j.get()
+   'Version 0: hiVersion 1: hiVersion 2: hiVersion 3: hi'
+
+You can see that the decorator also maintains the original docstring if it is
+implemented.
+
+By default, the returned job will be submitted already, but you can override
+that behavior:
+
+.. code:: python
+
+   import fyrd
+   @fyrd.jobify(mem='10MB', time='00:00:30', submit=False)
+   def raise_me(something, power=2):
+       return something**power
 
 File Submission
 ---------------

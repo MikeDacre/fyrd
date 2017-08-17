@@ -8,7 +8,7 @@ Submit jobs to slurm or torque, or with multiprocessing.
         LICENSE: MIT License, property of Stanford, use as you wish
         VERSION: 0.6.2a1
         CREATED: 2015-12-11 22:19
-  Last modified: 2017-08-11 16:33
+  Last modified: 2017-08-16 16:40
  =============== ===================================================
 
 Allows simple job submission with *dependency tracking and queue waiting* with
@@ -181,6 +181,8 @@ from .basic import clean_dir
 from .basic import wait
 from .basic import get
 
+from .helpers import jobify
+
 from .conf import set_profile
 from .conf import get_profile
 from .conf import get_profiles
@@ -189,7 +191,7 @@ option_help = batch_systems.options.option_help
 
 #  import fyrd.batch_system as batch_system
 
-__all__ = ['Job', 'Queue', 'wait', 'get', 'submit', 'submit_file',
+__all__ = ['Job', 'Queue', 'wait', 'get', 'submit', 'submit_file', 'jobify',
            'make_job_file', 'clean', 'clean_dir', 'check_queue', 'option_help',
            'set_profile', 'get_profile', 'get_profiles', 'conf', 'helpers']
 

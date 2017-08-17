@@ -35,7 +35,104 @@ try:
 except ImportError:
     _logme.log('Could not import numpy and pandas for helpers', 'debug')
 
-__all__ = ['parapply', 'parapply_summary', 'splitrun']
+__all__ = ['jobify', 'parapply', 'parapply_summary', 'splitrun']
+
+###############################################################################
+#                                 Decorators                                  #
+###############################################################################
+
+
+def jobify(name=None, profile=None, qtype=None, submit=True, **kwds):
+    """Decorator to make any function a job.
+
+    Will make any function return a Job object that will execute the function
+    on the cluster.
+
+    If `submit` is `True`, the job will be submitted when it is returned.
+
+    Usage:
+
+    .. code:: python
+        @fyrd.jobify(name='my_job', profile='small', mem='8GB',
+                     time='00:10:00', imports=['from time import sleep'])
+        def do_something(file_path, iteration_count=24):
+            for i in range(iteration_count):
+                print(file_path + i)
+                sleep(1)
+            return file_path
+
+        job = do_something('my_file.txt')
+        out = job.get()
+
+    Parameters
+    ----------
+    name : str, optional
+        Optional name of the job. If not defined, guessed. If a job of the same
+        name is already queued, an integer job number (not the queue number)
+        will be added, ie.  <name>.1
+    qtype : str, optional
+        Override the default queue type
+    profile : str, optional
+        The name of a profile saved in the conf
+    submit : bool, optional
+        Submit the Job before returning it
+    kwds
+        *All other keywords are parsed into cluster keywords by the options
+        system.* For available keywords see `fyrd.option_help()`
+
+    Returns
+    -------
+    fyrd.job.Job
+        A Job class initialized with the decorated function.
+
+    Examples
+    --------
+
+    >>> import fyrd
+    >>> @fyrd.jobify(name='test_job', mem='1GB')
+    ... def test(string, iterations=4):
+    ...     \"\"\"This does basically nothing!\"\"\"
+    ...     outstring = ""
+    ...     for i in range(iterations):
+    ...         outstring += "Version {0}: {1}".format(i, string)
+    ...     return outstring
+    >>> j = test('hi')
+    >>> j.get()
+    'Version 0: hiVersion 1: hiVersion 2: hiVersion 3: hiVersion 4: hi'
+    """
+    def deco(func):
+        """This will be the actual decorator for the function."""
+        # Munge the job docstring to preserve function documentation
+        fdoc = func.__doc__
+        if fdoc:
+            fdoc = "\nOriginal Docstring:\n\n{0}".format(fdoc)
+        else:
+            fdoc = ""
+        def wrapper(*args, **kwargs):
+            """This will convert the function into a Job object."""
+            job = _Job(func, args=args, kwargs=kwargs, name=name, qtype=qtype,
+                       profile=profile, **kwds)
+            jdoc = job.__doc__
+            if jdoc:
+                jdoc = "\n\nJob documentation:\n\n{0}".format(jdoc)
+            else:
+                jdoc = ""
+            job.__doc__ = (
+                "This is a fyrd.job.Job decorated function, " +
+                "to get results run `.get()`.\n" + fdoc + jdoc
+            )
+            if submit:
+                job.submit()
+            return job
+        wrapper.__doc__ = (
+            "This is a fyrd.job.Job decorated function.\n" +
+            "\nWhen you call it it will return a Job object from " +
+            "which you can get\nthe results with the `.get()` method.\n" +
+            fdoc
+        )
+        return wrapper
+    return deco
+
 
 ###############################################################################
 #                                  parapply                                   #

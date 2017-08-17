@@ -299,6 +299,8 @@ The functions in `fyrd.basic <#fyrd.basic>`_ below are different in that they
 provide simple job submission and management, while the functions in
 `fyrd.helpers` allow the submission of many jobs.
 
+.. autofunction:: fyrd.helpers.jobify
+
 .. autofunction:: fyrd.helpers.parapply
 
 .. autofunction:: fyrd.helpers.parapply_summary

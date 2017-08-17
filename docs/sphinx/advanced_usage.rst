@@ -127,6 +127,39 @@ The helpers are all high level functions that are not required for the library
 but make difficult jobs easy to assist in the goal of trivially easy cluster
 submission.
 
+Decorator
+.........
+
+The `fyrd.helpers.jobify` (also imported as `fyrd.jobify`) allows you to decorate
+any function to make it submit to the cluster.
+ 
+For example:
+
+.. code:: python
+
+   import fyrd
+   @fyrd.jobify(name='test_job', mem='1GB')
+   def test(string, iterations=4):
+       """This does basically nothing!"""
+       outstring = ""
+       for i in range(iterations):
+           outstring += "Version {0}: {1}".format(i, string)
+       return outstring
+
+The decorator also maintains the original docstring if it is implemented.
+
+By default, the returned job will be submitted already, but you can override
+that behavior:
+
+.. code:: python
+
+   import fyrd
+   @fyrd.jobify(mem='10MB', time='00:00:30', submit=False)
+   def raise_me(something, power=2):
+       return something**power
+
+For more information, see the `basic usage info </basic_usage.html>`_.
+
 Pandas
 ......
 
