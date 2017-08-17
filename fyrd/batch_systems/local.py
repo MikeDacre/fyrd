@@ -360,11 +360,10 @@ def start_server():
         else:
             _os.remove(PID_FILE)
     us = _os.path.realpath(__file__)
-    subprocess.check_call([sys.executable, us, 'server', 'restart'])
-    with open(PID_FILE) as fin:
-        pid = int(fin.read().strip())
-    if not _pid_exists(pid):
+    subprocess.check_call([sys.executable, us, 'server', 'start'])
+    if not server_running():
         _logme.log('Cannot start server', 'error')
+        return False
 
 
 def get_server_uri(start=True):
@@ -375,7 +374,8 @@ def get_server_uri(start=True):
     if not _os.path.isfile(PID_FILE):
         if _os.path.isfile(URI_FILE):
             _os.remove(URI_FILE)
-        start_server()
+        if not start_server():
+            return False
     with open(PID_FILE) as fin:
         pid = int(fin.read().strip())
     if not _pid_exists(pid):
@@ -394,7 +394,7 @@ def get_server_uri(start=True):
 
 def get_server(start=True):
     """Return a client-side QueueManager instance."""
-    uri = get_server_uri()
+    uri = get_server_uri(start=start)
     if not uri:
         return None
     return Pyro4.Proxy(uri)
@@ -469,7 +469,7 @@ class QueueManager(object):
 
     _job_runner = None
 
-    def __init__(self, max_jobs=None, register_atexit=False):
+    def __init__(self, daemon, max_jobs=None):
         """Create the QueueManager
 
         Paramenters
@@ -482,12 +482,9 @@ class QueueManager(object):
         if self.max_jobs > mp.cpu_count():
             self.max_jobs = mp.cpu_count()-1
         self.db = LocalQueue(DATABASE)
+        self.daemon = daemon
         self.all_jobs = [i[0] for i in self.db.query(Job.jobno).all()]
         self.check_runner()
-
-        # Properly shutdown if process terminated
-        #  if register_atexit:
-            #  _atexit.register(self.shutdown)
 
 
     ##########################################################################
@@ -667,6 +664,18 @@ class QueueManager(object):
         session.commit()
         session.close()
 
+    def _housekeeping(self):
+        """Run by Pyro4, update all_jobs, db cache, and clean up."""
+        self.clean()
+        all   = []
+        cache = {}
+        session = self.db.get_session()
+        for job in session.query(Job).all():
+            all.append(job.id)
+            cache[job.id] = job
+        self.all_jobs = all
+        self._cache   = cache
+
     ##########################################################################
     #                                Shutdown                                #
     ##########################################################################
@@ -687,6 +696,7 @@ class QueueManager(object):
             self.outqueue.close()
         except AttributeError:
             pass
+        self.daemon.shutdown()
         if result is None:
             return None
         elif result:
@@ -720,6 +730,58 @@ class QueueManager(object):
         """A job runner process."""
         self.check_runner()
         return self._job_runner
+
+    ##########################################################################
+    #                           Interaction Stuff                            #
+    ##########################################################################
+
+    @Pyro4.expose
+    @property
+    def running(self):
+        """Return all running job ids from the cache, no new database query."""
+        return [job.id for job in self._cache if job.state == 'running']
+
+    @Pyro4.expose
+    @property
+    def queued(self):
+        """Return all queued job ids from the cache, no new database query."""
+        return [job.id for job in self._cache if job.state == 'queued']
+
+    @Pyro4.expose
+    @property
+    def completed(self):
+        """Return all completed job ids from the cache, no new database query."""
+        return [job.id for job in self._cache if job.state == 'completed']
+
+    @Pyro4.expose
+    @property
+    def failed(self):
+        """Return all failed job ids from the cache, no new database query."""
+        return [job.id for job in self._cache if job.state == 'failed']
+
+    def __repr__(self):
+        """Simple information."""
+        return "LocalQueue<running:{0};queued:{1};completed:{2}".format(
+            self.running, self.queued, self.completed
+        )
+
+    def __str__(self):
+        """Simple information."""
+        return self.__repr__()
+
+    @Pyro4.expose
+    def __len__(self):
+        """Length from the cache, no new database query."""
+        return len(self.all_jobs)
+
+    @Pyro4.expose
+    def __getitem__(self, key):
+        """Get a job by id."""
+        job = self._cache[key]
+        return (
+            job.jobno, job.name, job.command, job.state, job.threads,
+            job.exitcode, job.runpath, job.outfile, job.errfile
+        )
 
 
 def job_runner(inqueue, outqueue, max_jobs):
@@ -871,7 +933,9 @@ def job_runner(inqueue, outqueue, max_jobs):
 def daemonizer():
     """Create the server daemon."""
     with Pyro4.Daemon() as daemon:
-        uri = daemon.register(QueueManager)
+        queue_manager = QueueManager(daemon)
+        uri = daemon.register(queue_manager, objectId="QueueManager")
+        #  daemon.housekeeping = queue_manager._housekeeping
 
         with open(PID_FILE, 'w') as fout:
             fout.write(str(_os.getpid()))
@@ -977,6 +1041,7 @@ def queue_test(warn=True):
         batch_system = get_server()
     except:
         _logme.log('Cannot get local queue sever address', log_level)
+        raise
         return False
     return True
 
@@ -1165,7 +1230,7 @@ def queue_parser(user=None, partition=None):
     cntpernode : int or None
     exit_code : int or Nonw
     """
-    server = QueueManager()
+    server = get_server(start=True)
     user = _getpass.getuser()
     host = _socket.gethostname()
     for job in server.get():  # Get all jobs in the database
