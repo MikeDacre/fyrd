@@ -52,16 +52,15 @@ _opt = _batch.options
 #                            Configurable Defaults                            #
 ###############################################################################
 
-# Config File
-CONFIG_PATH  = _os.path.join(_os.environ['HOME'], '.fyrd')
 """
 Where configuration files will be kept
 """
+CONFIG_PATH  = _os.path.join(_os.environ['HOME'], '.fyrd')
 
-CONFIG_FILE  = _os.path.join(CONFIG_PATH, 'config.txt')
 """
 Where the main config will be kept.
 """
+CONFIG_FILE  = _os.path.join(CONFIG_PATH, 'config.txt')
 
 # Set default options
 DEFAULTS = {
@@ -74,7 +73,9 @@ DEFAULTS = {
         'sbatch':           None, # Path to sbatch command
         'qsub':             None, # Path to qsub command
         'progressbar':      True,
-        'local_clean_days': 7,
+        'queue_maximums':   _os.path.join(
+            CONFIG_PATH, 'queue_maximums.json'
+        ),
     },
     'jobs': {
         'clean_files':     True,
@@ -89,6 +90,11 @@ DEFAULTS = {
             CONFIG_PATH, 'profiles.txt'
         )
     },
+    'local': {
+        'server_uri':      None,
+        'max_jobs':        None,
+        'local_clean_days': 7,
+    }
 }
 
 CONF_HELP = {
@@ -134,9 +140,11 @@ CONF_HELP = {
             sbatch is not in the PATH.
         progressbar : bool
             Show a progress bar when waiting for jobs
-        local_clean_days : int
-            The number of days to keep jobs in the local queue. Any jobs older
-            than this will be purged from the database
+        queue_maximums : str
+            Path to a JSON file that sets the queue maximums, the file must
+            be in the format {'<queue>': {'max_<keyword>': val}}, where
+            <queue> is a batch system partition/queue and <keyword> is a valid
+            keyword argument (e.g. cores, mem, time, etc)
         """
     ),
     'jobs': _dnt(
@@ -174,6 +182,26 @@ CONF_HELP = {
             the config file where profiles are defined.
         """
     ),
+    'local': _dnt(
+        """
+        [local]
+        Set options just for the local queue batch system.
+
+        Options
+        -------
+        server_uri : str, optional
+            Hardcode the server_uri for the local queue server, this allows
+            you to set the server as a remote machine if you want, but you
+            must have the remote drives mounted in that case, these mounted
+            drives need only be in the 'scriptpath' and 'outpath' directories.
+        max_jobs : int, optional
+            Set the maximum locally running jobs, defaults to all available
+            cores minus 1.
+        local_clean_days : int, optional
+            The number of days to keep jobs in the local queue. Any jobs older
+            than this will be purged from the database
+        """
+    )
 }
 
 # Pre-defined profiles, 'DEFAULT' is required.

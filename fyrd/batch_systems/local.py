@@ -26,7 +26,6 @@ import os as _os
 import sys
 import errno as _errno
 #  import atexit as _atexit
-import psutil as _psutil
 import signal as _signal
 import socket as _socket    # Used to get hostname
 import getpass as _getpass  # Used to get usernames for queue
@@ -42,6 +41,8 @@ try:
     from queue import Empty
 except ImportError:  # python2
     from Queue import Empty
+
+import psutil as _psutil
 
 import Pyro4
 
@@ -87,6 +88,10 @@ STOP_WAIT = 5
 # Number of days to wait before cleaning out old jobs, obtained from the
 # config file, this just sets the default
 CLEAN_OLDER_THAN = 7
+
+# Default max jobs, can be overriden by config file or QueueManager init
+MAX_JOBS = mp.cpu_count()-1
+MAX_JOBS = MAX_JOBS if MAX_JOBS >= 0 else 1
 
 ############################
 #  Do Not Edit Below Here  #
@@ -401,7 +406,7 @@ def get_server(start=True, raise_on_error=False):
     uri = get_server_uri(start=start)
     if not uri:
         if raise_on_error:
-            raise QueueError('Cannot get the server.')
+            raise QueueError('Cannot get server')
         return None
     return Pyro4.Proxy(uri)
 
@@ -484,7 +489,10 @@ class QueueManager(object):
             The maximum number of jobs to run at one time. Defaults to current
             CPUs - 1
         """
-        self.max_jobs = max_jobs if max_jobs else mp.cpu_count()-1
+        if not max_jobs:
+            cmax = _conf.get_option('local', 'max_jobs')
+            max_jobs = cmax if cmax else MAX_JOBS
+        self.max_jobs = max_jobs
         if self.max_jobs > mp.cpu_count():
             self.max_jobs = mp.cpu_count()-1
         self.db = LocalQueue(DATABASE)
@@ -621,7 +629,7 @@ class QueueManager(object):
             clean_days = int(days)
         else:
             clean_days = _conf.get_option(
-                'queue', 'local_clean_days',CLEAN_OLDER_THAN
+                'local', 'local_clean_days',CLEAN_OLDER_THAN
             )
         current_time = _dt.now()
         cutoff = current_time - _td(days=clean_days)
@@ -689,13 +697,13 @@ class QueueManager(object):
     #  def _housekeeping(self):
         #  """Run by Pyro4, update all_jobs, db cache, and clean up."""
         #  self.clean()
-        #  all   = []
-        #  cache = {}
+        #  all_jobs = []
+        #  cache    = {}
         #  session = self.db.get_session()
         #  for job in session.query(Job).all():
-            #  all.append(job.id)
+            #  all_jobs.append(job.id)
             #  cache[job.id] = job
-        #  self.all_jobs = all
+        #  self.all_jobs = all_jobs
         #  self._cache   = cache
 
     ##########################################################################
@@ -728,8 +736,7 @@ class QueueManager(object):
             return None
         elif result:
             return True
-        else:
-            return False
+        return False
 
     ##########################################################################
     #                             Error Checking                             #
@@ -974,11 +981,79 @@ def job_runner(inqueue, outqueue, max_jobs):
 ###############################################################################
 
 
+def get_uri():
+    """Get the URI from the config or file.
+
+    Tests if URI is active before returning.
+
+    Returns
+    -------
+    uri : str or None
+        If file does not exist or URI is inactive, returns None and deletes
+        URI_FILE, else returns the URI as a string.
+    """
+    curi = _conf.get_option('local', 'server_uri')
+    if curi:
+        t = _test_uri(curi)
+        if t == 'connected':
+            return curi
+        if t == 'invalid':
+            _conf.set_option('local', 'server_uri', None)
+        return None
+    if not _os.path.isfile(URI_FILE):
+        return None
+    with open(URI_FILE) as fin:
+        uri = fin.read().strip()
+    t = _test_uri(uri)
+    if t == 'connected':
+        return uri
+    _os.remove(URI_FILE)
+    return None
+
+
+def _test_uri(uri):
+    """Test if a URI refers to an accessible Pyro4 object."""
+    try:
+        p = Pyro4.Proxy(uri)
+    except Pyro4.errors.PyroError:
+        _logme.log('URI {0} in an invalid URI', 'error')
+        return 'invalid'
+    try:
+        if p._pyroBind():
+            out = 'connected'
+        elif p.available_cores:
+            out = 'connected'
+        else:
+            out = 'disconnect'
+        if out == 'connected':
+            p._pyroRelease()
+        return out
+    except Pyro4.errors.CommunicationError:
+        _logme.log('URI {0} is not connected', 'warn')
+        return 'disconnect'
+
+
 def daemonizer():
     """Create the server daemon."""
-    with Pyro4.Daemon() as daemon:
+    # Get pre-configured URI if available
+    curi = _conf.get_option('local', 'server_uri')
+    utest = _test_uri(curi) if curi else None
+    # Test if there is already another daemon running
+    crun = True if utest == 'connected' else False
+    if crun or server_running():
+        raise QueueError('Daemon already running, cannot start')
+    # Set port and host if present in URI
+    if utest == 'disconnect':
+        uri = Pyro4.URI(curi)
+        args = {'host': uri.host, 'port': uri.port}
+        objId = uri.object
+    else:
+        args = {}
+        objId = "QueueManager"
+    # Create the daemon
+    with Pyro4.Daemon(**args) as daemon:
         queue_manager = QueueManager(daemon)
-        uri = daemon.register(queue_manager, objectId="QueueManager")
+        uri = daemon.register(queue_manager, objectId=objId)
         #  daemon.housekeeping = queue_manager._housekeeping
 
         with open(PID_FILE, 'w') as fout:
