@@ -28,7 +28,7 @@ Organization   Stanford University
 License        MIT License, use as you wish
 Version        {version}
 ============   ======================================
-""".format(doc=__doc__, version=fyrd.version)
+""".format(doc=__doc__, version=fyrd.__version__)
 
 RUN_HELP = """\
 Run a shell script on the cluster and optionally wait for completion.
@@ -644,6 +644,16 @@ def clean_dir(args):
         sys.stdout.write('\n\t'.join(files))
         sys.stdout.write('\n')
 
+############################
+#  Local Queue Management  #
+############################
+
+
+def manage_daemon(args):
+    """Start, stop, or restart the local queue daemon."""
+    from fyrd.batch_systems import local
+    return local.daemon_manager(args.mode)
+
 
 ######################
 #  Helper Functions  #
@@ -779,7 +789,7 @@ def command_line_parser():
     # Subcommands
     modes = parser.add_subparsers(
         dest='modes',
-        metavar='{run,submit,wait,queue,conf,prof,keywords,clean}'
+        metavar='{run,submit,wait,queue,conf,prof,keywords,clean,local}'
     )
 
     #################################
@@ -1068,7 +1078,7 @@ def command_line_parser():
     ############################
 
     server_mode = modes.add_parser(
-        'local', help='Manage the local queue server'
+        'local', aliases=['server'], help='Manage the local queue server'
     )
     server_mode.add_argument(
         'mode', choices={'start', 'stop', 'status', 'restart'},

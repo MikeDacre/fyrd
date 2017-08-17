@@ -38,7 +38,10 @@ from datetime import datetime as _dt
 from datetime import timedelta as _td
 from collections import OrderedDict as _OD
 
-from queue import Empty
+try:
+    from queue import Empty
+except ImportError:  # python2
+    from Queue import Empty
 
 import Pyro4
 
@@ -347,19 +350,17 @@ def server_running():
 
 
 def start_server():
-    """Call ourself as a script to start the server."""
+    """Start the server as a separate thread.
+
+    Returns
+    -------
+    pid : int
+    """
     _logme.log('Starting local queue server with 2 second sleep', 'info')
     _sleep(2)
-    if _os.path.isfile(PID_FILE):
-        with open(PID_FILE) as fin:
-            pid = int(fin.read().strip())
-        if _pid_exists(pid):
-            _logme.log('Server already running', 'info')
-            return pid
-        else:
-            _os.remove(PID_FILE)
-    us = _os.path.realpath(__file__)
-    subprocess.check_call([sys.executable, us, 'server', 'start'])
+    #  subprocess.check_call([sys.executable, us, 'start'])
+    if not server_running():
+        daemon_manager('start')
     _sleep(1)
     if not server_running():
         _logme.log('Cannot start server', 'critical')
@@ -399,6 +400,8 @@ def get_server(start=True, raise_on_error=False):
     """Return a client-side QueueManager instance."""
     uri = get_server_uri(start=start)
     if not uri:
+        if raise_on_error:
+            raise QueueError('Cannot get the server.')
         return None
     return Pyro4.Proxy(uri)
 
@@ -683,17 +686,17 @@ class QueueManager(object):
         session.commit()
         session.close()
 
-    def _housekeeping(self):
-        """Run by Pyro4, update all_jobs, db cache, and clean up."""
-        self.clean()
-        all   = []
-        cache = {}
-        session = self.db.get_session()
-        for job in session.query(Job).all():
-            all.append(job.id)
-            cache[job.id] = job
-        self.all_jobs = all
-        self._cache   = cache
+    #  def _housekeeping(self):
+        #  """Run by Pyro4, update all_jobs, db cache, and clean up."""
+        #  self.clean()
+        #  all   = []
+        #  cache = {}
+        #  session = self.db.get_session()
+        #  for job in session.query(Job).all():
+            #  all.append(job.id)
+            #  cache[job.id] = job
+        #  self.all_jobs = all
+        #  self._cache   = cache
 
     ##########################################################################
     #                                Shutdown                                #
@@ -760,53 +763,53 @@ class QueueManager(object):
     #                           Interaction Stuff                            #
     ##########################################################################
 
-    @Pyro4.expose
-    @property
-    def running(self):
-        """Return all running job ids from the cache, no new database query."""
-        return [job.id for job in self._cache if job.state == 'running']
+    #  @Pyro4.expose
+    #  @property
+    #  def running(self):
+        #  """Return all running job ids from the cache, no new database query."""
+        #  return [job.id for job in self._cache if job.state == 'running']
 
-    @Pyro4.expose
-    @property
-    def pending(self):
-        """Return all pending job ids from the cache, no new database query."""
-        return [job.id for job in self._cache if job.state == 'pending']
+    #  @Pyro4.expose
+    #  @property
+    #  def pending(self):
+        #  """Return all pending job ids from the cache, no new database query."""
+        #  return [job.id for job in self._cache if job.state == 'pending']
 
-    @Pyro4.expose
-    @property
-    def completed(self):
-        """Return all completed job ids from the cache, no new database query."""
-        return [job.id for job in self._cache if job.state == 'completed']
+    #  @Pyro4.expose
+    #  @property
+    #  def completed(self):
+        #  """Return all completed job ids from the cache, no new database query."""
+        #  return [job.id for job in self._cache if job.state == 'completed']
 
-    @Pyro4.expose
-    @property
-    def failed(self):
-        """Return all failed job ids from the cache, no new database query."""
-        return [job.id for job in self._cache if job.state == 'failed']
+    #  @Pyro4.expose
+    #  @property
+    #  def failed(self):
+        #  """Return all failed job ids from the cache, no new database query."""
+        #  return [job.id for job in self._cache if job.state == 'failed']
 
-    def __repr__(self):
-        """Simple information."""
-        return "LocalQueue<running:{0};pending:{1};completed:{2}".format(
-            self.running, self.pending, self.completed
-        )
+    #  def __repr__(self):
+        #  """Simple information."""
+        #  return "LocalQueue<running:{0};pending:{1};completed:{2}".format(
+            #  self.running, self.pending, self.completed
+        #  )
 
-    def __str__(self):
-        """Simple information."""
-        return self.__repr__()
+    #  def __str__(self):
+        #  """Simple information."""
+        #  return self.__repr__()
 
     @Pyro4.expose
     def __len__(self):
         """Length from the cache, no new database query."""
         return len(self.all_jobs)
 
-    @Pyro4.expose
-    def __getitem__(self, key):
-        """Get a job by id."""
-        job = self._cache[key]
-        return (
-            job.jobno, job.name, job.command, job.state, job.threads,
-            job.exitcode, job.runpath, job.outfile, job.errfile
-        )
+    #  @Pyro4.expose
+    #  def __getitem__(self, key):
+        #  """Get a job by id."""
+        #  job = self._cache[key]
+        #  return (
+            #  job.jobno, job.name, job.command, job.state, job.threads,
+            #  job.exitcode, job.runpath, job.outfile, job.errfile
+        #  )
 
 
 def job_runner(inqueue, outqueue, max_jobs):
@@ -1019,30 +1022,64 @@ def shutdown_queue():
 
 
 def daemon_manager(mode):
-    """Manage the daemon process"""
+    """Manage the daemon process
+
+    Parameters
+    ----------
+    mode : {'start', 'stop', 'restart', 'status'}
+
+    Returns
+    -------
+    status : int
+        0 on success, 1 on failure
+    """
     global _WE_ARE_A_SERVER
     _WE_ARE_A_SERVER = True
     check_conf()
     if mode == 'start':
-        if _os.path.isfile(PID_FILE):
-            with open(PID_FILE) as fin:
-                pid = fin.read().strip()
-            if _pid_exists(pid):
-                _logme.log('Local queue already running with pid {0}'
-                           .format(pid), 'info')
-                return 1
-        pid = _os.fork()
-        if pid == 0: # The first child.
-            daemonizer()
+        return _start()
+    elif mode == 'stop':
+        return _stop()
+    elif mode == 'restart':
+        _stop()
+        return _start()
+    elif mode == 'status':
+        running = server_running()
+        if running:
+            _logme.log('Local queue server is running', 'info',
+                       also_write='stderr')
         else:
-            _logme.log('Local queue starting', 'info')
-            return 0
-    if mode == 'stop':
-        if not _os.path.isfile(PID_FILE):
-            _logme.log('Queue does not appear to be running, cannot stop',
-                       'info')
+            _logme.log('Local queue server is not running', 'info',
+                       also_write='stderr')
+        return 0 if running else 1
+    _logme.log('Invalid mode {0}'.format(mode), 'error')
+    return 1
+
+def _start():
+    """Start the daemon process as a fork."""
+    if _os.path.isfile(PID_FILE):
+        with open(PID_FILE) as fin:
+            pid = fin.read().strip()
+        if _pid_exists(pid):
+            _logme.log('Local queue already running with pid {0}'
+                        .format(pid), 'info')
             return 1
-        return shutdown_queue()
+        _os.remove(PID_FILE)
+    pid = _os.fork()
+    if pid == 0: # The first child.
+        daemonizer()
+    else:
+        _logme.log('Local queue starting', 'info')
+        return 0
+
+
+def _stop():
+    """Stop the daemon process."""
+    if not _os.path.isfile(PID_FILE):
+        _logme.log('Queue does not appear to be running, cannot stop',
+                   'info')
+        return 1
+    return shutdown_queue()
 
 
 def _kill_proc_tree(pid, including_parent=True):
@@ -1079,12 +1116,12 @@ def queue_test(warn=True):
     """
     log_level = 'error' if warn else 'debug'
     try:
-        batch_system = get_server()
+        if not server_running():
+            start_server()
+        return server_running()
     except:
         _logme.log('Cannot get local queue sever address', log_level)
-        raise
         return False
-    return True
 
 
 ###############################################################################
@@ -1336,13 +1373,10 @@ def command_line_parser():
         formatter_class=_argparse.RawDescriptionHelpFormatter
     )
 
-    # Subcommands
-    modes = parser.add_subparsers(dest='modes')
-
-    server_mode = modes.add_parser('server', help='Run the server')
-    server_mode.add_argument(
+    parser.add_argument(
         'mode', choices={'start', 'stop', 'status', 'restart'},
-        metavar='{start,stop,status,restart}', help='Server command')
+        metavar='{start,stop,status,restart}', help='Server command'
+    )
 
     return parser
 
@@ -1356,13 +1390,8 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
 
-    if not args.modes:
-        parser.print_help()
-        return 0
-
     # Call the subparser function
-    if args.modes == 'server':
-        daemon_manager(args.mode)
+    return daemon_manager(args.mode)
 
 if __name__ == '__main__' and '__file__' in globals():
     sys.exit(main())

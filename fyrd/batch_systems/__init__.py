@@ -83,10 +83,17 @@ def get_cluster_environment():
         elif _run.which(qsub_cmnd):
             MODE = 'torque'
         else:
-            MODE = 'local'
+            from fyrd.batch_systems import local
+            if local.queue_test(warn=False):
+                MODE = 'local'
+            else:
+                MODE = None
     else:
         MODE = conf_queue
-    if MODE == 'local':
+    if MODE is None:
+        _logme.log('No functional batch system detected, will not be able to'
+                   'run', 'error')
+    elif MODE == 'local':
         _logme.log('No cluster environment detected, using multiprocessing',
                    'debug')
     else:
