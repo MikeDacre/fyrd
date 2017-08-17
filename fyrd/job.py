@@ -366,7 +366,8 @@ class Job(object):
                                        file_name=exec_script)
 
             # Add all of the keyword arguments at once
-            precmd = _options.options_to_string(kwds, self.qtype) + precmd
+            precmd = _options.options_to_string(kwds, self.qtype) \
+                + '\n\n' + precmd
 
             ecmnd = 'srun bash {}'.format(exec_script)
             sub_script = _scrpts.SCRP_RUNNER.format(precmd=precmd,
@@ -378,7 +379,8 @@ class Job(object):
                                   '{}.cluster.qsub'.format(name))
 
             # Add all of the keyword arguments at once
-            precmd = _options.options_to_string(kwds, self.qtype) + precmd
+            precmd = _options.options_to_string(kwds, self.qtype) \
+                + '\n\n' + precmd
 
             sub_script = _scrpts.CMND_RUNNER_TRACK.format(
                 precmd=precmd, usedir=self.runpath, name=name, command=command)
