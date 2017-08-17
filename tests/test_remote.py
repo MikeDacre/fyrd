@@ -29,6 +29,18 @@ def raise_me(number, power=2):
     return number**power
 
 
+@fyrd.jobify(name='test', mem='1000MB', time='00:20:00', submit=True)
+def raise_me_deco(number, power=2):
+    """Raise number to power."""
+    return number**power
+
+
+@fyrd.jobify(name='test', mem='1000MB', time='00:20:00', submit=False)
+def raise_me_deco2(number, power=2):
+    """Raise number to power."""
+    return number**power
+
+
 def dosomething(x):
     """Simple file operation."""
     out = []
@@ -381,6 +393,25 @@ def test_function_keywords():
     """Submit a simple function with keyword arguments."""
     job = fyrd.Job(raise_me, (10,), kwargs={'power': 10}).submit()
     assert job.get() == 10**10
+    job.clean(delete_outputs=True)
+
+
+@pytest.mark.skipif(not env,
+                    reason="No valid batch system detected")
+def test_function_deco():
+    """Submit a simple decorated function."""
+    job = raise_me_deco(10, power=10)
+    assert job.get() == 10**10
+    job.clean(delete_outputs=True)
+
+
+@pytest.mark.skipif(not env,
+                    reason="No valid batch system detected")
+def test_function_deco2():
+    """Submit a simple decorated function."""
+    job = raise_me_deco2(10)
+    job.submit()
+    assert job.get() == 10**2
     job.clean(delete_outputs=True)
 
 
