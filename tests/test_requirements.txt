@@ -11,3 +11,4 @@ tqdm>=4.15.0
 Pyro4>=4.62
 daemonocle>=1.0
 sqlalchemy>=1.1.13
+psutil>=5.2

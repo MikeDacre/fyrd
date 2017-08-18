@@ -10,7 +10,7 @@ At its simplest, you can use it like::
     q = queue.Queue()
     q.jobs
     q.running
-    q.queued
+    q.pending
     q.complete
 
 All of the above commands return a dictionary of:
@@ -79,7 +79,7 @@ class Queue(object):
     job_states : list
         A list of the different states of jobs in this queue
     active_job_count : int
-        A count of all jobs that are either queued or running in the current
+        A count of all jobs that are either pending or running in the current
         queue
     can_submit : bool
         True if total active jobs is less than max_jobs
@@ -95,7 +95,7 @@ class Queue(object):
     get(jobs)
         Get all results from a bunch of Job objects.
     wait_to_submit(max_jobs=None)
-        Block until fewer running/queued jobs in queue than max_jobs.
+        Block until fewer running/pending jobs in queue than max_jobs.
     update()
         Refresh the list of jobs from the server.
     get_jobs(key)
@@ -644,10 +644,10 @@ class Queue(object):
         """For debugging."""
         self._updating = True
         if self.user:
-            outstr = 'Queue<jobs:{};completed:{};queued:{};user={}>'.format(
+            outstr = 'Queue<jobs:{};completed:{};pending:{};user={}>'.format(
                 len(self), len(self.complete), len(self.queued), self.user)
         else:
-            outstr = 'Queue<jobs:{};completed:{};queued:{};user=ALL>'.format(
+            outstr = 'Queue<jobs:{};completed:{};pending:{};user=ALL>'.format(
                 len(self), len(self.complete), len(self.queued))
         self._updating = False
         return outstr

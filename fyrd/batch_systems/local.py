@@ -1426,7 +1426,7 @@ def queue_parser(user=None, partition=None):
         name       = job[1]
         userid     = user
         partition  = None
-        state      = job[3]
+        state      = normalize_state(job[3])
         nodelist   = [host]
         numnodes   = 1
         cntpernode = job[4]
