@@ -13,4 +13,4 @@ install: "pip install -r tests/test_requirements.txt"
 
 # Run py.test and also a separate local queue test
 script:
-  - tests/run_tests.py
+  - tests/run_tests.py -l
