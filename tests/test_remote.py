@@ -442,8 +442,10 @@ def test_splitfile_indirect():
         outfile='test.out.txt', direct=False
     )
     job.wait()
-    os.remove('test.txt.gz.split_0001.gz.out')
-    os.remove('test.txt.gz.split_0002.gz.out')
+    if os.path.isfile('test.txt.gz.split_0001.gz.out'):
+        os.remove('test.txt.gz.split_0001.gz.out')
+    if os.path.isfile('test.txt.gz.split_0002.gz.out'):
+        os.remove('test.txt.gz.split_0002.gz.out')
     assert os.path.isfile('test.out.txt')
     os.remove('test.out.txt')
     return 0
