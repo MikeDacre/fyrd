@@ -7,9 +7,9 @@ title:  Fyrd
 
 ### What is *Fyrd*?
 
-*Fyrd* is a library for Python 2.7+/3.4+ that allows easy multiprocessing-style parallelization using a batch system backend. Right now it supports [torque](http://www.adaptivecomputing.com/products/open-source/torque/) and [slurm](https://slurm.schedmd.com/), but because it is written in a modular way, any batch system can be added. To request your batch system be added, please email requests@fyrd.science or [submit and issue on the github page]({{ site.github.repository_url }}/issues).
+*Fyrd* is a library for Python 2.7+/3.4+ that allows easy multiprocessing-style parallelization using a batch system back end. Right now it supports [torque](http://www.adaptivecomputing.com/products/open-source/torque/) and [slurm](https://slurm.schedmd.com/), with a local, multiprocessing based, fallback. Because it is written in a modular way, however, any batch system can be added. To request your batch system be added, please email requests@fyrd.science or [submit an issue on the github page]({{ site.github.repository_url }}/issues).
 
-To allow code porting, *fyrd* also has a fallback local mode, that is a wrapper around Python's own multiprocessing module that allows fyrd syntax to submit multiprocessing jobs.
+The local fallback mode is a miniature torque/slurm style job managing clone. It starts a server on your machine and that server will accept and run jobs in the same way that torque or slurm would. It allows dependency tracking to work, but does not implement partitions or allow the viewing of other users jobs. Note that fyrd's local mode is not a fantastic substitute for multiprocessing, because it uses a file-submission model that is unnecessary for local jobs, this means that there is a slight (about 0.5 second) overhead for every job that is submitted.
 
 ### A Quick Example
 
@@ -22,14 +22,18 @@ import fyrd
 
 SCRIPT = """really_slow_algorithm {} | awk '{print $1, "\\t", $2}'"""
 
+# This is the same as running fyrd.Job(filter_results, (x,), profile='small', time='00:01:00').submit()
+# It is best used when dependency tracking is not needed and every function submission requires
+# the same resources
+@fyrd.jobify(profile='small', time='00:01:00')
 def filter_results(x):
     """If first column contains 'tomato', return the log of the second column."""
     output = []
     for i in x.split('\n'):
-	name, data = i.split('\t')
-	if 'tomato' in name:
-	    output.append(math.log10(int(data)))
-    return output
+        name, data = i.split('\t')
+    if 'tomato' in name:
+        output.append(math.log10(int(data)))
+      return output
 
 script_jobs = []
 for i in os.listdir('input_files'):
@@ -40,12 +44,9 @@ fyrd.wait(script_jobs)
     
 func_jobs = []
 for result in script_job:
-    func_jobs.append(fyrd.Job(filter_results, (result.stdout,), cores=1, mem='500MB', time='00:20:00').submit())
+    func_jobs.append(filter_results(result.stdout))
 
-filtered = []
-for i in func_jobs:
-    # Wait for job to complete and then get the function output
-    filtered.append(job.get())
+filtered = fyrd.basic.get(func_jobs)
 ```
 
 ### Dependency tracking
@@ -84,16 +85,29 @@ fyrd.Job(long_function, profile='long').submit().get()
 ### Installation
 
 ```bash
+pip install fyrd
+```
+
+To get a specific version:
+```bash
 pip install {{ site.github.repository_url }}/archive/{{ site.version }}.tar.gz --user
 fyrd conf init
 ```
 
-To get the latest version:
+To get the latest stable version:
 
 ```bash
 pip install {{ site.github.repository_url }}/tarball/master --user
 fyrd conf init
 ```
+
+To get the latest development version (still pretty stable):
+
+```bash
+pip install {{ site.github.repository_url }}/tarball/dev --user
+fyrd conf init
+```
+ 
 
 The `fyrd conf init` command initializes your environment interactively by asking questions about the local cluster system.
 
