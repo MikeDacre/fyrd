@@ -7,7 +7,7 @@ title:  Fyrd
 
 ### What is *Fyrd*?
 
-*Fyrd* is a library for Python 2.7+/3.4+ that allows easy multiprocessing-style parallelization using a batch system back end. Right now it supports [torque](http://www.adaptivecomputing.com/products/open-source/torque/) and [slurm](https://slurm.schedmd.com/), with a local, multiprocessing based, fallback. Because it is written in a modular way, however, any batch system can be added. To request your batch system be added, please email requests@fyrd.science or [submit an issue on the github page]({{ site.github.repository_url }}/issues).
+*Fyrd* is a library for Python 2.7+/3.3+ that allows easy multiprocessing-style parallelization using a batch system back end. Right now it supports [torque](http://www.adaptivecomputing.com/products/open-source/torque/) and [slurm](https://slurm.schedmd.com/), with a local, multiprocessing based, fallback. Because it is written in a modular way, however, any batch system can be added. To request your batch system be added, please email requests@fyrd.science or [submit an issue on the github page]({{ site.github.repository_url }}/issues).
 
 The local fallback mode is a miniature torque/slurm style job managing clone. It starts a server on your machine and that server will accept and run jobs in the same way that torque or slurm would. It allows dependency tracking to work, but does not implement partitions or allow the viewing of other users jobs. Note that fyrd's local mode is not a fantastic substitute for multiprocessing, because it uses a file-submission model that is unnecessary for local jobs, this means that there is a slight (about 0.5 second) overhead for every job that is submitted.
 

@@ -1,7 +1,7 @@
 # Setup
 title:        Fyrd
 tagline:      "A pythonic way to submit jobs to any cluster with dependency tracking."
-description:  "Submit functions and shell scripts to torque, slurm, or local machines using easy python syntax."
+description:  "A python cluster: submit functions and shell scripts to torque, slurm, or local clusters/machines using easy python sytanx. Compatible with Python 2.7+."
 version:      "0.6.1b9"
 baseurl:      "https://fyrd.science"
 csshighlight: default
