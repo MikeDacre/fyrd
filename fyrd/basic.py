@@ -270,7 +270,7 @@ def clean_dir(directory=None, suffix=None, qtype=None, confirm=False,
                  .<suffix>.out.func.pickle
                  .<suffix>.sbatch & .<suffix>.script for slurm mode
                  .<suffix>.qsub for torque mode
-                 .<suffix> for local mode
+                 .<suffix>.job for local mode
                  _func.<suffix>.py
                  _func.<suffix>.py.pickle.in
                  _func.<suffix>.py.pickle.out
@@ -310,7 +310,8 @@ def clean_dir(directory=None, suffix=None, qtype=None, confirm=False,
     if delete_outputs:
         extensions += ['.' + suffix + '.err', '.' + suffix + '.out',
                        '_func.' + suffix + '.py.pickle.out',
-                       '.' + suffix + '.out.func.pickle']
+                       '.' + suffix + '.out.func.pickle',
+                       '.' + suffix + '.job']
 
     if qtype:
         if qtype == 'local':

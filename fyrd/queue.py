@@ -44,9 +44,6 @@ from . import batch_systems as _batch
 # Funtions to import if requested
 __all__ = ['Queue']
 
-# We only need the queue defaults
-_defaults = _conf.get_option('queue')
-
 GOOD_STATES      = _batch.GOOD_STATES
 ACTIVE_STATES    = _batch.ACTIVE_STATES
 BAD_STATES       = _batch.BAD_STATES
@@ -141,7 +138,7 @@ class Queue(object):
         """The partition if defined."""
 
         # Set queue length
-        self.max_jobs = _conf.get_option('queue', 'max_jobs')
+        self.max_jobs = int(_conf.get_option('queue', 'max_jobs'))
         """The maximum number of jobs that can run in this queue."""
 
         # Support python2, which hates reciprocal import
@@ -150,9 +147,9 @@ class Queue(object):
 
         # Get sleep time and update time
         self.queue_update_time = float(
-            conf.get_option('queue', 'queue_update', 2)
+            _conf.get_option('queue', 'queue_update', 2)
         )
-        self.sleep_len = float(conf.get_option('queue', 'sleep_len', 0.5))
+        self.sleep_len = float(_conf.get_option('queue', 'sleep_len', 0.5))
 
         # Set type
         if qtype:
@@ -260,7 +257,7 @@ class Queue(object):
                 lgd      = False
                 lgd2     = False
                 start    = _dt.now()
-                res_time = _conf.get_option('queue', 'res_time')
+                res_time = float(_conf.get_option('queue', 'res_time'))
                 count    = 0
                 # Get job state
                 job_state = self.jobs[job_id].state
@@ -461,7 +458,7 @@ class Queue(object):
         retjobs = {}
         keys = [k.lower() for k in _run.listify(key)]
         for jobid, job in self.jobs.items():
-            if job.get_state in keys:
+            if job.get_state() in keys:
                 retjobs[jobid] = job
         return retjobs
 
@@ -516,7 +513,7 @@ class Queue(object):
         jobcount = 0
         for j in self.get_jobs(ACTIVE_STATES):
             jobcount += j.jobcount()
-        return jobcount
+        return int(jobcount)
 
     @property
     def can_submit(self):
@@ -525,7 +522,10 @@ class Queue(object):
         If max_jobs is None, default from config is used.
         """
         self.update()
-        return self.active_job_count < self.max_jobs
+        jobcount = 0
+        for j in self.get_jobs(ACTIVE_STATES):
+            jobcount += j.jobcount()
+        return int(jobcount) < self.max_jobs
 
     ######################
     # Internal Functions #

@@ -492,7 +492,7 @@ class QueueManager(object):
         if not max_jobs:
             cmax = _conf.get_option('local', 'max_jobs')
             max_jobs = cmax if cmax else MAX_JOBS
-        self.max_jobs = max_jobs
+        self.max_jobs = int(max_jobs)
         if self.max_jobs > mp.cpu_count():
             self.max_jobs = mp.cpu_count()-1
         self.db = LocalQueue(DATABASE)
@@ -628,9 +628,9 @@ class QueueManager(object):
         if days:
             clean_days = int(days)
         else:
-            clean_days = _conf.get_option(
+            clean_days = int(_conf.get_option(
                 'local', 'local_clean_days',CLEAN_OLDER_THAN
-            )
+            ))
         current_time = _dt.now()
         cutoff = current_time - _td(days=clean_days)
         jobs = self.db.query().filter(Job.submit_time < cutoff).all()
