@@ -124,7 +124,7 @@ def run_function(func_c, args=None, kwargs=None):
             iter(args)
         except TypeError:
             args = (args,)
-        if isinstance(args, str):
+        if isinstance(args, (six.string_types, six.text_type)):
             args = (args,)
         ot = func_c(*args)
     elif kwargs:

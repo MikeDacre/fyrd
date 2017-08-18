@@ -12,6 +12,9 @@ splitrun
     Split a file, run a command in parallel, return result.
 """
 import os as _os
+from six import text_type as _txt
+from six import string_types as _str
+from six import integer_types as _int
 
 ###############################################################################
 #                               Import Ourself                                #
@@ -240,7 +243,7 @@ def _parapply(jobs, df, func, args=(), profile=None, applymap=False,
               **kwds):
     """Direct running function for parapply, see parapply docstring."""
     # Handle arguments
-    if not isinstance(jobs, int):
+    if not isinstance(jobs, _int):
         raise ValueError('Jobs argument must be an integer.')
     if not isinstance(df, (_pd.core.frame.DataFrame, _np.ndarray)):
         raise ValueError('df must be a dataframe or numpy array, is {}'
@@ -248,7 +251,7 @@ def _parapply(jobs, df, func, args=(), profile=None, applymap=False,
     if not callable(func):
         raise ValueError('function must be callable, current type is {}'
                          .format(type(func)))
-    if profile is not None and not isinstance(profile, str):
+    if profile is not None and not isinstance(profile, (_str, _txt)):
         raise ValueError('Profile must be a string, is {}'
                          .format(type(profile)))
     fyrd_kwds, pandas_kwds = _options.split_keywords(kwds)
@@ -596,9 +599,9 @@ def _splitrun(jobs, infile, inheader, command, args=None, kwargs=None,
     function directly.
     """
     # Handle arguments
-    if not isinstance(jobs, int):
+    if not isinstance(jobs, _int):
         raise ValueError('Jobs argument must be an integer.')
-    if profile is not None and not isinstance(profile, str):
+    if profile is not None and not isinstance(profile, (_str, _txt)):
         raise ValueError('Profile must be a string, is {}'
                          .format(type(profile)))
     kwds = _options.check_arguments(kwds)

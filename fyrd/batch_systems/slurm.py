@@ -8,6 +8,10 @@ import sys as _sys
 import pwd as _pwd     # Used to get usernames for queue
 from subprocess import CalledProcessError as _CalledProcessError
 
+from six import text_type as _txt
+from six import string_types as _str
+from six import integer_types as _int
+
 from .. import run as _run
 from .. import conf as _conf
 from .. import logme as _logme
@@ -323,15 +327,15 @@ def queue_parser(user=None, partition=None):
                                 .format(len(sinfo)))
         if partition and spartition != partition:
             continue
-        if not isinstance(sid, str):
+        if not isinstance(sid, (_str, _txt)):
             sid = str(sid) if sid else None
         else:
             sarr = None
-        if not isinstance(snodes, int):
+        if not isinstance(snodes, _int):
             snodes = int(snodes) if snodes else None
-        if not isinstance(scpus, int):
+        if not isinstance(scpus, _int):
             scpus = int(scpus) if snodes else None
-        if not isinstance(scode, int):
+        if not isinstance(scode, _int):
             scode = int(scode) if scode else None
         sstate = sstate.lower()
         # Convert user from ID to name

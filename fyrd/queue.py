@@ -31,6 +31,10 @@ from datetime import datetime as _dt
 from time import time as _time
 from time import sleep as _sleep
 
+from six import text_type as _txt
+from six import string_types as _str
+from six import integer_types as _int
+
 ###############################################################################
 #                                Our functions                                #
 ###############################################################################
@@ -127,7 +131,7 @@ class Queue(object):
                 self.user = None
             else:
                 if isinstance(user, int) \
-                        or (isinstance(user, str) and user.isdigit()):
+                        or (isinstance(user, (_str, _txt)) and user.isdigit()):
                     self.uid  = int(user)
                 else:
                     self.uid = _pwd.getpwnam(str(user)).pw_uid
@@ -230,7 +234,7 @@ class Queue(object):
         if not isinstance(jobs, (list, tuple)):
             jobs = [jobs]
         for job in jobs:
-            if not isinstance(job, (str, int, QueueJob, self._Job)):
+            if not isinstance(job, (_str, _txt, _int, QueueJob, self._Job)):
                 raise _ClusterError('job must be int, string, or Job, ' +
                                     'is {}'.format(type(job)))
 
@@ -474,13 +478,7 @@ class Queue(object):
             A filtered job dictionary of `{job_id: QueueJob}` for all jobs
             owned by the queried users.
         """
-        try:
-            if isinstance(users, (str, int)):
-                users = [users]
-            else:
-                users = list(users)
-        except TypeError:
-            users = [users]
+        users = _run.listify(users)
         return {k: v for k, v in self.jobs.items() if v.owner in users}
 
     @property

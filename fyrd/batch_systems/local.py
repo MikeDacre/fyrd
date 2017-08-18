@@ -42,6 +42,10 @@ try:
 except ImportError:  # python2
     from Queue import Empty
 
+from six import text_type as _txt
+from six import string_types as _str
+from six import integer_types as _int
+
 import psutil as _psutil
 
 import Pyro4
@@ -300,7 +304,7 @@ class LocalQueue(object):
 
     def __getitem__(self, x):
         """Quick access to jobs by ID."""
-        if isinstance(x, str):
+        if isinstance(x, (_str, _txt)):
             return self.query().filter(Job.jobno == x).all()
 
     def __len__(self):
@@ -555,10 +559,13 @@ class QueueManager(object):
         Raises
         ------
         QueueError
-            If a dependency is not in the job db already
+            If a dependency is not in the job db already or command is invalid
         """
         session = self.db.get_session()
         threads = int(threads)
+        if not isinstance(command, (_str, _txt)):
+            raise ValueError('command is {0}, type{1}, cannot continue'
+                             .format(command, type(command)))
         depends = []
         if dependencies:
             for dep in dependencies:
@@ -614,7 +621,7 @@ class QueueManager(object):
             Job.exitcode, Job.runpath, Job.outfile, Job.errfile
         )
         if jobs:
-            jobs = [jobs] if isinstance(jobs, (int, str)) else jobs
+            jobs = [jobs] if isinstance(jobs, (_int, _str, _txt)) else jobs
             jobs = [int(j) for j in jobs]
             q = q.filter(Job.jobno.in_(jobs))
         res = q.all()
@@ -658,7 +665,7 @@ class QueueManager(object):
         ----------
         jobs : list of int
         """
-        if isinstance(jobs, str):
+        if isinstance(jobs, (_str, _txt)):
             jobs = [int(jobs)]
         elif isinstance(jobs, int):
             jobs = [jobs]
@@ -728,7 +735,7 @@ class QueueManager(object):
             self.inqueue.put('stop')
             print('waiting for jobs to terminate gracefully')
             try:
-                result = self.outqueue.get(STOP_WAIT)
+                result = self.outqueue.get(timeout=STOP_WAIT)
             except Empty:
                 pass
         print('killing runner')
@@ -927,6 +934,9 @@ def job_runner(inqueue, outqueue, max_jobs):
             if info[0] != 'queue':
                 raise QueueError('Invalid argument: {0}'.format(info[0]))
             jobno, command, threads, depends, stdout, stderr, runpath = info[1]
+            if not command:
+                raise QueueError('Job command is {0}, cannot continue'
+                                 .format(type(command)))
             jobno = int(jobno)
             threads = int(threads)
             # Run anyway
@@ -973,7 +983,6 @@ def job_runner(inqueue, outqueue, max_jobs):
                 if not_done:
                     continue
             if info['threads'] <= available_cores:
-                assert isinstance(info['command'], str)
                 if info['runpath']:
                     curpath = _os.path.abspath('.')
                     _os.chdir(info['runpath'])
@@ -1357,6 +1366,9 @@ def submit(file_name, dependencies=None, job=None, args=None, kwds=None):
             params[param] = None
     # Submit the job
     server = get_server()
+    if not _os.path.isfile(file_name):
+        raise QueueError('File {0} does not exist, cannot submit'
+                         .format(file_name))
     command = 'bash {0}'.format(_os.path.abspath(file_name))
     jobno = server.submit(
         command, params['name'], threads=params['cores'],

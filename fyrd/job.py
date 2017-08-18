@@ -13,6 +13,9 @@ from datetime import datetime as _dt
 # Try to use dill, revert to pickle if not found
 import dill as _pickle
 from six import reraise as _reraise
+from six import text_type as _txt
+from six import string_types as _str
+from six import integer_types as _int
 
 ###############################################################################
 #                                Our functions                                #
@@ -457,7 +460,7 @@ class Job(object):
             self.dependencies = []
             errmsg = 'Dependencies must be number, numeric string or Job'
             for dependency in dependencies:
-                if not isinstance(dependency, (str, Job)):
+                if not isinstance(dependency, (_str, _txt, Job)):
                     raise _ClusterError(errmsg)
                 self.dependencies.append(dependency)
 

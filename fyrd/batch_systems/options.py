@@ -30,6 +30,8 @@ from itertools import groupby as _groupby
 from collections import OrderedDict as _OD
 
 from six import reraise as _raise
+from six import text_type as _txt
+from six import string_types as _str
 from tabulate import tabulate as _tabulate
 
 from .. import logme
@@ -356,7 +358,7 @@ def check_arguments(kwargs):
                                    'it is formatted as {}'.format(opt))
 
         # Force memory into an integer of megabytes
-        elif arg == 'mem' and isinstance(opt, str):
+        elif arg == 'mem' and isinstance(opt, (_str, _txt)):
             if opt.isdigit():
                 opt = int(opt)
             else:

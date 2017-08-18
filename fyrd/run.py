@@ -24,6 +24,9 @@ from subprocess import PIPE
 from time import sleep
 from glob import glob as _glob
 
+from six import text_type as _txt
+from six import string_types as _str
+from six import integer_types as _int
 from six.moves import input as _get_input
 
 # Progress bar handling
@@ -345,7 +348,7 @@ def listify(iterable):
     """Try to force any iterable into a list sensibly."""
     if isinstance(iterable, list):
         return iterable
-    if isinstance(iterable, (str, int, float)):
+    if isinstance(iterable, (_str, _txt, _int, float)):
         return [iterable]
     if not iterable:
         return []
@@ -424,7 +427,7 @@ def open_zipped(infile, mode='r'):
     mode   = mode[0] + 't'
     if hasattr(infile, 'write'):
         return infile
-    if isinstance(infile, str):
+    if isinstance(infile, _str):
         if infile.endswith('.gz'):
             return gzip.open(infile, mode)
         if infile.endswith('.bz2'):
@@ -619,7 +622,7 @@ def cmd(command, args=None, stdout=None, stderr=None, tries=1):
             raise ValueError('Cannot submit list/tuple command as ' +
                              'well as args argument')
         command = ' '.join(command)
-    assert isinstance(command, str)
+    assert isinstance(command, _str)
     if args:
         if isinstance(args, (list, tuple)):
             args = ' '.join(args)
@@ -754,14 +757,14 @@ def replace_argument(args, find_string, replace_string, error=True):
     newargs = tuple()
     if args:
         for arg in listify(args):
-            if isinstance(arg, str) and find_string in arg:
+            if isinstance(arg, _str) and find_string in arg:
                 arg = arg.format(**{find_string.strip('{}'): replace_string})
                 found = True
             newargs += (arg,)
     newkwds = {}
     if kwargs:
         for arg, value in kwargs.items():
-            if isinstance(value, str) and find_string in value:
+            if isinstance(value, _str) and find_string in value:
                 value = replace_string
                 found = True
             newkwds[arg] = value
@@ -874,7 +877,7 @@ def get_input(message, valid_answers=None, default=None):
     if not message.endswith(' '):
         message = message + ' '
     if valid_answers:
-        if isinstance(valid_answers, str):
+        if isinstance(valid_answers, _str):
             if valid_answers.lower() == 'yesno':
                 valid_answers = ['yes', 'no', 'y', 'n']
             else:
@@ -952,7 +955,7 @@ def normalize_imports(imports, prot=True):
     if not imports:
         return []
     for imp in imports:
-        if not isinstance(imp, str):
+        if not isinstance(imp, _str):
             raise ValueError('All imports must be strings')
         if imp.startswith('try:'):
             prot_impts.append(imp.rstrip())
