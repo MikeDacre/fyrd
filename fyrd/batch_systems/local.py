@@ -149,6 +149,8 @@ class Job(Base):
         The requested number of cores
     exitcode : int
         The exit code of the job if state in {'completed', 'failed'}
+    pid : int
+        The pid of the process
     runpath : str, optional
         Path to the directory to run in
     outfile, errfile : str, optional
@@ -164,14 +166,15 @@ class Job(Base):
     threads     = _Column(_Integer, nullable=False)
     state       = _Column(_String, nullable=False, index=True)
     exitcode    = _Column(_Integer)
+    pid         = _Column(_Integer)
     runpath     = _Column(_String)
     outfile     = _Column(_String)
     errfile     = _Column(_String)
 
     def __repr__(self):
         """Display summary."""
-        return 'LocalQueueJob<{0};{1};state:{2};exitcode:{3}>'.format(
-            self.jobno, self.name, self.state, self.exitcode
+        return 'LocalQueueJob<{0}:{1};{2};state:{3};exitcode:{4}>'.format(
+            self.jobno, self.pid, self.name, self.state, self.exitcode
         )
 
 
@@ -493,8 +496,13 @@ class QueueManager(object):
             cmax = _conf.get_option('local', 'max_jobs')
             max_jobs = cmax if cmax else MAX_JOBS
         self.max_jobs = int(max_jobs)
+        # Don't use more than the available cores
         if self.max_jobs > mp.cpu_count():
-            self.max_jobs = mp.cpu_count()-1
+            self.max_jobs = mp.cpu_count()
+        # Unless there are fewer than 4 cores, we need at least 4 for split
+        # jobs, so we hard code 4 as the minimum
+        if self.max_jobs < 4:
+            self.max_jobs = 4
         self.db = LocalQueue(DATABASE)
         self.daemon = daemon
         self.all_jobs = [i[0] for i in self.db.query(Job.jobno).all()]
@@ -682,7 +690,7 @@ class QueueManager(object):
     ##########################################################################
 
     @Pyro4.expose
-    def update_job(self, jobno, state=None, exitcode=None):
+    def update_job(self, jobno, state=None, exitcode=None, pid=None):
         """Update either the state or the exitcode of a job in the DB."""
         session = self.db.get_session()
         job = session.query(Job).filter(Job.jobno == int(jobno)).first()
@@ -690,6 +698,8 @@ class QueueManager(object):
             job.state = state
         if isinstance(exitcode, int):
             job.exitcode = exitcode
+        if isinstance(pid, int):
+            job.pid = pid
         session.flush()
         session.commit()
         session.close()
@@ -837,7 +847,11 @@ def job_runner(inqueue, outqueue, max_jobs):
     outqueue : multiprocessing.Queue
         job information available_cores if argument was available_cores
     max_jobs : int
-        The maximum number of concurrently running jobs
+        The maximum number of concurrently running jobs, will be adjusted to
+        be 4 <= max_jobs <= cpu_count. The minimum of 4 jobs is a hard limit
+        and is enforced, so a machine with only 2 cores will still end up with
+        4 jobs running. This is required to avoid hangs on some kinds of fyrd
+        jobs, where a split job is created from a child process.
 
     Returns
     -------
@@ -862,8 +876,14 @@ def job_runner(inqueue, outqueue, max_jobs):
         continue
     if not qserver:
         qserver = get_server(raise_on_error=True)
+    max_jobs = int(max_jobs)
+    if max_jobs < mp.cpu_count():
+        max_jobs = mp.cpu_count()
+    if max_jobs < 4:
+        max_jobs = 4
+    available_cores = max_jobs
     running = {}     # {jobno: Process}
-    queued  = _OD()  # {jobno: {'command': command, 'depends': depends}
+    queued  = _OD()  # {jobno: {'command': command, 'depends': depends, ...}
     done    = {}     # {jobno: Process}
     jobs    = []     # [jobno, ...]
     put_core_info = False
@@ -910,8 +930,8 @@ def job_runner(inqueue, outqueue, max_jobs):
             jobno = int(jobno)
             threads = int(threads)
             # Run anyway
-            if threads > max_jobs:
-                threads = max_jobs
+            if threads >= max_jobs:
+                threads = max_jobs-1
             # Add to queue
             if jobno in jobs:
                 # This should never happen
@@ -920,7 +940,7 @@ def job_runner(inqueue, outqueue, max_jobs):
             queued[jobno] = {'command': command, 'threads': threads,
                              'depends': depends, 'stdout': stdout,
                              'stderr': stderr, 'runpath': runpath}
-            qserver.update_job(jobno, state='queued')
+            qserver.update_job(jobno, state='pending')
         # Update running and done queues
         for jobno, process in running.items():
             if process.is_alive():
@@ -934,9 +954,13 @@ def job_runner(inqueue, outqueue, max_jobs):
         # Remove completed jobs from running
         for jobno in done:
             if jobno in running:
-                running.pop(jobno)
+                p = running.pop(jobno)
+                available_cores += p.cores
         # Start jobs if can run
-        available_cores = max_jobs-len(running)
+        if available_cores > max_jobs:
+            available_cores = max_jobs
+        if available_cores < 0:  # Shouldn't happen
+            available_cores = 0
         if put_core_info:
             outqueue.put(available_cores)
             put_core_info = False
@@ -965,9 +989,10 @@ def job_runner(inqueue, outqueue, max_jobs):
                 p.start()
                 running[jobno] = p
                 available_cores -= info['threads']
+                p.cores = info['threads']
                 if info['runpath']:
                     _os.chdir(curpath)
-            qserver.update_job(jobno, state='running')
+            qserver.update_job(jobno, state='running', pid=p.pid)
         # Clear running jobs from queue
         for jobno in running:
             if jobno in queued:
@@ -1070,7 +1095,10 @@ def shutdown_queue():
     good = True
     server = get_server(start=False)
     if server:
-        res = server.shutdown_jobs()
+        try:
+            res = server.shutdown_jobs()
+        except OSError:
+            res = None
         _logme.log('Local queue runner terminated.', 'debug')
         if res is None:
             _logme.log('Could not determine process completion state',
@@ -1137,7 +1165,7 @@ def _start():
             pid = fin.read().strip()
         if _pid_exists(pid):
             _logme.log('Local queue already running with pid {0}'
-                        .format(pid), 'info')
+                       .format(pid), 'info')
             return 1
         _os.remove(PID_FILE)
     pid = _os.fork()
@@ -1145,7 +1173,11 @@ def _start():
         daemonizer()
     else:
         _logme.log('Local queue starting', 'info')
-        return 0
+        _sleep(1)
+        if server_running():
+            return 0
+        _logme.log('Server failed to start', 'critical')
+        return 1
 
 
 def _stop():
@@ -1211,7 +1243,9 @@ def normalize_job_id(job_id):
 
 def normalize_state(state):
     """Convert state into standardized (slurm style) state."""
-    # Already normalized
+    state = state.lower()
+    if state == 'queued':
+        state = 'pending'
     return state
 
 

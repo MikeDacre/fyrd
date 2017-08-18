@@ -135,11 +135,11 @@ class Queue(object):
             self.uid = None
         self.user = _pwd.getpwuid(self.uid).pw_name if self.uid else None
         self.partition = partition
-        """The partition if defined."""
-
-        # Set queue length
         self.max_jobs = int(_conf.get_option('queue', 'max_jobs'))
-        """The maximum number of jobs that can run in this queue."""
+        # Don't allow max jobs to be less than 5, otherwise basic split jobs
+        # permanently hang
+        if self.max_jobs < 4:
+            self.max_jobs = 4
 
         # Support python2, which hates reciprocal import
         from .job import Job
@@ -422,14 +422,12 @@ class Queue(object):
         Parameters
         ----------
         max_jobs : int
-            Override self.max_jobs
+            Override self.max_jobs for wait
         """
         count   = 50
         written = False
-        if max_jobs:
-            self.max_jobs = int(max_jobs)
         while True:
-            if self.can_submit:
+            if self._can_submit(max_jobs):
                 return
             if not written:
                 _logme.log(('The queue is full, there are {} jobs running and '
@@ -510,6 +508,7 @@ class Queue(object):
     @property
     def active_job_count(self):
         """Return a count of all queued or running jobs, inc. array jobs."""
+        self.update()
         jobcount = 0
         for j in self.get_jobs(ACTIVE_STATES):
             jobcount += j.jobcount()
@@ -517,15 +516,25 @@ class Queue(object):
 
     @property
     def can_submit(self):
-        """Return True if R/Q jobs are less than max_jobs.
+        """Return True if R/Q jobs are less than max_jobs."""
+        return self._can_submit()
 
-        If max_jobs is None, default from config is used.
-        """
+    def _can_submit(self, max_jobs=None):
+        """"Return True if R/Q jobs are less than max_jobs."""
         self.update()
+        # Get max jobs
+        max_jobs = int(max_jobs) if max_jobs else self.max_jobs
+        if max_jobs < 4:
+            max_jobs = 4
+        # Fix self.max_jobs also
+        if self.max_jobs < 4:
+            self.max_jobs = 4
+        # Update running and queued jobs can't use self.active_job_count as
+        # rapid update breaks the property count and caused jobcount to be None
         jobcount = 0
-        for j in self.get_jobs(ACTIVE_STATES):
+        for j in self.get_jobs(ACTIVE_STATES).values():
             jobcount += j.jobcount()
-        return int(jobcount) < self.max_jobs
+        return jobcount < max_jobs
 
     ######################
     # Internal Functions #
