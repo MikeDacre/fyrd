@@ -7,7 +7,7 @@ title:  Fyrd
 
 ### What is *Fyrd*?
 
-*Fyrd* is a library for Python 2.7+ that allows easy multiprocessing-style parallelization using a batch system backend. Right now it supports [torque](http://www.adaptivecomputing.com/products/open-source/torque/) and [slurm](https://slurm.schedmd.com/), but because it is written in a modular way, any batch system can be added. To request your batch system be added, please email requests@fyrd.science or [submit and issue on the github page]({{ site.github.repository_url }}/issues).
+*Fyrd* is a library for Python 2.7+/3.4+ that allows easy multiprocessing-style parallelization using a batch system backend. Right now it supports [torque](http://www.adaptivecomputing.com/products/open-source/torque/) and [slurm](https://slurm.schedmd.com/), but because it is written in a modular way, any batch system can be added. To request your batch system be added, please email requests@fyrd.science or [submit and issue on the github page]({{ site.github.repository_url }}/issues).
 
 To allow code porting, *fyrd* also has a fallback local mode, that is a wrapper around Python's own multiprocessing module that allows fyrd syntax to submit multiprocessing jobs.
 
