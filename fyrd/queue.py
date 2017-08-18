@@ -149,8 +149,10 @@ class Queue(object):
         self._Job      = Job
 
         # Get sleep time and update time
-        self.queue_update_time = _conf.get_option('queue', 'queue_update', 2)
-        self.sleep_len         = _conf.get_option('queue', 'sleep_len', 0.5)
+        self.queue_update_time = float(
+            conf.get_option('queue', 'queue_update', 2)
+        )
+        self.sleep_len = float(conf.get_option('queue', 'sleep_len', 0.5))
 
         # Set type
         if qtype:
