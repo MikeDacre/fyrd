@@ -108,13 +108,13 @@ class Queue(object):
         Return a dict of jobs for all all jobs by each user in users.
     """
 
-    def __init__(self, user=None, partition=None, qtype=None,):
+    def __init__(self, user=None, partition=None, qtype=None):
         """Can filter by user, queue type or partition on initialization.
 
         Parameters
         ----------
         user : str
-            Optional usernameto filter the queue with.  If user='self' or
+            Optional username to filter the queue with.  If user='self' or
             'current', the current user will be used.
         partition : str
             Optional partition to filter the queue with.
@@ -170,6 +170,8 @@ class Queue(object):
         self.jobs = {}
         """All jobs currently in this queue."""
 
+        # Whether to show a progress bar
+        self.show_pb = bool(_conf.get_option('queue', 'progressbar', True))
         self._update()
 
     ####################
