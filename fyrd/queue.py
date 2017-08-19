@@ -108,7 +108,7 @@ class Queue(object):
         Return a dict of jobs for all all jobs by each user in users.
     """
 
-    def __init__(self, user=None, partition=None, qtype=None,):
+    def __init__(self, user=None, partition=None, qtype=None):
         """Can filter by user, queue type or partition on initialization.
 
         Parameters
