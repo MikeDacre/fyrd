@@ -576,7 +576,7 @@ class Job(object):
         return self
 
     def submit(self, wait_on_max_queue=True, additional_keywords=None,
-               max_jobs=None):
+               max_jobs=None, auto_send=None):
         """Submit this job.
 
         To disable max_queue_len, set it to 0. None will allow override by
@@ -592,6 +592,9 @@ class Job(object):
             not necessary.
         max_jobs : int, optional
             Override the maximum number of jobs to wait for
+        auto_send : bool, optional
+            If a remote queue is connected, send the job instead of submitting
+            locally. If not remote queue is active, just submits locally.
 
         Returns
         -------
@@ -712,6 +715,52 @@ class Job(object):
         self.gen_scripts()
         self.write()
         return self.submit(wait_on_max_queue)
+
+    def send(self, wait_on_max_queue=True, additional_keywords=None):
+        """Transmit this job to the remote server.
+
+        To function correctly, a local_server must be running on this
+        machine with a remote server configured, the remote server must also
+        be running and the remote server.
+
+        Parameters
+        ----------
+        wait_on_max_queue : bool, optional
+            Block until queue limit is below the maximum before submitting.
+        additional_keywords : dict, optional
+            Pass this dictionary to the batch system submission function,
+            not necessary.
+
+        Returns
+        -------
+        self : Job
+        """
+        pass
+
+    def resend(self, wait_on_max_queue=True, cancel_running=None):
+        """Attempt to auto resend job, deletes prior files.
+
+        To function correctly, a local_server must be running on this
+        machine with a remote server configured, the remote server must also
+        be running and the remote server.
+
+        Parameters
+        ----------
+        wait_on_max_queue : bool, optional
+            Block until queue limit is below the maximum before submitting.
+        cancel_running : bool or None, optional
+            If the job is currently running, cancel it before resubmitting.
+            If None (default), will ask the user.
+
+        To disable max_queue_len, set it to 0. None will allow override by
+        the default settings in the config file, and any positive integer will
+        be interpretted to be the maximum queue length.
+
+        Returns
+        -------
+        self : Job
+        """
+        pass
 
     def kill(self, confirm=True):
         """Kill the running job.

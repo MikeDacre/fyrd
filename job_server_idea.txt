@@ -1,0 +1,73 @@
+Remote server
+
+- Structure
+  - job_server/
+    - __init__\.py
+    - connections/
+      - *Required functions:
+        - send(message, uuid, files=None)
+          - transmits a message and all associated files to the server
+          - message is any python object
+          - uuid is the string that identifies this message
+          - files is a set or a dict of files to send
+            - if dict, then format it {to_send: remote_path}
+          - returns None
+          - raises Exception on transmit failure
+        - get(uuid)
+          - Non-blocking function tries to get message by UUID
+          - Returns (status, message)
+          - status is bool, True on successful message receipt, False on failure
+          - message is None is status is False, else it is the contents of the message from the server
+        - receive()
+          - A non-blocking function that when called by remote_server\.py will return all pending messages from the client (local_server\.py)
+          - Returns list of messages as [(message, uuid)]
+        - The only one I will write is folder syncing, made for sshfs or an rsync daemon, just include documentation on how to run those
+      - __init__\.py
+        - Manages config and choice of connection
+      - folder\.py
+        - Default option, just writes messages to a folder
+    - local_server\.py
+      - daemon process
+      - message loop checks for new messages and writes to the database
+      - pyro class receives messages from clients, writes metadata to the database, and transmits the message and associated files
+      - transmit calls connections.send(message, uuid, files)
+    - remote_server\.py
+      - Runs on any remote machine
+      - Loops continually
+      - Calls connections.receive() to get messages
+        - Acts on those messages
+          - msg: submit
+            - Call Job.submit()
+            - Add to list of running jobs (like local\.py)
+      - Maintains a list of jobs, like local\.py, and when they finish, sends messages back by calling connections.send(message, uuid, files)
+        - In complete job case, message will be (job.state, job.get()
+  - queue_server\.py
+    - Loops continually, gets job information, and writes to the database
+    - Can run either detached, on a regular machine (will work same if remote_server\.py is running) or as a client when local_server\.py is running
+    - Holds 1+ child Queue objects
+    - Searched all of those objects for jobs
+    - Adds all jobs to the database
+  - queue\.py
+    - Existing Queue class
+    - If queue_server\.py is running, get job information from there instead of directly
+    - Do this by initializing the class with different methods (two different classes?) depending on if queue_server\.py is running
+  - job\.py
+    - Implement send()
+    - Implement resend()
+    - Modify get so that if job has been sent instead of submitted, gets data from remote queue
+- Possible messages:
+  - All messages are in the format (signal, data), where data can be None
+  - ('submit', Job)
+    - Will execute Job.submit()
+  - ('state', Job.get())
+    - Returns information about complete job
+  - ('isalive', None)
+    - Request server living status
+  - ('alive', None)
+    - Returned if server alive
+  - ('queue', kwargs)
+    - Request a Queue object with job information
+  - ('fullqueue', Queue)
+    - An initialized and updated Queue object sent per user's request
+  - ('terminate', [str(job_id)])
+    - Kill the running job(s) immediately
