@@ -1105,10 +1105,6 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
 
-    if args.version:
-        print(fyrd.version)
-        return 0
-
     if not args.modes:
         parser.print_help()
         return 0
