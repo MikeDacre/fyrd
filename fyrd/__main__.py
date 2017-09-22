@@ -783,7 +783,8 @@ def command_line_parser():
     # Global arguments
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Show debug outputs')
-    parser.add_argument('-V', '--version', action='store_true',
+    parser.add_argument('-V', '--version', action='version',
+                        version='%(prog)s {0}'.format(fyrd.__version__),
                         help='Print version string')
 
     # Subcommands
