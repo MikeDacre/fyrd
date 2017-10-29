@@ -9,6 +9,7 @@ import sys as _sys
 from uuid import uuid4 as _uuid
 from time import sleep as _sleep
 from datetime import datetime as _dt
+from traceback import print_tb as _tb
 
 # Try to use dill, revert to pickle if not found
 import dill as _pickle
@@ -956,6 +957,13 @@ class Job(object):
             _logme.log('Wait complete, fetching outputs', 'debug')
             self.fetch_outputs(save=save, delete_files=False)
         out = self.out if save else self.get_output(save=save, update=False)
+        if isinstance(out, tuple) and issubclass(out[0], Exception):
+            if raise_on_error:
+                _reraise(*out)
+            else:
+                _logme.log('Job failed with exception {}'.format(out))
+                print(_tb(out[2]))
+                return out
         # Cleanup
         if cleanup is None:
             cleanup = self.clean_files
