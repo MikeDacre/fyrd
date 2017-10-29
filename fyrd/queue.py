@@ -231,18 +231,24 @@ class Queue(object):
 
         # Sanitize arguments
         jobs = _run.listify(jobs)
-        if not isinstance(jobs, (list, tuple)):
-            jobs = [jobs]
         for job in jobs:
             if not isinstance(job, (_str, _txt, _int, QueueJob, self._Job)):
                 raise _ClusterError('job must be int, string, or Job, ' +
                                     'is {}'.format(type(job)))
 
+        check_jobs = []
+        for job in jobs:
+            if isinstance(job, (self._Job, QueueJob)):
+                job_id = job.id
+            else:
+                job_id = str(job)
+            check_jobs.append(job_id)
+
         pbar = _run.get_pbar(jobs, name="Waiting for job completion",
                              unit='jobs')
-        while jobs:
+        while check_jobs:
             self.update()
-            for job in jobs:
+            for job in check_jobs:
                 if isinstance(job, (self._Job, QueueJob)):
                     job_id = job.id
                 else:
@@ -269,9 +275,7 @@ class Queue(object):
                 if job_state in GOOD_STATES:
                     _logme.log('Queue wait for {} complete'
                                .format(job_id), 'debug')
-                    if isinstance(job, self._Job):
-                        job.update()
-                    jobs.pop(jobs.index(job))
+                    check_jobs.pop(check_jobs.index(job))
                     pbar.update()
                     break
                 elif job_state in ACTIVE_STATES:
@@ -308,6 +312,10 @@ class Queue(object):
                                'trying to resolve', 'debug')
                     count += 1
             _sleep(self.sleep_len)
+        # Update jobs
+        for job in jobs:
+            if isinstance(job, self._Job):
+                job.update()
         return True
 
     def get(self, jobs):
