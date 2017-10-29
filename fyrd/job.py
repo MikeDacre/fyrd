@@ -755,7 +755,7 @@ class Job(object):
         """
         _logme.log('Cleaning outputs, delete_outputs={}'
                    .format(delete_outputs), 'debug')
-        if delete_outputs is None:
+        if not isinstance(delete_outputs, bool):
             delete_outputs = self.clean_outputs
         assert isinstance(delete_outputs, bool)
         for jobfile in [self.submission, self.exec_script, self.function]:
