@@ -1109,15 +1109,15 @@ def _typecast_items(x):
     """
     c = re.compile(r', *')
     r = re.compile(r': *')
+    if not isinstance(x, (six.string_types, six.text_type)):
+        return x
     if x == 'True':
         return True
     if x == 'False':
         return False
     if x == 'None':
         return None
-    if x is None:
-        return x
-    if isinstance(x, (six.string_types, six.text_type)) and x.isdigit():
+    if x.isdigit():
         return int(x)
     try:
         return float(x)
