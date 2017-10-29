@@ -320,7 +320,7 @@ def init_config(args):
     """Start config initialization."""
     if args.defaults:
         if args.yes:
-            ans = fyrd.fyrd.run.get_input('Overwrite current config? [y/N] ')
+            ans = fyrd.run.get_input('Overwrite current config? [y/N] ')
             if ans.lower() != 'y':
                 print('Aborting')
                 return 1
@@ -374,7 +374,7 @@ def del_profile(args):
     args.name = 'DEFAULT' if args.name.lower() == 'default' else args.name
 
     print('This will delete the {} profile.'.format(args.name))
-    if fyrd.fyrd.run.get_input('Are you sure? [y/N] ', ['y', 'n']).lower() == 'y':
+    if fyrd.run.get_input('Are you sure? [y/N] ', ['y', 'n']).lower() == 'y':
         fyrd.conf.del_profile(args.name)
         print('Done')
     else:
@@ -438,7 +438,7 @@ def run_args_to_keywords(args):
 
 def run(args):
     """Run an arbitrary shell script as a job."""
-    r = re.compile(r'{(.*?)}')
+    #  r = re.compile(r'{(.*?)}')
     jobs = []
     kwargs = run_args_to_keywords(args)
     extra_vars = args.extra_vars.split(',') if args.extra_vars else []
@@ -504,7 +504,10 @@ def run(args):
 
     if args.wait and not args.dry_run:
         print('Waiting for job(s) to complete')
-        fyrd.wait(jobs)
+        if args.notify:
+            fyrd.wait(jobs, notify=args.email)
+        else:
+            fyrd.wait(jobs)
 
 
 def sub_files(args):
@@ -520,7 +523,10 @@ def sub_files(args):
         job_nos.append(job_no)
     if args.wait:
         print('Waiting for job to complete')
-        fyrd.basic.wait(job_nos)
+        if args.notify:
+            fyrd.wait(job_nos, notify=args.email)
+        else:
+            fyrd.wait(job_nos)
 
 
 #######################
@@ -609,7 +615,10 @@ def wait(args):
     if args.users:
         users = args.users.strip().split(',')
         args.jobs += list(q.get_user_jobs(users).values())
-    q.wait(args.jobs)
+    if args.notify:
+        q.wait(args.jobs, notify=args.email)
+    else:
+        q.wait(args.jobs, notify=False)
 
 
 def clean_dir(args):
@@ -817,13 +826,27 @@ def command_line_parser():
     run_opts.add_argument('-l', '--clean', action='store_true',
                           help='Delete STDOUT and STDERR files when done')
 
+    ##################################
+    #  Waiting Notification Options  #
+    ##################################
+
+    default_email = fyrd.conf.get_option('notify', 'notify_address')
+    wait_modes = argparse.ArgumentParser(add_help=False)
+    wait_opts = wait_modes.add_argument_group("Notification Options")
+    wait_opts.add_argument('-n', '--notify', action='store_true',
+                           help='Send notification email when done')
+    wait_opts.add_argument('-e', '--email', default=default_email,
+                           help=('Email address to send notification to, '
+                                 'default set in ~/.fyrd/config.txt'))
+
     ######################
     #  Run Shell Script  #
     ######################
 
     run_sub = modes.add_parser(
-        'run', description=RUN_HELP, epilog=RUN_EPI, parents=[run_modes],
-        help="Run simple shell scripts", aliases=['r'],
+        'run', description=RUN_HELP, epilog=RUN_EPI,
+        parents=[run_modes, wait_modes], help="Run simple shell scripts",
+        aliases=['r'],
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
@@ -847,7 +870,7 @@ def command_line_parser():
 
     run_job_sub = modes.add_parser(
         'submit', description=RUN_HELP, help="Submit existing job files",
-        parents=[run_modes], aliases=['sub', 's'],
+        parents=[run_modes, wait_modes], aliases=['sub', 's'],
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
@@ -863,7 +886,7 @@ def command_line_parser():
 
     wait_sub = modes.add_parser(
         'wait', description=WAIT_HELP, help="Wait for jobs",
-        aliases=['w'],
+        parents=[wait_modes], aliases=['w'],
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 

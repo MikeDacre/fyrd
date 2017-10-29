@@ -44,6 +44,7 @@ from . import logme as _logme
 from . import conf as _conf
 from . import ClusterError as _ClusterError
 from . import batch_systems as _batch
+from . import notify as _notify
 
 # Funtions to import if requested
 __all__ = ['Queue']
@@ -206,7 +207,7 @@ class Queue(object):
                 raise _ClusterError('Invalid state {0}'.format(state))
         return 'good'
 
-    def wait(self, jobs, return_disp=False):
+    def wait(self, jobs, return_disp=False, notify=False):
         """Block until all jobs in jobs are complete.
 
         Update time is dependant upon the queue_update parameter in your
@@ -219,6 +220,10 @@ class Queue(object):
         return_disp : bool, optional
             If a job disappeares from the queue, return 'disapeared' instead of
             True
+        notify : str or False, optional
+            Email address to send notification to, defaults to address in
+            config
+            False means no notification
 
         Returns
         -------
@@ -226,6 +231,8 @@ class Queue(object):
             True on success False or None on failure unless return_disp is True
             and the job disappeares, then returns 'disappeared'
         """
+        if notify is None:
+            notify = _conf.get_option('notify', 'notify_address')
         self.update()
         _logme.log('Queue waiting.', 'debug')
 
@@ -316,6 +323,8 @@ class Queue(object):
         for job in jobs:
             if isinstance(job, self._Job):
                 job.update()
+        if notify:
+            _notify.notify('{} Jobs complete'.format(len(jobs)), notify)
         return True
 
     def get(self, jobs):

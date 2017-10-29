@@ -20,25 +20,32 @@ from fyrd import conf as _conf
 from fyrd import logme as _logme
 
 
-def notify(msg, to, subject='Fyrd notification'):
+def notify(msg, to=None, subject='Fyrd notification'):
     """Send a message."""
+    if not to:
+        to = _conf.get_option('notify', 'notify_address')
+    if not to:
+        _logme.log('No notification address, cannot send notification',
+                   'error')
+        return False
     assert isinstance(msg, str)
     assert isinstance(to, str)
     assert isinstance(subject, str)
     opt = _conf.get_option('notify', 'mode', None)
     if opt == 'linux':
-        mail(msg, to, subject)
+        return mail(msg, to, subject)
     elif opt == 'smtp':
-        smtp(msg, to, subject)
-    else:
-        raise ValueError('Unknown mail mode {}'.format(opt))
+        return smtp(msg, to, subject)
+    raise ValueError('Unknown mail mode {}'.format(opt))
 
 
 def mail(msg, to, subject):
     """Send a message with linux mail."""
     _logme.log('Sending with sendmail', 'debug')
     if not _run.which('mail'):
-        raise ValueError('Linux mail not found')
+        _logme.log('Linux mail not found, cannot send notification' +
+                   'perhaps configure SMTP?', 'error')
+        return False
     job = _sub.run(
         ['mail', '-s', subject, to],
         input=msg.encode(),
