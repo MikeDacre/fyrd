@@ -25,12 +25,15 @@ objects, or JobQueue.Job objects and blocks until those jobs to complete
 The default cluster environment is also defined in this file as MODE, it can be
 set directly or with the get_cluster_environment() function definied here.
 """
+import sys as _sys          # Used to get TB info
 import pwd as _pwd          # Used to get usernames for queue
 import getpass as _getpass  # Used to get usernames for queue
+import traceback as _tb     # Used to mail TB info
 from datetime import datetime as _dt
 from time import time as _time
 from time import sleep as _sleep
 
+from six import reraise as _reraise
 from six import text_type as _txt
 from six import string_types as _str
 from six import integer_types as _int
@@ -207,7 +210,7 @@ class Queue(object):
                 raise _ClusterError('Invalid state {0}'.format(state))
         return 'good'
 
-    def wait(self, jobs, return_disp=False, notify=False):
+    def wait(self, jobs, return_disp=False, notify=True):
         """Block until all jobs in jobs are complete.
 
         Update time is dependant upon the queue_update parameter in your
@@ -220,9 +223,12 @@ class Queue(object):
         return_disp : bool, optional
             If a job disappeares from the queue, return 'disapeared' instead of
             True
-        notify : str or False, optional
-            Email address to send notification to, defaults to address in
-            config
+        notify : str, True, or False, optional
+            If True, both notification address and wait_time must be set in
+            the [notify] section of the config. A notification email will be
+            sent if the time exceeds this time. This is the default.
+            If a string is passed, notification is forced and the string must
+            be the to address.
             False means no notification
 
         Returns
@@ -231,8 +237,13 @@ class Queue(object):
             True on success False or None on failure unless return_disp is True
             and the job disappeares, then returns 'disappeared'
         """
-        if notify is None:
-            notify = _conf.get_option('notify', 'notify_address')
+        if notify is True:
+            notify_time = _conf.get_option('notify', 'wait_time', 120)
+            notify_addr = _conf.get_option('notify', 'notify_address')
+        elif isinstance(notify, str):
+            notify_addr = notify
+            notify_time = 0
+        start_time  = _dt.now()
         self.update()
         _logme.log('Queue waiting.', 'debug')
 
@@ -253,79 +264,113 @@ class Queue(object):
 
         pbar = _run.get_pbar(jobs, name="Waiting for job completion",
                              unit='jobs')
-        while check_jobs:
-            self.update()
-            for job in check_jobs:
-                if isinstance(job, (self._Job, QueueJob)):
-                    job_id = job.id
-                else:
-                    job_id = str(job)
-                job_id, array_id = self.batch_system.normalize_job_id(job_id)
-                _logme.log('Checking {}'.format(job_id), 'debug')
-                lgd = False
-                # Allow 12 seconds to elapse before job is found in queue,
-                # if it is not in the queue by then, assume failure.
-                if not self.test_job_in_queue(job_id):
-                    if return_disp:
-                        return 'disappeared'
+        dispo = 'Unknown'
+        msg = None
+        try:
+            while check_jobs:
+                self.update()
+                for job in check_jobs:
+                    if isinstance(job, (self._Job, QueueJob)):
+                        job_id = job.id
                     else:
-                        return False
-                ## Actually look for job in running/queued queues
-                lgd      = False
-                lgd2     = False
-                start    = _dt.now()
-                res_time = float(_conf.get_option('queue', 'res_time'))
-                count    = 0
-                # Get job state
-                job_state = self.jobs[job_id].state
-                # Check the state
-                if job_state in GOOD_STATES:
-                    _logme.log('Queue wait for {} complete'
-                               .format(job_id), 'debug')
-                    check_jobs.pop(check_jobs.index(job))
-                    pbar.update()
-                    break
-                elif job_state in ACTIVE_STATES:
-                    if lgd:
-                        _logme.log('{} not complete yet, waiting'
+                        job_id = str(job)
+                    job_id, array_id = self.batch_system.normalize_job_id(job_id)
+                    _logme.log('Checking {}'.format(job_id), 'debug')
+                    lgd = False
+                    # Allow 12 seconds to elapse before job is found in queue,
+                    # if it is not in the queue by then, assume failure.
+                    if not self.test_job_in_queue(job_id):
+                        if return_disp:
+                            dispo = 'disappeared'
+                            break
+                        else:
+                            dispo = False
+                            break
+                    ## Actually look for job in running/queued queues
+                    lgd      = False
+                    lgd2     = False
+                    start    = _dt.now()
+                    res_time = float(_conf.get_option('queue', 'res_time'))
+                    count    = 0
+                    # Get job state
+                    job_state = self.jobs[job_id].state
+                    # Check the state
+                    if job_state in GOOD_STATES:
+                        _logme.log('Queue wait for {} complete'
                                    .format(job_id), 'debug')
-                        lgd = True
+                        check_jobs.pop(check_jobs.index(job))
+                        pbar.update()
+                        dispo = True
+                        break
+                    elif job_state in ACTIVE_STATES:
+                        if lgd:
+                            _logme.log('{} not complete yet, waiting'
+                                       .format(job_id), 'debug')
+                            lgd = True
+                        else:
+                            _logme.log('{} still not complete, waiting'
+                                       .format(job_id), 'verbose')
+                    elif job_state in BAD_STATES:
+                        msg = 'Job {} failed with state {}'.format(job, job_state)
+                        _logme.log(msg, 'error')
+                        dispo = False
+                        break
+                    elif job_state in UNCERTAIN_STATES:
+                        if not lgd2:
+                            _logme.log('Job {} in state {}, waiting {} '
+                                       .format(job, job_state, res_time) +
+                                       'seconds for resolution', 'warn')
+                            lgd2 = True
+                        if (_dt.now() - start).seconds > res_time:
+                            msg = (
+                                'Job {} still in state {} after {}s wait, aborting'
+                                .format(job, job_state, res_time)
+                            )
+                            _logme.log(msg, 'error')
+                            dispo = False
+                            break
                     else:
-                        _logme.log('{} still not complete, waiting'
-                                   .format(job_id), 'verbose')
-                elif job_state in BAD_STATES:
-                    _logme.log('Job {} failed with state {}'
-                               .format(job, job_state), 'error')
-                    return False
-                elif job_state in UNCERTAIN_STATES:
-                    if not lgd2:
-                        _logme.log('Job {} in state {}, waiting {} '
-                                   .format(job, job_state, res_time) +
-                                   'seconds for resolution', 'warn')
-                        lgd2 = True
-                    if (_dt.now() - start).seconds > res_time:
-                        _logme.log('Job {} still in state {}, aborting'
-                                   .format(job, job_state), 'error')
-                        return False
-                else:
-                    if count == 5:
+                        if count == 5:
+                            _logme.log('Job {} in unknown state {} '
+                                       .format(job, job_state) +
+                                       'cannot continue', 'critical')
+                            raise QueueError('Unknown job state {}'
+                                             .format(job_state))
                         _logme.log('Job {} in unknown state {} '
                                    .format(job, job_state) +
-                                   'cannot continue', 'critical')
-                        raise QueueError('Unknown job state {}'
-                                         .format(job_state))
-                    _logme.log('Job {} in unknown state {} '
-                               .format(job, job_state) +
-                               'trying to resolve', 'debug')
-                    count += 1
-            _sleep(self.sleep_len)
-        # Update jobs
-        for job in jobs:
-            if isinstance(job, self._Job):
-                job.update()
+                                   'trying to resolve', 'debug')
+                        count += 1
+                if dispo in [False, 'disappeared']:
+                    break
+                _sleep(self.sleep_len)
+            # Update jobs
+            for job in jobs:
+                if isinstance(job, self._Job):
+                    job.update()
+        except:
+            dispo = _sys.exc_info()
         if notify:
-            _notify.notify('{} Jobs complete'.format(len(jobs)), notify)
-        return True
+            if (_dt.now()-start_time).total_seconds() >= notify_time:
+                job_count = len(jobs)
+                subject = 'Fyrd Wait for {} Jobs Completed'.format(job_count)
+                if dispo is True:
+                    message = 'Jobs completed\n'
+                    subject += ', Success'
+                elif isinstance(dispo, tuple):
+                    message = 'Jobs {}\nTraceback: {}'.format(
+                        repr(dispo[1]), _tb.format_tb(dispo[2])
+                    )
+                    subject += ', {}'.format(repr(dispo[1]))
+                else:
+                    message = 'Some or all jobs failed\n'
+                    if msg:
+                        message += 'Error message:\n{}\n\n'.format(msg)
+                    subject += ', Some Failed'
+                message += 'Total jobs waited for: {}\n'.format(job_count)
+                _notify.notify(message, notify_addr, subject)
+        if isinstance(dispo, tuple):
+            _reraise(*dispo)
+        return dispo
 
     def get(self, jobs):
         """Get all results from a bunch of Job objects.

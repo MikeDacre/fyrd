@@ -95,6 +95,7 @@ DEFAULTS = {
     },
     'notify': {
         'mode': 'linux',  # Or SMTP
+        'wait_time': 240, # time in seconds
         'notify_address': None,
         'smtp_host': 'smtp.gmail.com',
         'smtp_port': 587,
@@ -207,6 +208,8 @@ CONF_HELP = {
             If mode is smtp, all other entries required, `smtp_passfile` must
             point to a read only file accessible only to the user that
             contains the password for smtp.
+        wait_time : int
+            Time to wait before auto-email, in seconds.
         notify_address : str
             The address to send an email to. Can also be specified at runtime
         smtp_host : str
