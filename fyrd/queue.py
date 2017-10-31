@@ -357,8 +357,8 @@ class Queue(object):
                     message = 'Jobs completed\n'
                     subject += ', Success'
                 elif isinstance(dispo, tuple):
-                    message = 'Jobs {}\nTraceback: {}'.format(
-                        repr(dispo[1]), _tb.format_tb(dispo[2])
+                    message = 'Jobs {}\nTraceback:\n{}'.format(
+                        repr(dispo[1]), _tb.format_tb(dispo[2])[0]
                     )
                     subject += ', {}'.format(repr(dispo[1]))
                 else:
