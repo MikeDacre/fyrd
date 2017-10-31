@@ -28,6 +28,7 @@ if [ -f {script} ]; then
     {command}
     exitcode=$?
     echo Done
+    echo Code: $exitcode
     date +'%y-%m-%d-%H:%M:%S'
     if [[ $exitcode != 0 ]]; then
         echo Exited with code: $exitcode >&2
@@ -63,6 +64,7 @@ echo "Running {name}"
 {command}
 exitcode=$?
 echo Done
+echo Code: $exitcode
 date +'%y-%m-%d-%H:%M:%S'
 if [[ $exitcode != 0 ]]; then
     echo Exited with code: $exitcode >&2
