@@ -505,7 +505,10 @@ def run(args):
     if args.wait and not args.dry_run:
         print('Waiting for job(s) to complete')
         if args.notify:
-            fyrd.wait(jobs, notify=args.email)
+            arg = args.email if args.email else True
+            fyrd.wait(jobs, notify=arg)
+        elif args.no_notify:
+            q.wait(args.jobs, notify=False)
         else:
             fyrd.wait(jobs)
 
@@ -524,7 +527,10 @@ def sub_files(args):
     if args.wait:
         print('Waiting for job to complete')
         if args.notify:
-            fyrd.wait(job_nos, notify=args.email)
+            arg = args.email if args.email else True
+            fyrd.wait(job_nos, notify=arg)
+        elif args.no_notify:
+            q.wait(args.jobs, notify=False)
         else:
             fyrd.wait(job_nos)
 
@@ -616,9 +622,12 @@ def wait(args):
         users = args.users.strip().split(',')
         args.jobs += list(q.get_user_jobs(users).values())
     if args.notify:
-        q.wait(args.jobs, notify=args.email)
-    else:
+        arg = args.email if args.email else True
+        q.wait(args.jobs, notify=arg)
+    elif args.no_notify:
         q.wait(args.jobs, notify=False)
+    else:
+        q.wait(args.jobs)
 
 
 def clean_dir(args):
@@ -835,6 +844,8 @@ def command_line_parser():
     wait_opts = wait_modes.add_argument_group("Notification Options")
     wait_opts.add_argument('-n', '--notify', action='store_true',
                            help='Send notification email when done')
+    wait_opts.add_argument('--no-notify', action='store_true',
+                           help='Suppress automatic notifications')
     wait_opts.add_argument('-e', '--email', default=default_email,
                            help=('Email address to send notification to, '
                                  'default set in ~/.fyrd/config.txt'))
