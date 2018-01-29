@@ -105,6 +105,7 @@ tests if a file is executable) to check your command line tools.
 Use the warn parameter with `_logme.log()` to set a log level, e.g.:
 
 .. code:: python
+
     log_level = 'error' if warn else 'debug'
     _logme.log('Cannot use me :-(', log_level)
 

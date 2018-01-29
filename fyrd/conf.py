@@ -34,6 +34,7 @@ Examples
 
 """
 from __future__ import print_function
+import re
 import os       as _os
 import readline as _rl
 from textwrap import dedent as _dnt
@@ -41,6 +42,8 @@ try:
     import configparser as _configparser
 except ImportError:
     import ConfigParser as _configparser
+
+import six
 
 from . import run     as _run
 from . import logme   as _logme
@@ -89,6 +92,17 @@ DEFAULTS = {
         'profile_file':    _os.path.join(
             CONFIG_PATH, 'profiles.txt'
         )
+    },
+    'notify': {
+        'mode': 'linux',  # Or SMTP
+        'wait_time': 240, # time in seconds
+        'notify_address': None,
+        'smtp_host': 'smtp.gmail.com',
+        'smtp_port': 587,
+        'smtp_tls': True,
+        'smtp_from': None,
+        'smtp_user': None,
+        'smtp_passfile': None
     },
     'local': {
         'server_uri':      None,
@@ -180,6 +194,37 @@ CONF_HELP = {
             advised, but sometimes necessary.
         profile_file : str
             the config file where profiles are defined.
+        """
+    ),
+    'notify': _dnt(
+        """
+        [notify]
+        User notification option, used mostly to email completion info.
+
+        Options
+        -------
+        mode : 'linux', 'smtp', or None
+            If mode is linux, all other entries optional and `mail` is used.
+            If mode is smtp, all other entries required, `smtp_passfile` must
+            point to a read only file accessible only to the user that
+            contains the password for smtp.
+        wait_time : int
+            Time to wait before auto-email, in seconds.
+        notify_address : str
+            The address to send an email to. Can also be specified at runtime
+        smtp_host : str
+            e.g. smtp.gmail.com
+        smtp_port : int
+            e.g. 587
+        smtp_tls : bool
+            Use TLS?
+        smtp_from : str
+            Server email address, e.g. a dedicated gmail adrress
+        smtp_user : str, optional
+            If not provided, smtp_from used
+        smtp_passfile : str
+            Path to a plain text, read-only, user accessible password file with
+            the SMTP password. Perissions should be 400.
         """
     ),
     'local': _dnt(
@@ -1060,32 +1105,49 @@ def _section_to_dict(section):
     return out
 
 
-def _typecast_items(val):
+def _typecast_items(x):
     """Try to convert a variable into the true type.
+
+    Avoids eval() as we will be used on config files.
 
     For example: 'True' becomes True and '0.125' becomes 0.125
     """
-    if isinstance(val, str):
-        if val == 'True':
-            out = True
-        elif val == 'False':
-            out = False
-        elif val == 'None':
-            out = None
-        elif val.isdigit():
-            out = int(val)
-        else:
-            if '.' in val:
-                res = val.split('.')
-                if len(res) == 2 and res[0].isdigit() and res[1].isdigit():
-                    out = float(val)
-                else:
-                    out = val
-            else:
-                out = val
-    else:
-        out = val
-    return out
+    c = re.compile(r', *')
+    r = re.compile(r': *')
+    if not isinstance(x, (six.string_types, six.text_type)):
+        return x
+    if x == 'True':
+        return True
+    if x == 'False':
+        return False
+    if x == 'None':
+        return None
+    if x.isdigit():
+        return int(x)
+    try:
+        return float(x)
+    except (ValueError, TypeError):
+        pass
+    try:
+        return complex(x)
+    except (ValueError, TypeError):
+        pass
+    try:
+        if x.startswith('[') and x.endswith(']'):
+            return [_typecast_items(i) for i in c.split(x.strip('[]'))]
+        if x.startswith('{') and x.endswith('}'):
+            if ':' in x:
+                return {
+                    _typecast_items(k): _typecast_items(v) for k, v in [
+                        r.split(i) for i in c.split(x.strip('{}'))
+                    ]
+                }
+            return {_typecast_items(i) for i in c.split(x.strip('{}'))}
+    except (ValueError, TypeError):
+        pass
+    if isinstance(x, (six.string_types)):
+        return x.strip('\'"')
+    return x
 
 
 def _config_to_dict(cnf):

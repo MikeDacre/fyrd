@@ -99,6 +99,23 @@ attributes through the `Queue` class and the `Queue.jobs` dictionary. The `Job`
 class uses this system to block until the job completes when either the
 `wait()` or `get()` methods are called.
 
+Note, waiting can email you when it is done, but you need to enable it in the
+config file (`~/.fyrd/config.txt`)::
+
+    [notify]
+    mode = linux  # Can be linux or smtp, linux uses the mail command
+    notify_address = your.address@gmail.com 
+    # The following are only needed for smtp mode
+    smtp_host = smtp.gmail.com
+    smtp_port = 587
+    smtp_tls = True
+    smtp_from = your.server@gmail.com
+    smtp_user = None  # Defaults to smtp_from
+    # This is insecure, so use an application specific password. This should
+    # be a read-only file with the SMTP password. After making it run:
+    # chmod 400 ~/.fyrd/smtp_pass
+    smtp_passfile = ~/.fyrd/smtp_pass
+
 To allow similar functionality on a system not connected to a torque or slurm
 queue, a local queue that behaves similarly, including allowing dependency
 tracking, is implemented in the `fyrd/jobqueue.py` file. It is based on
@@ -212,7 +229,8 @@ Fyrd provides a few command line tools to make little jobs easier. The main
 tool is `fyrd`. Running `fyrd --help` will give instructions on use, something
 like this::
 
-    usage: fyrd [-h] [-v] {conf,prof,keywords,queue,wait,clean} ...
+    usage: fyrd [-h] [-v] [-V]
+            {run,submit,wait,queue,conf,prof,keywords,clean,local} ...
 
     Manage fyrd config, profiles, and queue.
 
@@ -220,22 +238,26 @@ like this::
     Author         Michael D Dacre <mike.dacre@gmail.com>
     Organization   Stanford University
     License        MIT License, use as you wish
-    Version        0.6.2-beta.7
+    Version        0.6.2-beta2
     ============   ======================================
 
     positional arguments:
-      {conf,prof,keywords,queue,wait,clean}
+      {run,submit,wait,queue,conf,prof,keywords,clean,local}
+        run (r)             Run simple shell scripts
+        submit (sub, s)     Submit existing job files
+        wait (w)            Wait for jobs
+        queue (q)           Search the queue
         conf (config)       View and manage the config
         prof (profile)      Manage profiles
         keywords (keys, options)
                             Print available keyword arguments.
-        queue (q)           Search the queue
-        wait                Wait for jobs
         clean               Clean up a job directory
+        local (server)      Manage the local queue server
 
     optional arguments:
       -h, --help            show this help message and exit
       -v, --verbose         Show debug outputs
+      -V, --version         Print version string
 
 The keywords each have their own help menus and are fairly self-explanatory.
 The `conf` and `profile` arguments allow you to edit the fyrd config and
@@ -257,7 +279,8 @@ currently running jobs, and `myq -r -l` will dump a list of job numbers only to
 the console, really useful when combined with `xargs`, e.g. `myq -r -l | xargs
 qdel`.
 
-The `wait` command just blocks until the provided job numbers complete.
+The `wait` command just blocks until the provided job numbers complete, and
+can send you an email when it completes, see the config info above.
 
 And the `clean` command provides options to clean out a job directory that
 contains leftover files from a fyrd session.

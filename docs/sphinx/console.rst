@@ -23,18 +23,41 @@ This software has uses a subcommand system to separate modes, and has six modes:
 
 Several of the commands have aliases (`conf` and `prof` being the two main ones)
 
+Emailing
+........
+
+The `run`, `run-job`, and `wait` commands can all email you when they are done. To use
+this you need to configure the sending in the `~/fyrd/config.txt` file::
+
+    [notify]
+    mode = linux  # Can be linux or smtp, linux uses the mail command
+    notify_address = your.address@gmail.com 
+    # The following are only needed for smtp mode
+    smtp_host = smtp.gmail.com
+    smtp_port = 587
+    smtp_tls = True
+    smtp_from = your.server@gmail.com
+    smtp_user = None  # Defaults to smtp_from
+    # This is insecure, so use an application specific password. This should
+    # be a read-only file with the SMTP password. After making it run:
+    # chmod 400 ~/.fyrd/smtp_pass
+    smtp_passfile = ~/.fyrd/smtp_pass
+
+To enable emailing, pass `-n` (notify) to `wait`, or `-w -n` to the other two commands.
+You can also manually specify the address with `-e your.address@gmail.com`.
+
 Examples
 ........
 
 .. code:: shell
 
    fyrd run 'samtools display big_file.bam | python $HOME/bin/my_parser.py > outfile'
-   fyrd run --profile long --args walltime=24:00:00,mem=20G --wait \
+   fyrd run --profile long --args walltime=24:00:00,mem=20G --wait -n \
             'samtools display big_file.bam | python $HOME/bin/my_parser.py > outfile'
 
 .. code:: shell
 
-   fyrd run-jobs --wait ./jobs/*.sh
+   fyrd submit --wait -n ./jobs/*.sh
 
 .. code:: shell
 
@@ -93,38 +116,84 @@ All Options
 
 `fyrd run`::
 
-    usage: fyrd run [-h] [-w] [-p PROFILE] [-a ARGS]
-                    shell_script [shell_script ...]
+    usage: fyrd run [-h] [-p PROFILE] [-c CORES] [-m MEM] [-t TIME] [-a ARGS] [-w]
+                    [-k] [-l] [-n] [-e EMAIL] [-s] [-x EXTRA_VARS] [-d]
+                    [shell_script] [file_parsing [file_parsing ...]]
 
     Run a shell script on the cluster and optionally wait for completion.
+
+    Allows the running of a single simple shell script, or the same shell script on
+    many files, or more complex file interpretation.
 
     positional arguments:
       shell_script          The script to run
+      file_parsing          The script to run
 
     optional arguments:
       -h, --help            show this help message and exit
-      -w, --wait            Wait for the job to complete
+      -s, --simple          The amount of walltime to request
+      -x EXTRA_VARS, --extra-vars EXTRA_VARS
+                            Regex in form "new_var:orig_var:regex:sub,..."
+      -d, --dry-run         Print commands instead of running them
+
+    Run Options:
       -p PROFILE, --profile PROFILE
                             The profile to use to run
+      -c CORES, --cores CORES
+                            The number of cores to request
+      -m MEM, --mem MEM     The amount of memory to request
+      -t TIME, --time TIME  The amount of walltime to request
       -a ARGS, --args ARGS  Submission args, e.g.:
                             'time=00:20:00,mem=20G,cores=10'
+      -w, --wait            Wait for the job to complete
+      -k, --keep            Keep submission scripts
+      -l, --clean           Delete STDOUT and STDERR files when done
 
-`fyrd run-jobs`::
+    Notification Options:
+      -n, --notify          Send notification email when done
+      -e EMAIL, --email EMAIL
+                            Email address to send notification to, default set in
+                            ~/.fyrd/config.txt
 
-    usage: fyrd run-job [-h] [-w] shell_scripts [shell_scripts ...]
+`fyrd submit`::
+
+    usage: fyrd submit [-h] [-p PROFILE] [-c CORES] [-m MEM] [-t TIME] [-a ARGS]
+                       [-w] [-k] [-l] [-n] [-e EMAIL]
+                       job_files [job_files ...]
 
     Run a shell script on the cluster and optionally wait for completion.
 
+    Allows the running of a single simple shell script, or the same shell script on
+    many files, or more complex file interpretation.
+
     positional arguments:
-      shell_scripts  The script to run
+      job_files             The script to run
 
     optional arguments:
-      -h, --help     show this help message and exit
-      -w, --wait     Wait for the job to complete
+      -h, --help            show this help message and exit
+
+    Run Options:
+      -p PROFILE, --profile PROFILE
+                            The profile to use to run
+      -c CORES, --cores CORES
+                            The number of cores to request
+      -m MEM, --mem MEM     The amount of memory to request
+      -t TIME, --time TIME  The amount of walltime to request
+      -a ARGS, --args ARGS  Submission args, e.g.:
+                            'time=00:20:00,mem=20G,cores=10'
+      -w, --wait            Wait for the job to complete
+      -k, --keep            Keep submission scripts
+      -l, --clean           Delete STDOUT and STDERR files when done
+
+    Notification Options:
+      -n, --notify          Send notification email when done
+      -e EMAIL, --email EMAIL
+                            Email address to send notification to, default set in
+                            ~/.fyrd/config.txt
 
 `fyrd wait`::
   
-    usage: fyrd wait [-h] [-u USERS] [jobs [jobs ...]]
+    usage: fyrd wait [-h] [-n] [-e EMAIL] [-u USERS] [jobs [jobs ...]]
 
     Wait on a list of jobs, block until they complete.
 
@@ -135,7 +204,13 @@ All Options
       -h, --help            show this help message and exit
       -u USERS, --users USERS
                             A comma-separated list of users to wait for
- 
+
+    Notification Options:
+      -n, --notify          Send notification email when done
+      -e EMAIL, --email EMAIL
+                            Email address to send notification to, default set in
+                            ~/.fyrd/config.txt
+   
 `fyrd queue`::
 
     usage: fyrd queue [-h] [-u  [...] | -a] [-p  [...]] [-r | -q | -d | -b]

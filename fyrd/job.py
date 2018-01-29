@@ -9,6 +9,7 @@ import sys as _sys
 from uuid import uuid4 as _uuid
 from time import sleep as _sleep
 from datetime import datetime as _dt
+from traceback import print_tb as _tb
 
 # Try to use dill, revert to pickle if not found
 import dill as _pickle
@@ -379,6 +380,36 @@ class Job(object):
         if self.poutfile and not self._got_out:
             outfiles.append(self.poutfile)
         return outfiles
+
+    @property
+    def exitcode(self):
+        """Return exitcode."""
+        return self.get_exitcode()
+
+    @property
+    def code(self):
+        """Return exitcode."""
+        return self.get_exitcode()
+
+    @property
+    def out(self):
+        """Return output."""
+        return self.get_output()
+
+    @property
+    def stdout(self):
+        """Return output."""
+        return self.get_stdout()
+
+    @property
+    def stderr(self):
+        """Return stderr."""
+        return self.get_stderr()
+
+    @property
+    def err(self):
+        """Return stderr."""
+        return self.get_stderr()
 
     ###############################
     #  Core Job Handling Methods  #
@@ -754,7 +785,7 @@ class Job(object):
         """
         _logme.log('Cleaning outputs, delete_outputs={}'
                    .format(delete_outputs), 'debug')
-        if delete_outputs is None:
+        if not isinstance(delete_outputs, bool):
             delete_outputs = self.clean_outputs
         assert isinstance(delete_outputs, bool)
         for jobfile in [self.submission, self.exec_script, self.function]:
@@ -956,6 +987,13 @@ class Job(object):
             _logme.log('Wait complete, fetching outputs', 'debug')
             self.fetch_outputs(save=save, delete_files=False)
         out = self.out if save else self.get_output(save=save, update=False)
+        if isinstance(out, tuple) and issubclass(out[0], Exception):
+            if raise_on_error:
+                _reraise(*out)
+            else:
+                _logme.log('Job failed with exception {}'.format(out))
+                print(_tb(out[2]))
+                return out
         # Cleanup
         if cleanup is None:
             cleanup = self.clean_files
@@ -1084,11 +1122,17 @@ class Job(object):
         _logme.log('Getting stdout from {}'.format(self._kwargs['outfile']),
                    'debug')
         if _os.path.isfile(self._kwargs['outfile']):
-            self.get_times(update=False)
-            stdout = open(self._kwargs['outfile']).read()
+            with open(self._kwargs['outfile']) as fin:
+                stdout = fin.read()
             if stdout:
-                stdouts = stdout.split('\n')
-                stdout     = '\n'.join(stdouts[2:-3]) + '\n'
+                stdouts = stdout.strip().split('\n')
+                if len(stdouts) < 3 or stdouts[-3] != 'Done':
+                    _logme.log('STDOUT incomplete, returning as is', 'info')
+                    return stdout
+                if self.done:
+                    self.get_times(update=False, stdout=stdout)
+                    self.get_exitcode(update=False, stdout=stdout)
+                stdout  = '\n'.join(stdouts[2:-3]) + '\n'
             if delete_file is True or self.clean_files is True:
                 _logme.log('Deleting {}'.format(self._kwargs['outfile']),
                            'debug')
@@ -1144,7 +1188,8 @@ class Job(object):
         _logme.log('Getting stderr from {}'.format(self._kwargs['errfile']),
                    'debug')
         if _os.path.isfile(self._kwargs['errfile']):
-            stderr = open(self._kwargs['errfile']).read()
+            with open(self._kwargs['errfile']) as fin:
+                stderr = fin.read()
             if delete_file is True or self.clean_files is True:
                 _logme.log('Deleting {}'.format(self._kwargs['errfile']),
                            'debug')
@@ -1159,7 +1204,7 @@ class Job(object):
                        .format(self._kwargs['errfile']), 'warn')
             return None
 
-    def get_times(self, update=True):
+    def get_times(self, update=True, stdout=None):
         """Get stdout of function or script, same for both.
 
         Sets self.start and self.end from the contents of STDOUT if
@@ -1169,6 +1214,8 @@ class Job(object):
         ----------
         update : bool, optional
             Update job info from queue first.
+        stdout : str, optional
+            Pass existing stdout for use
 
         Returns
         -------
@@ -1189,34 +1236,41 @@ class Job(object):
             return None, None
         _logme.log('Getting times from {}'.format(self._kwargs['outfile']),
                    'debug')
-        if _os.path.isfile(self._kwargs['outfile']):
-            stdout = open(self._kwargs['outfile']).read()
-            if stdout:
-                stdouts = stdout.split('\n')
-                # Get times
-                timefmt = '%y-%m-%d-%H:%M:%S'
-                try:
-                    self.start = _dt.strptime(stdouts[0], timefmt)
-                    self.end   = _dt.strptime(stdouts[-2], timefmt)
-                except ValueError as err:
-                    _logme.log('Time parsing failed with value error; ' +
-                               '{}. '.format(err) + 'This may be because you ' +
-                               'are using the script running that does not ' +
-                               'include time tracking', 'debug')
-            self._got_times = True
-            return self.start, self.end
-        else:
-            _logme.log('No file at {}, cannot get times'
-                       .format(self._kwargs['outfile']), 'warn')
+        if not stdout:
+            if _os.path.isfile(self._kwargs['outfile']):
+                with open(self._kwargs['outfile']) as fin:
+                    stdout = fin.read()
+            else:
+                _logme.log('No file at {}, cannot get times'
+                           .format(self._kwargs['outfile']), 'warn')
+                return None
+        stdouts = stdout.strip().split('\n')
+        if len(stdouts) < 3 or stdouts[-3] != 'Done':
+            _logme.log('STDOUT incomplete, cannot get times', 'warn')
             return None
 
-    def get_exitcode(self, update=True):
+        # Get times
+        timefmt = '%y-%m-%d-%H:%M:%S'
+        try:
+            self.start = _dt.strptime(stdouts[0], timefmt)
+            self.end   = _dt.strptime(stdouts[-1], timefmt)
+        except ValueError as err:
+            _logme.log('Time parsing failed with value error; ' +
+                       '{}. '.format(err) + 'This may be because you ' +
+                       'are using the script running that does not ' +
+                       'include time tracking', 'debug')
+        self._got_times = True
+        return self.start, self.end
+
+    def get_exitcode(self, update=True, stdout=None):
         """Try to get the exitcode.
 
         Parameters
         ----------
         update : bool, optional
             Update job info from queue first.
+        stdout : str, optional
+            Pass existing stdout for use
 
         Returns
         -------
@@ -1226,29 +1280,46 @@ class Job(object):
         if self.done and self._got_exitcode:
             _logme.log('Getting exitcode from _exitcode', 'debug')
             return self._exitcode
-        if self.status == 'disappeared':
-            _logme.log('Cannot get exitcode for disappeared job', 'debug')
-            return 0
         if update and not self._updating and not self.done:
             self.update()
         if not self.done:
             _logme.log('Job is not complete, no exit code yet', 'info')
             return None
-        _logme.log('Getting exitcode from queue', 'debug')
-        if not self.queue_info:
-            self.queue_info = self.queue[self.id]
-        if hasattr(self.queue_info, 'exitcode'):
-            code = self.queue_info.exitcode
-        else:
-            code = None
-            _logme.log('No exitcode even though the job is done, this ' +
-                       "shouldn't happen.", 'warn')
-        self._exitcode = code
+        if self.state == 'disappeared':
+            _logme.log('Cannot get exitcode for disappeared job', 'debug')
+            return 0
+
+        code = None
+
+        if not stdout and _os.path.isfile(self._kwargs['outfile']):
+            with open(self._kwargs['outfile']) as fin:
+                stdout = fin.read()
+
+        if stdout:
+            stdouts = stdout.strip().split('\n')
+            if len(stdouts) > 3 and stdouts[-3] == 'Done':
+                if stdouts[-2].startswith('Code: '):
+                    code = int(stdouts[-2].split(':')[-1].strip())
+
+        if code is None:
+            _logme.log('Getting exitcode from queue', 'debug')
+            if not self.queue_info:
+                self.queue_info = self.queue[self.id]
+            if hasattr(self.queue_info, 'exitcode'):
+                code = self.queue_info.exitcode
+
+        if code is None:
+            _logme.log('Failed to get exitcode for job', 'warn')
+            return None
+
+        self._exitcode     = code
         self._got_exitcode = True
+
         if code != 0:
             self.state = 'failed'
             _logme.log('Job {} failed with exitcode {}'
                        .format(self.name, code), 'error')
+
         return code
 
     def fetch_outputs(self, save=True, delete_files=None, get_stats=True):
@@ -1484,19 +1555,6 @@ class Job(object):
         self.name = name
 
         return name
-
-    def __getattr__(self, key):
-        """Dynamically get out, stdout, stderr, and exitcode."""
-        if key == 'out':
-            return self.get_output()
-        elif key == 'stdout':
-            return self.get_stdout()
-        elif key == 'stderr':
-            return self.get_stderr()
-        elif key == 'exitcode':
-            return self.get_exitcode()
-        elif key == 'err':
-            return self.get_stderr()
 
     def __repr__(self):
         """Return simple job information."""

@@ -274,6 +274,24 @@ or `Job` objects and wait until all of them are complete. This method is called
 by the `Job.wait()` method, and can be called directly to wait for an arbitrary
 number of jobs.
 
+Note, if you add the following to `~/.fyrd/config.txt` wait will automatically
+send an email when done::
+
+    [notify]
+    mode = linux  # Can be linux or smtp, linux uses the mail command
+    notify_address = your.address@gmail.com 
+    # The following are only needed for smtp mode
+    smtp_host = smtp.gmail.com
+    smtp_port = 587
+    smtp_tls = True
+    smtp_from = your.server@gmail.com
+    smtp_user = None  # Defaults to smtp_from
+    # This is insecure, so use an application specific password. This should
+    # be a read-only file with the SMTP password. After making it run:
+    # chmod 400 ~/.fyrd/smtp_pass
+    smtp_passfile = ~/.fyrd/smtp_pass
+ 
+
 To wait for all jobs from a given user, you can do this:
 
 .. code:: python

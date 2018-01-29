@@ -376,13 +376,20 @@ def clean_dir(directory=None, suffix=None, qtype=None, confirm=False,
 ###############################################################################
 
 
-def wait(jobs):
+def wait(jobs, notify=True):
     """Wait for jobs to finish.
 
     Parameters
     ----------
     jobs : fyrd.job.Job or str or list of either (mixed list fine)
         A single job or list of jobs, either Job objects or job numbers
+    notify : str, True, or False, optional
+        If True, both notification address and wait_time must be set in
+        the [notify] section of the config. A notification email will be
+        sent if the time exceeds this time. This is the default.
+        If a string is passed, notification is forced and the string must
+        be the to address.
+        False means no notification
 
     Returns
     -------
@@ -390,7 +397,7 @@ def wait(jobs):
         True if all jobs successful, false otherwise
     """
     q = _queue.Queue()
-    return q.wait(jobs)
+    return q.wait(jobs, notify=notify)
 
 
 def get(jobs):
