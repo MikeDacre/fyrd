@@ -438,6 +438,15 @@ def open_zipped(infile, mode='r'):
         return open(infile, mode)
 
 
+def exp_file(infile):
+    """Return an expanded path to a file."""
+    return _os.path.expandvars(
+        _re.sub(
+            '~', '$HOME', infile
+        )
+    )
+
+
 def cmd_or_file(string):
     """If string is a file, return the contents, else return the string.
 
