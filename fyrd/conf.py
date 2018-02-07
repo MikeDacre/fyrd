@@ -555,11 +555,13 @@ def create_config_interactive(prompt=True):
     print("We store job profile information in a small config file.")
     file_path = _os.path.expanduser(
         _run.get_input('Where would you like that file to go? [{}]'
-                       .format(config.get('jobs', 'profile_file')))
+                       .format(
+                           _run.exp_file(config.get('jobs', 'profile_file'))
+                       ))
     ).strip(' ').lower()
 
     file_path = file_path if file_path else cnf['jobs']['profile_file']
-    cnf['jobs']['profile_file'] = _os.path.expanduser(file_path)
+    cnf['jobs']['profile_file'] = _run.exp_file(file_path)
 
 
     # Temp file directory
@@ -949,8 +951,8 @@ def create_profiles(profs=None):
         allow_no_value=True,
     )
 
-    if _os.path.exists(config.get('jobs', 'profile_file')):
-        _os.remove(config.get('jobs', 'profile_file'))
+    if _os.path.exists(_run.exp_file(config.get('jobs', 'profile_file'))):
+        _os.remove(_run.exp_file(config.get('jobs', 'profile_file')))
 
     init_conf = {}
     if not profs or not isinstance(profs, dict):
@@ -965,7 +967,7 @@ def create_profiles(profs=None):
 
     _config_from_dict(profiles, init_conf)
 
-    with open(config.get('jobs', 'profile_file'), 'w') as fout:
+    with open(_run.exp_file(config.get('jobs', 'profile_file')), 'w') as fout:
         profiles.write(fout)
 
 
@@ -977,9 +979,9 @@ def load_profiles():
     ConfigParser
         profiles
     """
-    if not _os.path.isfile(config.get('jobs', 'profile_file')):
+    if not _os.path.isfile(_run.exp_file(config.get('jobs', 'profile_file'))):
         create_profiles()
-    profiles.read(config.get('jobs', 'profile_file'))
+    profiles.read(_run.exp_file(config.get('jobs', 'profile_file')))
 
     # Recreate DEFAULT if necessary.
     def_prof = _config_to_dict(profiles)['DEFAULT']
@@ -1002,7 +1004,7 @@ def write_profiles():
     ConfigParser
         profiles
     """
-    with open(config.get('jobs', 'profile_file'), 'w') as fout:
+    with open(_run.exp_file(config.get('jobs', 'profile_file')), 'w') as fout:
         profiles.write(fout)
     return load_profiles()
 
