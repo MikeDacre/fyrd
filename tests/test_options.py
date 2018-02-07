@@ -5,7 +5,6 @@ from collections import OrderedDict
 import pytest
 sys.path.append(os.path.abspath('.'))
 import fyrd
-fyrd.local.THREADS = 5
 
 
 def test_help():

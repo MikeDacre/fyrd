@@ -298,24 +298,19 @@ def check_arguments(kwargs):
             else:
                 raise OptionsError('Unrecognized argument {}'.format(arg))
         if opt is not None and not isinstance(opt, ALLOWED_KWDS[arg]):
-            try:
-                newtype = ALLOWED_KWDS[arg]
-                if (newtype is list or newtype is tuple) \
-                        and not isinstance(arg, (list, tuple)):
-                    if newtype is list:
-                        opt2 = [opt]
-                    elif newtype is tuple:
-                        opt2 = (opt,)
-                    else:
-                        raise Exception("Shouldn't be here")
-                else:
-                    opt2 = newtype(opt)
-            except:
-                raise TypeError('arg must be {}, is {}'.format(
-                    ALLOWED_KWDS[arg], type(opt)))
-            new_kwds[arg] = opt2
-        else:
-            new_kwds[arg] = opt
+            newtype = ALLOWED_KWDS[arg]
+            if (newtype is list or newtype is tuple) \
+                    and not isinstance(arg, (list, tuple)):
+                opt = run.listify(opt)
+            elif newtype is int and isinstance(opt, str) and opt.isdigit():
+                opt = int(opt)
+            else:
+                raise TypeError(
+                    'arg "{}" must be {}, is {} ({})'.format(
+                        arg, ALLOWED_KWDS[arg], opt, type(opt)
+                    )
+                )
+        new_kwds[arg] = opt
 
     # Parse individual complex options
     for arg, opt in new_kwds.items():
@@ -454,6 +449,12 @@ def option_to_string(option, value=None, qtype=None):
     if '{}' in kwds[option][qtype]:
         if value is None:
             return ''
+        if 'type' in kwds[option]:
+            if not isinstance(value, kwds[option]['type']):
+                raise ValueError(
+                    'Argument to {} must be {}, but is:\n{}'
+                    .format(option, kwds[option]['type'], value)
+                )
         return '{prefix} {optarg}'.format(
             prefix=prefix, optarg=kwds[option][qtype].format(value))
     else:
