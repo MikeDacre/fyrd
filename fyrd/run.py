@@ -61,9 +61,11 @@ def listify(iterable):
         return [iterable]
     if not iterable:
         return []
-    if callable(iterable):
-        iterable = iterable()
-    return list(iter(iterable))
+    try:
+        iterable = list(iterable)
+    except TypeError:
+        iterable = [iterable]
+    return iterable
 
 
 def merge_lists(lists):

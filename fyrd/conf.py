@@ -16,6 +16,7 @@ Options will also be pre-sanitized before being added to profile. e.g. 'mem':
     '2GB' will become 'mem': 2000.
 """
 from __future__ import print_function
+import re
 import os       as _os
 import readline as _rl
 from textwrap import dedent as _dnt
@@ -23,6 +24,8 @@ try:
     import configparser as _configparser
 except ImportError:
     import ConfigParser as _configparser
+
+import six
 
 from . import run     as _run
 from . import logme   as _logme
@@ -279,7 +282,7 @@ def get_option(section=None, key=None, default=None):
         _logme.log('No option specified, returning config dictionary', 'debug')
         out = _config_to_dict(config)
 
-    return out
+    return _typecast_items(out)
 
 
 def set_option(section, key, value):
@@ -912,6 +915,50 @@ def _section_to_dict(section):
         else:
             out[key] = val
     return out
+
+def _typecast_items(x):
+    """Try to convert a variable into the true type.
+
+    Avoids eval() as we will be used on config files.
+
+    For example: 'True' becomes True and '0.125' becomes 0.125
+    """
+    c = re.compile(r', *')
+    r = re.compile(r': *')
+    if not isinstance(x, (six.string_types, six.text_type)):
+        return x
+    if x == 'True':
+        return True
+    if x == 'False':
+        return False
+    if x == 'None':
+        return None
+    if x.isdigit():
+        return int(x)
+    try:
+        return float(x)
+    except (ValueError, TypeError):
+        pass
+    try:
+        return complex(x)
+    except (ValueError, TypeError):
+        pass
+    try:
+        if x.startswith('[') and x.endswith(']'):
+            return [_typecast_items(i) for i in c.split(x.strip('[]'))]
+        if x.startswith('{') and x.endswith('}'):
+            if ':' in x:
+                return {
+                    _typecast_items(k): _typecast_items(v) for k, v in [
+                        r.split(i) for i in c.split(x.strip('{}'))
+                    ]
+                }
+            return {_typecast_items(i) for i in c.split(x.strip('{}'))}
+    except (ValueError, TypeError):
+        pass
+    if isinstance(x, (six.string_types)):
+        return x.strip('\'"')
+    return x
 
 
 def _config_to_dict(cnf):

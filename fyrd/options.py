@@ -302,10 +302,12 @@ def check_arguments(kwargs):
             if (newtype is list or newtype is tuple) \
                     and not isinstance(arg, (list, tuple)):
                 opt = run.listify(opt)
+            elif newtype is int and isinstance(opt, str) and opt.isdigit():
+                opt = int(opt)
             else:
                 raise TypeError(
-                    'arg must be {}, is {}'.format(
-                        ALLOWED_KWDS[arg], type(opt)
+                    'arg "{}" must be {}, is {} ({})'.format(
+                        arg, ALLOWED_KWDS[arg], opt, type(opt)
                     )
                 )
         new_kwds[arg] = opt
