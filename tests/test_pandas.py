@@ -113,7 +113,7 @@ def test_parapply_summary(delete=True):
     df_comp.T.A
     df_comp.T.B
     try:
-        assert str(new_df.T.A) == str(df_comp.T.A)
+        assert str(round(new_df.T.A, 2)) == str(round(df_comp.T.A, 2))
     except AssertionError:
         print('A:', type(new_df.T.A), ':', str(new_df.T.A),
               type(df_comp.T.A), ':', str(df_comp.T.A))
@@ -121,7 +121,7 @@ def test_parapply_summary(delete=True):
         print('Comp df', new_df)
         raise
     try:
-        assert str(new_df.T.B) == str(df_comp.T.B)
+        assert str(round(new_df.T.B, 2)) == str(round(df_comp.T.B, 2))
     except AssertionError:
         print('B:', type(new_df.T.B), ':', str(new_df.T.B),
               type(df_comp.T.B), ':', str(df_comp.T.B))
@@ -165,7 +165,7 @@ def test_parapply_summary_indirect(delete=True):
     df_comp.T.A
     df_comp.T.B
     try:
-        assert str(new_df.T.A) == str(df_comp.T.A)
+        assert str(round(new_df.T.A, 2)) == str(round(df_comp.T.A, 2))
     except AssertionError:
         print('A:', type(new_df.T.A), ':', new_df.T.A,
               type(df_comp.T.A), ':', df_comp.T.A,)
@@ -173,7 +173,7 @@ def test_parapply_summary_indirect(delete=True):
         print('Comp df:\n', new_df)
         raise
     try:
-        assert str(new_df.T.B) == str(df_comp.T.B)
+        assert str(round(new_df.T.B, 2)) == str(round(df_comp.T.B, 2))
     except AssertionError:
         print('B:', type(new_df.T.B), ':', str(new_df.T.B),
               type(df_comp.T.B), ':', str(df_comp.T.B))

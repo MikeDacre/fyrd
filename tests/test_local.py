@@ -44,7 +44,6 @@ def test_listify():
     assert fyrd.run.listify(('hi',)) == ['hi']
     assert fyrd.run.listify(('hi',)) == ['hi']
     assert fyrd.run.listify(simple_iterator()) == [1,2,3,4]
-    assert fyrd.run.listify(simple_iterator) == [1,2,3,4]
 
 
 def test_count_lines():
