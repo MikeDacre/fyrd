@@ -352,8 +352,6 @@ def listify(iterable):
         return [iterable]
     if not iterable:
         return []
-    #  if callable(iterable):
-        #  iterable = iterable()
     try:
         iterable = list(iterable)
     except TypeError:
