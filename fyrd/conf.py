@@ -1104,6 +1104,50 @@ def _section_to_dict(section):
         out[key] = _typecast_items(val)
     return out
 
+def _typecast_items(x):
+    """Try to convert a variable into the true type.
+
+    Avoids eval() as we will be used on config files.
+
+    For example: 'True' becomes True and '0.125' becomes 0.125
+    """
+    c = re.compile(r', *')
+    r = re.compile(r': *')
+    if not isinstance(x, (six.string_types, six.text_type)):
+        return x
+    if x == 'True':
+        return True
+    if x == 'False':
+        return False
+    if x == 'None':
+        return None
+    if x.isdigit():
+        return int(x)
+    try:
+        return float(x)
+    except (ValueError, TypeError):
+        pass
+    try:
+        return complex(x)
+    except (ValueError, TypeError):
+        pass
+    try:
+        if x.startswith('[') and x.endswith(']'):
+            return [_typecast_items(i) for i in c.split(x.strip('[]'))]
+        if x.startswith('{') and x.endswith('}'):
+            if ':' in x:
+                return {
+                    _typecast_items(k): _typecast_items(v) for k, v in [
+                        r.split(i) for i in c.split(x.strip('{}'))
+                    ]
+                }
+            return {_typecast_items(i) for i in c.split(x.strip('{}'))}
+    except (ValueError, TypeError):
+        pass
+    if isinstance(x, (six.string_types)):
+        return x.strip('\'"')
+    return x
+
 
 def _typecast_items(x):
     """Try to convert a variable into the true type.
