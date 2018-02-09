@@ -278,7 +278,7 @@ def test_depends():
     assert job2.stdout == 'eggs\n'
     assert job2.stderr == ''
     job3 = fyrd.Job('echo cheese', profile='default', clean_files=True,
-                    clean_outputs=True, depends=job2.id).submit()
+                    clean_outputs=True, depends=[job, job2.id]).submit()
     out = job3.get()
     assert out == 'cheese\n'
     assert job3.stdout == 'cheese\n'

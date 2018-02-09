@@ -164,8 +164,9 @@ def submit(file_name, dependencies=None, job=None, args=None, kwds=None):
     """
     _logme.log('Submitting to torque', 'debug')
     if dependencies:
-        deps = '-W depend={}'.format(
-            ','.join(['afterok:' + str(d) for d in dependencies]))
+        deps = '-W depend=afterok:{}'.format(
+            ':'.join([str(d) for d in dependencies])
+        )
         args = ['qsub', deps, file_name]
     else:
         args = ['qsub', file_name]
@@ -311,10 +312,16 @@ def queue_parser(user=None, partition=None):
             nodes = []
             # Convert node range to individual nodes in list
             for node in nds:
-                if '-' in node:
-                    nm, num = node.split('/')
-                    for i in range(*[int(i) for i in num.split('-')]):
-                        nodes.append(nm + '/' + str(i).zfill(2))
+                if '/' in node:
+                    nm, nums = node.split('/')
+                    for num in nums.split(','):
+                        if '-' in num:
+                            nstart, nend = [int(i) for i in num.split('-')]
+                        else:
+                            nstart = nend = int(num)
+                        nend += 1
+                        for i in range(nstart, nend):
+                            nodes.append(nm + '/' + str(i).zfill(2))
                 else:
                     nodes.append(node)
             # I assume that every 'node' is a core, as that is the
