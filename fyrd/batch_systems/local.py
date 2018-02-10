@@ -38,9 +38,9 @@ from datetime import timedelta as _td
 from collections import OrderedDict as _OD
 
 try:
-    from queue import Empty
-except ImportError:  # python2
     from Queue import Empty
+except ImportError:  # python3
+    from queue import Empty
 
 from six import text_type as _txt
 from six import string_types as _str
@@ -49,6 +49,8 @@ from six import integer_types as _int
 import psutil as _psutil
 
 import Pyro4
+
+from sqlalchemy.exc import InvalidRequestError
 
 from sqlalchemy import create_engine as _create_engine
 from sqlalchemy import Column as _Column
@@ -408,6 +410,9 @@ def get_server_uri(start=True):
         return fin.read().strip()
 
 
+RESTART_TRY = False
+
+
 def get_server(start=True, raise_on_error=False):
     """Return a client-side QueueManager instance."""
     uri = get_server_uri(start=start)
@@ -415,7 +420,27 @@ def get_server(start=True, raise_on_error=False):
         if raise_on_error:
             raise QueueError('Cannot get server')
         return None
-    return Pyro4.Proxy(uri)
+    server =  Pyro4.Proxy(uri)
+    # Test for bad connection
+    try:
+        server._pyroBind()
+    except Pyro4.errors.CommunicationError:
+        global RESTART_TRY
+        if RESTART_TRY:
+            _logme.log(
+                "Cannot bind to server still. Failing. Try to kill the "
+                "process in {}".format(PID_FILE),
+                'critical'
+            )
+            if raise_on_error:
+                raise QueueError('Cannot get server')
+            return None
+        RESTART_TRY = True
+        _logme.log("Cannot bind to server, killing and retrying.", 'error')
+        kill_queue()
+        server = get_server(start, raise_on_error)
+        RESTART_TRY = False
+    return server
 
 
 def _pid_exists(pid):
@@ -581,7 +606,15 @@ class QueueManager(object):
             job.errfile = stderr
         if runpath:
             job.runpath = runpath
-        session.add(job)
+        try:
+            session.add(job)
+        except InvalidRequestError:
+            # In case open in another thread
+            local_job = session.merge(job)
+            other_session = session.object_session(job)
+            session.add(local_job)
+            session.commit()
+            other_session.close()
         session.flush()
         jobno = int(job.jobno)
         session.commit()
@@ -653,7 +686,15 @@ class QueueManager(object):
             return
         session = self.db.get_session()
         for job in jobs:
-            session.delete(job)
+            try:
+                session.delete(job)
+            except InvalidRequestError:
+                # In case open in another thread
+                local_job = session.merge(job)
+                other_session = session.object_session(job)
+                session.delete(local_job)
+                session.commit()
+                other_session.close()
         session.commit()
         session.close()
 
@@ -1100,13 +1141,15 @@ def daemonizer():
 
 
 def shutdown_queue():
-    """Kill the queue."""
+    """Kill the server and queue gracefully."""
     good = True
     server = get_server(start=False)
     if server:
         try:
             res = server.shutdown_jobs()
         except OSError:
+            res = None
+        except Pyro4.errors.CommunicationError:
             res = None
         _logme.log('Local queue runner terminated.', 'debug')
         if res is None:
@@ -1120,6 +1163,13 @@ def shutdown_queue():
             good = False
     else:
         _logme.log('Server appears already stopped', 'info')
+    kill_queue()
+    _logme.log('Local queue terminated', 'info')
+    return 0 if good else 1
+
+
+def kill_queue():
+    """Kill the server and queue without trying to clean jobs."""
     if _os.path.isfile(PID_FILE):
         with open(PID_FILE) as fin:
             pid = int(fin.read().strip())
@@ -1129,8 +1179,6 @@ def shutdown_queue():
             _os.kill(pid, _signal.SIGKILL)
     if _os.path.isfile(URI_FILE):
         _os.remove(URI_FILE)
-    _logme.log('Local queue terminated', 'info')
-    return 0 if good else 1
 
 
 def daemon_manager(mode):

@@ -208,6 +208,9 @@ def test_make_job_file():
                     reason="No valid batch system detected")
 def test_job_execution_paths():
     """Run a job and autoclean with defined paths."""
+    if os.path.isdir('out'):
+        os.removedirs('out')
+        os.system('rm -rf {}'.format('out'))
     os.makedirs('out')
     job = fyrd.Job('echo hi', profile='default', clean_files=True,
                    clean_outputs=True, scriptpath='..', outpath='.').submit()
