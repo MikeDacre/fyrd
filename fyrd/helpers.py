@@ -56,6 +56,7 @@ def jobify(name=None, profile=None, qtype=None, submit=True, **kwds):
     Usage:
 
     .. code:: python
+
         @fyrd.jobify(name='my_job', profile='small', mem='8GB',
                      time='00:10:00', imports=['from time import sleep'])
         def do_something(file_path, iteration_count=24):

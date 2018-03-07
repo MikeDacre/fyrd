@@ -1,6 +1,11 @@
 Change Log
 ==========
 
+Version 0.6.211
+---------------
+
+This version adds bugfixes and stability over version 0.6.2a1.
+
 Version 0.6.2a1
 ---------------
 

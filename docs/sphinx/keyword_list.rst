@@ -11,7 +11,6 @@
     outfile
     errfile
     imports
-    threads
     nodes
     features
     qos

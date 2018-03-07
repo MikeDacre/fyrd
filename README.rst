@@ -20,7 +20,7 @@ https://github.com/MikeDacre/fyrd
 +---------+----------------------------------------------------+
 | License | MIT License, property of Stanford, use as you wish |
 +---------+----------------------------------------------------+
-| Version | 0.6.2a1                                            |
+| Version | 0.6.2b1                                            |
 +---------+----------------------------------------------------+
 
 
@@ -238,7 +238,7 @@ like this::
     Author         Michael D Dacre <mike.dacre@gmail.com>
     Organization   Stanford University
     License        MIT License, use as you wish
-    Version        0.6.2-beta2
+    Version        0.6.2-beta1
     ============   ======================================
 
     positional arguments:
