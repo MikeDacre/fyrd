@@ -49,9 +49,9 @@ either torque, slurm, or locally with the multiprocessing module. It uses simple
 techniques to avoid overwhelming the queue and to catch bugs on the fly.
 
 It is routinely tested on Mac OS and Linux with slurm and torque clusters, or
-in the absence of a cluster, on Python versions `2.7.10`, `2.7.11`, `2.7.12`,
-`3.3.0`, `3.4.0`, `3.5.2`, `3.6.2`, and `3.7-dev`. The full test suite is
-available in the `tests` folder.
+in the absence of a cluster, on Python versions ``2.7.10``, ``2.7.11``, ``2.7.12``,
+``3.3.0``, ``3.4.0``, ``3.5.2``, ``3.6.2``, and ``3.7-dev``. The full test suite is
+available in the ``tests`` folder.
 
 Fyrd is pronounced 'feared' (sort of), it is an Anglo-Saxon term for an army,
 particularly an army of freemen (in this case an army of compute nodes). The
@@ -83,24 +83,24 @@ as working with the multiprocessing library. It aims to provide:
   module without needing any changes to syntax.
 
 To do this, all major torque and slurm keyword arguments are encoded in
-dictionaries in the `fyrd/options.py` file using synonyms so that all arguments
-are standardized on the fly. Job management is handled by the `Job` class in
-`fyrd/job.py`, which accepts any of the keyword arguments in the options file.
+dictionaries in the ``fyrd/options.py`` file using synonyms so that all arguments
+are standardized on the fly. Job management is handled by the ``Job`` class in
+``fyrd/job.py``, which accepts any of the keyword arguments in the options file.
 To make submission as simple as possible, the code makes used of profiles
-defined in the `~/.fyrd/profiles.txt` config file. These allow simple grouping
+defined in the ``~/.fyrd/profiles.txt`` config file. These allow simple grouping
 of keyword arguments into named profiles to make submission even easier.
-Dependency tracking is handled by the `depends=` argument to `Job`, which
-accepts job numbers or `Job` objects, either singularly or as lists.
+Dependency tracking is handled by the ``depends=`` argument to ``Job``, which
+accepts job numbers or ``Job`` objects, either singularly or as lists.
 
-To allow simple queue management and job waiting, a `Queue` class is
-implemented in `fyrd/queue.py`. It uses iterators, also defined in that file,
+To allow simple queue management and job waiting, a ``Queue`` class is
+implemented in ``fyrd/queue.py``. It uses iterators, also defined in that file,
 to parse torque or slurm queues transparently and allow access to their
-attributes through the `Queue` class and the `Queue.jobs` dictionary. The `Job`
+attributes through the ``Queue`` class and the ``Queue.jobs`` dictionary. The ``Job``
 class uses this system to block until the job completes when either the
-`wait()` or `get()` methods are called.
+``wait()`` or ``get()`` methods are called.
 
 Note, waiting can email you when it is done, but you need to enable it in the
-config file (`~/.fyrd/config.txt`)::
+config file (``~/.fyrd/config.txt``)::
 
     [notify]
     mode = linux  # Can be linux or smtp, linux uses the mail command
@@ -118,7 +118,7 @@ config file (`~/.fyrd/config.txt`)::
 
 To allow similar functionality on a system not connected to a torque or slurm
 queue, a local queue that behaves similarly, including allowing dependency
-tracking, is implemented in the `fyrd/jobqueue.py` file. It is based on
+tracking, is implemented in the ``fyrd/jobqueue.py`` file. It is based on
 multiprocessing but behaves like torque.  It is not a good idea to use this
 module in place of multiprocessing due to the dependency tracking overhead, it
 is primarily intended as a fallback, but it does work well enough to use
@@ -129,16 +129,16 @@ code, but it is important to remember that fyrd is meant primarily for large
 cluster use.**
 
 As all clusters are different, common alterable parameters are defined in a
-config file located at `~/.fyrd/config.txt`. This includes an option for max
+config file located at ``~/.fyrd/config.txt``. This includes an option for max
 queue size, which makes job submission block until the queue has opened up,
 preventing job submission failure on systems with queue limits (most clusters).
 
 To make life easier, a bunch of simple wrapper functions are defined in
-`fyrd/basic.py` that allow submission without having to worry about using the
+``fyrd/basic.py`` that allow submission without having to worry about using the
 class system, or to submit existing job files. Several helper function are also
-created in `fyrd/helpers.py` that allow the automation of more complex tasks,
-like running `apply` on a pandas dataframe in parallel on the cluster
-(`fyrd.helpers.parapply()`).
+created in ``fyrd/helpers.py`` that allow the automation of more complex tasks,
+like running ``apply`` on a pandas dataframe in parallel on the cluster
+(``fyrd.helpers.parapply()``).
 
 Basic Usage
 -----------
@@ -185,12 +185,12 @@ Here is the same code with dependency tracking:
        i.wait()
        results.append(i.out)
 
-As you can see, the `profile` keyword is not required, if not supplied the
-default profile is used. It is also important to note that `.out` will contain
-the same contents as `.stdout` for all script submissions, but for function
-submissions, `.out` contains the function output, not STDOUT.
+As you can see, the ``profile`` keyword is not required, if not supplied the
+default profile is used. It is also important to note that ``.out`` will contain
+the same contents as ``.stdout`` for all script submissions, but for function
+submissions, ``.out`` contains the function output, not STDOUT.
 
-Note, to submit simple functions, I recommend that you use the `jobify`
+Note, to submit simple functions, I recommend that you use the ``jobify``
 decorator instead:
 
 .. code:: python
@@ -210,7 +210,7 @@ decorator instead:
    This is a fyrd.job.Job decorated function.
 
    When you call it it will return a Job object from which you can get
-   the results with the `.get()` method.
+   the results with the ``.get()`` method.
 
    Original Docstring:
 
@@ -226,7 +226,7 @@ Command Line Tools
 ------------------
 
 Fyrd provides a few command line tools to make little jobs easier. The main
-tool is `fyrd`. Running `fyrd --help` will give instructions on use, something
+tool is ``fyrd``. Running ``fyrd --help`` will give instructions on use, something
 like this::
 
     usage: fyrd [-h] [-v] [-V]
@@ -260,29 +260,29 @@ like this::
       -V, --version         Print version string
 
 The keywords each have their own help menus and are fairly self-explanatory.
-The `conf` and `profile` arguments allow you to edit the fyrd config and
+The ``conf`` and ``profile`` arguments allow you to edit the fyrd config and
 cluster profiles without having to directly edit the config files in the
-`~/.fyrd/` directory.
+``~/.fyrd/`` directory.
 
-The `keywords` argument is a help function only, it prints all possible keyword
+The ``keywords`` argument is a help function only, it prints all possible keyword
 arguments that can be used in cluster submissions.
 
-`queue` allows you to query the queue in the same way that `squeue` or `qstat`
+``queue`` allows you to query the queue in the same way that ``squeue`` or ``qstat``
 would, with a few extra functions to make it easy to see only your jobs, or
 only your running jobs.
 
-There is another command line tool provided `myqueue` or `myq` (both are the
-same), these tools are just wrappers for `fyrd queue` and they make it really
-fast to query a torque or slurm queue on any machine. e.g. `myq -r` will show
-you all your currently running jobs, `myq -r -c` will display a count of all
-currently running jobs, and `myq -r -l` will dump a list of job numbers only to
-the console, really useful when combined with `xargs`, e.g. `myq -r -l | xargs
-qdel`.
+There is another command line tool provided ``myqueue`` or ``myq`` (both are the
+same), these tools are just wrappers for ``fyrd queue`` and they make it really
+fast to query a torque or slurm queue on any machine. e.g. ``myq -r`` will show
+you all your currently running jobs, ``myq -r -c`` will display a count of all
+currently running jobs, and ``myq -r -l`` will dump a list of job numbers only to
+the console, really useful when combined with ``xargs``, e.g. ``myq -r -l | xargs
+qdel``.
 
-The `wait` command just blocks until the provided job numbers complete, and
+The ``wait`` command just blocks until the provided job numbers complete, and
 can send you an email when it completes, see the config info above.
 
-And the `clean` command provides options to clean out a job directory that
+And the ``clean`` command provides options to clean out a job directory that
 contains leftover files from a fyrd session.
 
 Installation
@@ -318,17 +318,17 @@ To get the development version (still pretty stable):
    pip install https://github.com/MikeDacre/fyrd/tarball/dev
    fyrd conf init
  
-The `fyrd conf init` command initializes your environment interactively by
+The ``fyrd conf init`` command initializes your environment interactively by
 asking questions about the local cluster system.
 
 I recommend installing using anaconda or pyenv, this will make your life much
 simpler, but is not required.
 
 In general you want either `pyenv <https://github.com/yyuu/pyenv>`_ or user
-level install (`pip install --user`) even if you have `sudo` access, as most
+level install (``pip install --user``) even if you have ``sudo`` access, as most
 cluster environments share /home/<user> across the cluster, making this module
 available everywhere. Anaconda will work if it is installed in a cross-cluster
-capacity, usually as a module (with lmod, e.g. `module load anaconda`). An
+capacity, usually as a module (with lmod, e.g. ``module load anaconda``). An
 install to the system python will usually fail as cluster nodes need to have
 access to the module also.
 
@@ -348,6 +348,10 @@ This software requires the following external modules:
 - `six <https://pypi.python.org/pypi/six>`_ —  makes python2/3 cross-compatibility easier
 - `tblib <https://pypi.python.org/pypi/tblib>`_ —  allows me to pass Tracebacks between nodes
 - `tqdm <https://pypi.python.org/pypi/tqdm>`_ — pretty progress bars for multi-job get and wait
+- `sqlalchemy <https://pypi.python.org/pypi/sqlalchemy>`_ — used in local mode
+  to track jobs
+- `Pyro4 <https://pypi.python.org/pypi/Pyro4>`_ — used in local mode to make a
+  daemon
 
 Cluster Dependencies
 ....................
@@ -381,10 +385,10 @@ your modules are already available, so you don't need to worry about this!
 Testing
 =======
 
-To fully test this software, I use `py.test` tests written in the tests folder.
-Unfortunately, local queue tests do not work with `py.test`, so I have separated
-them out into the `local_queue.py` script. To run all tests, run `python
-tests/run_tests.py`.
+To fully test this software, I use ``py.test`` tests written in the tests folder.
+Unfortunately, local queue tests do not work with ``py.test``, so I have separated
+them out into the ``local_queue.py`` script. To run all tests, run ``python
+tests/run_tests.py``.
 
 To ensure sensible testing always, I use `buildkite <https://buildkite.com>`_,
 which is an amazing piece of software. It integrates into this repository and
@@ -409,7 +413,7 @@ I use the following work-flow to release versions of fyrd:
    commits.
 5. Repeat the above for other related features and bugs
 6. When a related set of fixes and features are done and well tested,
-   merge into master with a pull request through github, all travis and 
+   merge into master with a pull request through github, all travis and
    buildkite tests must pass for the merge to work.
 7. At some point after the new features are in master, add a new tagged
    beta release.
@@ -419,7 +423,7 @@ I use the following work-flow to release versions of fyrd:
 New releases are added when enough features and fixes have accumulated to
 justify it, new minor version are added only when there are very large changes
 in the code and are always tracked by milestones.
-   
+
 While this project is still in its infancy, the API cannot be considered stable
 and the major version will remain 0. once version 1.0 is reached, any API
 changes will result in a major version change.
@@ -458,15 +462,15 @@ follow these rules:
   - Add some tests to the test suite that fully test your new feature
   - Add notes to the documentation on what your feature does and how it works
 - Make sure your code passes the full test suite, which means you need to run
-  `python tests/run_tests.py` from the root of the repository at a bare
-  minimum. Ideally, you will install pyenv and run `bash tests/pyenv_tests.py`
+  ``python tests/run_tests.py`` from the root of the repository at a bare
+  minimum. Ideally, you will install pyenv and run ``bash tests/pyenv_tests.py``
 - Squash all of your commits into a single commit with a well written and
   informative commit message.
-- Send me a pull request to either the `dev` or `master` branches.
+- Send me a pull request to either the ``dev`` or ``master`` branches.
 
 It may take a few days for me to fully review your pull request, as I will test
 it extensively. If it is a big new feature implementation I may request that
-you send the pull request to the `dev` branch instead of to `master`.
+you send the pull request to the ``dev`` branch instead of to ``master``.
 
 Why the Name?
 =============

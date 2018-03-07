@@ -2,7 +2,7 @@ Console Scripts
 ===============
 
 This software is primarily intended to be a library, however some management tasks are just
-easier from the console. For that reason, *fyrd* has a frontend console script that makes 
+easier from the console. For that reason, *fyrd* has a frontend console script that makes
 tasks such as managing the local config and profiles trivial, it also has modes to inspect
 the queue easily, and to wait for jobs from the console, as well as to clean the working
 directory.
@@ -12,26 +12,26 @@ fyrd
 
 This software has uses a subcommand system to separate modes, and has six modes:
 
-- `run`      - run an arbitrary shell script on the cluster
-- `run-job`  - run existing cluster script(s)
-- `wait`     - wait for a list of jobs
-- `queue`    - show running jobs, makes filtering jobs very easy
-- `config`   — show and edit the contents of the config file
-- `profile`  - inspect and manage cluster profiles
-- `keywords` - print a list of current keyword arguments with descriptions for each
-- `clean`    - clean all script and output files in the given directory
+- ``run``      - run an arbitrary shell script on the cluster
+- ``run-job``  - run existing cluster script(s)
+- ``wait``     - wait for a list of jobs
+- ``queue``    - show running jobs, makes filtering jobs very easy
+- ``config``   — show and edit the contents of the config file
+- ``profile``  - inspect and manage cluster profiles
+- ``keywords`` - print a list of current keyword arguments with descriptions for each
+- ``clean``    - clean all script and output files in the given directory
 
-Several of the commands have aliases (`conf` and `prof` being the two main ones)
+Several of the commands have aliases (``conf`` and ``prof`` being the two main ones)
 
 Emailing
 ........
 
-The `run`, `run-job`, and `wait` commands can all email you when they are done. To use
-this you need to configure the sending in the `~/fyrd/config.txt` file::
+The ``run``, ``run-job``, and ``wait`` commands can all email you when they are done. To use
+this you need to configure the sending in the ``~/fyrd/config.txt`` file::
 
     [notify]
     mode = linux  # Can be linux or smtp, linux uses the mail command
-    notify_address = your.address@gmail.com 
+    notify_address = your.address@gmail.com
     # The following are only needed for smtp mode
     smtp_host = smtp.gmail.com
     smtp_port = 587
@@ -43,8 +43,8 @@ this you need to configure the sending in the `~/fyrd/config.txt` file::
     # chmod 400 ~/.fyrd/smtp_pass
     smtp_passfile = ~/.fyrd/smtp_pass
 
-To enable emailing, pass `-n` (notify) to `wait`, or `-w -n` to the other two commands.
-You can also manually specify the address with `-e your.address@gmail.com`.
+To enable emailing, pass ``-n`` (notify) to ``wait``, or ``-w -n`` to the other two commands.
+You can also manually specify the address with ``-e your.address@gmail.com``.
 
 Examples
 ........
@@ -61,7 +61,7 @@ Examples
 
 .. code:: shell
 
-   fyrd prof list 
+   fyrd prof list
    fyrd prof add large cores:92 mem:200GB partition:high_mem time:00:06:00
 
 .. code:: shell
@@ -76,7 +76,7 @@ Examples
    fyrd wait -u john
 
    # Will block until all of bob's jobs in the long queue finish
-   fyrd queue -p long -u bob -l | xargs fyrd wait 
+   fyrd queue -p long -u bob -l | xargs fyrd wait
 
 .. code:: shell
 
@@ -85,7 +85,7 @@ Examples
 All Options
 ...........
 
-`fyrd`::
+``fyrd``::
 
     usage: fyrd [-h] [-v] {run,submit,wait,queue,conf,prof,keywords,clean} ...
 
@@ -114,7 +114,7 @@ All Options
       -h, --help            show this help message and exit
       -v, --verbose         Show debug outputs
 
-`fyrd run`::
+``fyrd run``::
 
     usage: fyrd run [-h] [-p PROFILE] [-c CORES] [-m MEM] [-t TIME] [-a ARGS] [-w]
                     [-k] [-l] [-n] [-e EMAIL] [-s] [-x EXTRA_VARS] [-d]
@@ -155,7 +155,7 @@ All Options
                             Email address to send notification to, default set in
                             ~/.fyrd/config.txt
 
-`fyrd submit`::
+``fyrd submit``::
 
     usage: fyrd submit [-h] [-p PROFILE] [-c CORES] [-m MEM] [-t TIME] [-a ARGS]
                        [-w] [-k] [-l] [-n] [-e EMAIL]
@@ -191,8 +191,8 @@ All Options
                             Email address to send notification to, default set in
                             ~/.fyrd/config.txt
 
-`fyrd wait`::
-  
+``fyrd wait``::
+
     usage: fyrd wait [-h] [-n] [-e EMAIL] [-u USERS] [jobs [jobs ...]]
 
     Wait on a list of jobs, block until they complete.
@@ -210,8 +210,8 @@ All Options
       -e EMAIL, --email EMAIL
                             Email address to send notification to, default set in
                             ~/.fyrd/config.txt
-   
-`fyrd queue`::
+
+``fyrd queue``::
 
     usage: fyrd queue [-h] [-u  [...] | -a] [-p  [...]] [-r | -q | -d | -b]
                       [-l | -c]
@@ -244,7 +244,7 @@ All Options
       -l, --list            Print job numbers only, works well with xargs
       -c, --count           Print job count only
 
-`fyrd conf`::
+``fyrd conf``::
 
     usage: fyrd conf [-h] {show,list,help,update,alter,init} ...
 
@@ -272,7 +272,7 @@ All Options
     To create a new config from scratch interactively::
         fyrd conf init [--defaults]
 
-`fyrd prof`::
+``fyrd prof``::
 
     usage: fyrd prof [-h]
                      {show,list,add,new,update,alter,edit,remove-option,del-option,delete,del}
@@ -314,13 +314,13 @@ All Options
     Note: the DEFAULT profile is special and cannot be deleted, deleting it will
     cause it to be instantly recreated with the default values. Values from this
     profile will be available in EVERY other profile if they are not overriden
-    there. i.e. if DEFAULT contains `partition=normal`, if 'long' does not have
+    there. i.e. if DEFAULT contains ``partition=normal``, if 'long' does not have
     a 'partition' option, it will default to 'normal'.
 
     To reset the profile to defaults, just delete the file and run this script
     again.
 
-`fyrd keywords`::
+``fyrd keywords``::
 
     usage: fyrd keywords [-h] [-t | -s | -l]
 
@@ -330,7 +330,7 @@ All Options
       -s, --split-tables  Print keywords as multiple tables
       -l, --list          Print a list of keywords only
 
-`fyrd clean`::
+``fyrd clean``::
 
     usage: fyrd clean [-h] [-o] [-s SUFFIX] [-q {torque,slurm,local}] [-n] [dir]
 
@@ -370,12 +370,12 @@ All Options
 Aliases
 -------
 
-Several shell scripts are provided in `bin/` to provide shortcuts to the *fyrd*
+Several shell scripts are provided in ``bin/`` to provide shortcuts to the *fyrd*
 subcommands:
 
-- `frun`: `fyrd run`
-- `fsub`: `fyrd submit`
-- `my-queue` (or `myq`): `fyrd queue`
-- `clean-job-files`: `fyrd clean`
-- `monitor-jobs`: `fyrd wait`
-- `cluster-keywords`: `fyrd keywords`
+- ``frun``: ``fyrd run``
+- ``fsub``: ``fyrd submit``
+- ``my-queue`` (or ``myq``): ``fyrd queue``
+- ``clean-job-files``: ``fyrd clean``
+- ``monitor-jobs``: ``fyrd wait``
+- ``cluster-keywords``: ``fyrd keywords``

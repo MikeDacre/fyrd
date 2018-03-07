@@ -4,11 +4,11 @@ Getting Started
 Simple Job Submission
 ---------------------
 
-At its simplest, this module can be used by just executing `submit(<command>)`,
+At its simplest, this module can be used by just executing ````submit(<command>)````,
 where command is a function or system command/shell script. The module will
 autodetect the cluster, generate an intuitive name, run the job, and write all
 outputs to files in the current directory. These can be cleaned with
-`clean_dir()`.
+````clean_dir()````.
 
 To run with dependency tracking, run:
 
@@ -19,10 +19,10 @@ To run with dependency tracking, run:
   job2 = fyrd.submit(<command2>, depends=job1)
   out1, out2 = fyrd.get([job, job2])  # Will block until job completes
 
-The `submit()` function is actually just a wrapper for the
+The ````submit()```` function is actually just a wrapper for the
 `Job </api.html#fyrd-job-job>`_ class. The same behavior as above can be
-obtained by initializing a `Job` object directly:
-                                                
+obtained by initializing a ````Job```` object directly:
+
 .. code:: python
 
   import fyrd
@@ -31,9 +31,9 @@ obtained by initializing a `Job` object directly:
   job2 = fyrd.Job(<command2>, depends=job1).submit()
   out  = job2.get()  # Will block until job completes
 
-Note that as shown above, the submit method returns the `Job` object, so it
+Note that as shown above, the submit method returns the ````Job```` object, so it
 can be called on job initialization. Also note that the object returned by
-calling the `submit()` function (as in the first example) is also a `Job`
+calling the ````submit()```` function (as in the first example) is also a ````Job````
 object, so these two examples can be used fully interchangeably.
 
 Similar wrappers allow you to submit and monitor existing job files, such
@@ -89,7 +89,7 @@ to learn more about that, review the Advanced Usage section of this documentatio
 
 Function submission works equally well for submitting methods, however the original
 class object will not be updated, the method return value will be accurate, but any
-changes the method makes to `self` will not be returned from the cluster and will be
+changes the method makes to ````self```` will not be returned from the cluster and will be
 lost.
 
 Possible Infinate Recursion Error
@@ -98,7 +98,7 @@ Possible Infinate Recursion Error
 **Warning**: in order for function submission to work, *fyrd* ends up importing
 your original script file on the nodes. This means that all code in your file
 will be executed, so anything that isn't a function or class must be protected
-with an `if __name__ == '__main__':` protecting statement.
+with an ````if __name__ == '__main__':```` protecting statement.
 
 If you do not do this you can end up with multi-submission and infinite
 recursion, which could mess up your jobs or just crash the job, but either way,
@@ -110,10 +110,10 @@ or jupyter.
 Using the Jobify Decorator
 --------------------------
 
-Function submission can be made much easier by using the `jobify` decorator.
+Function submission can be made much easier by using the ````jobify```` decorator.
 
 Using the example above with a decorator, we can do this:
- 
+
 .. code:: python
 
    import fyrd
@@ -128,7 +128,7 @@ Using the example above with a decorator, we can do this:
        for i in outs:
            final_sum += i.get()
        print(final_sum)
-  
+
 Here is a full, if silly, example with outputs:
 
 .. code:: python
@@ -141,14 +141,14 @@ Here is a full, if silly, example with outputs:
    ...     for i in range(iterations):
    ...         outstring += "Version {0}: {1}".format(i, string)
    ...     return outstring
-   ... 
+   ...
    >>> test?
    Signature: test(*args, **kwargs)
    Docstring:
    This is a fyrd.job.Job decorated function.
 
    When you call it it will return a Job object from which you can get
-   the results with the `.get()` method.
+   the results with the ````.get()```` method.
 
    Original Docstring:
 
@@ -189,7 +189,7 @@ dependant on jobs 7 and 9. The dependencies can be omitted.
 Keywords
 --------
 
-The `Job` class, and therefore every submission script, accepts a large number of
+The ````Job```` class, and therefore every submission script, accepts a large number of
 keyword arguments and synonyms to make job submission easy. Some good examples:
 
 - cores
@@ -235,7 +235,7 @@ give them a name, so that cluster submission can look like this:
    job = Job('zcat huge_file | parse_file', profile='large')
    job = Job(my_parallel_function, cores=28, profile='high_mem')
 
-These profiles are defined in `~/.fyrd/profiles.txt` by default and have the
+These profiles are defined in ````~/.fyrd/profiles.txt```` by default and have the
 following syntax::
 
   [large]

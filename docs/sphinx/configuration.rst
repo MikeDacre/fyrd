@@ -2,7 +2,7 @@ Configuration
 =============
 
 Many program parameters can be set in the config file, found by default at
-`~/.fyrd/config.txt`.
+``~/.fyrd/config.txt``.
 
 This file has three sections with the following defaults:
 
@@ -55,7 +55,7 @@ This file has three sections with the following defaults:
                   with every submission.
 
 Example file::
- 
+
     [queue]
     res_time = 2700
     queue_type = auto
@@ -63,7 +63,7 @@ Example file::
     queue_update = 2
     max_jobs = 1000
     bool = True
-     
+
     [jobs]
     suffix = cluster
     file_block_time = 12
@@ -73,7 +73,7 @@ Example file::
     profile_file = /Users/dacre/.fyrd/profiles.txt
     clean_files = True
     generic_python = False
-    
+
     [jobqueue]
     jobno = 9
 
@@ -82,4 +82,3 @@ The config is managed by `fyrd/conf.py </api.html#fyrd-conf>`_ and enforces a
 minimum set of entries. If the config does not exist or any entries are
 missing, they will be created on the fly using the defaults defined in the
 defaults.
- 

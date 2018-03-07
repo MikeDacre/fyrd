@@ -11,6 +11,7 @@ copyright = '2017, Michael Dacre <mike.dacre@gmail.com>'
 author    = 'Michael Dacre <mike.dacre@gmail.com>'
 version   = '0.6'
 release   = fyrd.version
+#  release   = '0.6.2b1'
 language  = 'en'
 
 # Add any paths that contain templates here, relative to this directory.
