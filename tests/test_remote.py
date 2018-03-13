@@ -8,8 +8,11 @@ import pytest
 sys.path.append(os.path.abspath('.'))
 import fyrd
 env = fyrd.batch_systems.get_cluster_environment()
+batch = fyrd.batch_systems.get_batch_system()
+batch_works =  batch.queue_test()
+on_travis = 'TRAVIS' in os.environ
 
-fyrd.logme.MIN_LEVEL = 'debug'
+#  fyrd.logme.MIN_LEVEL = 'debug'
 
 
 ###############################################################################
@@ -110,7 +113,7 @@ def test_slurm_array_normalization():
     assert batch.normalize_job_id('12345_24') == ('12345', '24')
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
 def test_job_creation():
     """Make a job and print it."""
@@ -118,7 +121,7 @@ def test_job_creation():
     assert job.qtype == env
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
 def test_job_execution():
     """Run a job and autoclean."""
@@ -148,7 +151,7 @@ def test_job_execution():
     assert isinstance(job.runtime, td)
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
 def test_multi_job_get():
     """Run a job and autoclean."""
@@ -165,7 +168,7 @@ def test_multi_job_get():
     assert not os.path.isfile(job2.outfile)
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
 def test_basic_job():
     """Run a job using the basic.py submit function."""
@@ -195,7 +198,7 @@ def test_basic_job():
     assert isinstance(job.runtime, td)
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
 def test_make_job_file():
     """Use the basic function to make a job file."""
@@ -204,7 +207,7 @@ def test_make_job_file():
     os.remove(job_file)
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
 def test_job_execution_paths():
     """Run a job and autoclean with defined paths."""
@@ -240,7 +243,7 @@ def test_job_execution_paths():
     os.system('rm -rf {}'.format('out'))
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
 def test_job_params():
     """Run a job with some explicit parameters set."""
@@ -253,7 +256,7 @@ def test_job_params():
     assert job.stderr == ''
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
 def test_outfiles():
     """Run a job with outfile and errfile overriden parameters set."""
@@ -266,7 +269,7 @@ def test_outfiles():
     assert job.stderr == ''
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
 def test_depends():
     """Run some jobs with dependencies."""
@@ -288,7 +291,7 @@ def test_depends():
     assert job3.stderr == ''
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
 def test_resubmit():
     """Alter a job and resubmit."""
@@ -307,7 +310,7 @@ def test_resubmit():
     assert job.err == ''
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
 def test_job_cleaning():
     """Delete intermediate files without autoclean."""
@@ -324,7 +327,7 @@ def test_job_cleaning():
     assert not os.path.isfile(job.submission.file_name)
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
 def test_multi_job_cleaning():
     """Delete intermediate files for more than one job."""
@@ -348,8 +351,9 @@ def test_multi_job_cleaning():
     assert not os.path.isfile(job2.submission.file_name)
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
+@pytest.mark.skipif(on_travis, reason="Doesn't work on Travis CI")
 def test_function_submission():
     """Submit a function."""
     job = fyrd.Job(write_to_file, ('42', 'bobfile'), clean_files=False)
@@ -380,8 +384,9 @@ def test_function_submission():
     job.clean(delete_outputs=True)
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
+@pytest.mark.skipif(on_travis, reason="Doesn't work on Travis CI")
 def test_method_submission():
     """Submit a method."""
     t = MethodSubmission()
@@ -390,8 +395,9 @@ def test_method_submission():
     assert t2 == t.me*2
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
+@pytest.mark.skipif(on_travis, reason="Doesn't work on Travis CI")
 def test_function_keywords():
     """Submit a simple function with keyword arguments."""
     job = fyrd.Job(raise_me, (10,), kwargs={'power': 10}).submit()
@@ -399,8 +405,9 @@ def test_function_keywords():
     job.clean(delete_outputs=True)
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
+@pytest.mark.skipif(on_travis, reason="Doesn't work on Travis CI")
 def test_function_deco():
     """Submit a simple decorated function."""
     job = raise_me_deco(10, power=10)
@@ -408,8 +415,9 @@ def test_function_deco():
     job.clean(delete_outputs=True)
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
+@pytest.mark.skipif(on_travis, reason="Doesn't work on Travis CI")
 def test_function_deco2():
     """Submit a simple decorated function."""
     job = raise_me_deco2(10)
@@ -418,8 +426,9 @@ def test_function_deco2():
     job.clean(delete_outputs=True)
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
+@pytest.mark.skipif(on_travis, reason="Doesn't work on Travis CI")
 def test_splitfile():
     """Use the splitfile helper function."""
     out = fyrd.helpers.splitrun(2, 'tests/test.txt.gz',
@@ -427,8 +436,9 @@ def test_splitfile():
     assert out == dosomething('tests/test.txt.gz')
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
+@pytest.mark.skipif(on_travis, reason="Doesn't work on Travis CI")
 def test_splitfile_script():
     """Test splitfile() with a script and outfile."""
     out = fyrd.helpers.splitrun(2, 'tests/test.txt.gz',
@@ -436,8 +446,9 @@ def test_splitfile_script():
     assert out == dosomething('tests/test.txt.gz')
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
+@pytest.mark.skipif(on_travis, reason="Doesn't work on Travis CI")
 def test_splitfile_indirect():
     """Use the splitfile helper function."""
     job = fyrd.helpers.splitrun(
@@ -454,7 +465,7 @@ def test_splitfile_indirect():
     return 0
 
 
-@pytest.mark.skipif(not env,
+@pytest.mark.skipif(not batch_works,
                     reason="No valid batch system detected")
 def test_dir_clean():
     """Clean all job files in this dir."""

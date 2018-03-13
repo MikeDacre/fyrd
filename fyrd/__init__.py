@@ -141,17 +141,13 @@ import atexit as _atexit
 #  Version  #
 #############
 
-# Planned version
-version = '0.6.2a1'
 from ._version import get_versions
-# Actual version (same as planned for releases)
 __version__ = get_versions()['version']
 del get_versions
 
 ###################
 #  House Keeping  #
 ###################
-
 
 class ClusterError(Exception):
 
@@ -163,7 +159,6 @@ class ClusterError(Exception):
 #########################################
 #  Make our functions easily available  #
 #########################################
-
 
 from . import queue
 from . import job
@@ -199,9 +194,3 @@ option_help = batch_systems.options.option_help
 __all__ = ['Job', 'Queue', 'wait', 'get', 'submit', 'submit_file', 'jobify',
            'make_job_file', 'clean', 'clean_dir', 'check_queue', 'option_help',
            'set_profile', 'get_profile', 'get_profiles', 'conf', 'helpers']
-
-##########################
-#  Set the cluster type  #
-##########################
-
-batch_systems.MODE = get_cluster_environment()

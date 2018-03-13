@@ -50,27 +50,29 @@ __all__ = ['submit', 'make_job', 'make_job_file', 'submit_file', 'clean_dir',
 
 
 def submit(command, args=None, kwargs=None, name=None, qtype=None,
-           profile=None, **kwds):
+           profile=None, queue=None, **kwds):
     """Submit a script to the cluster.
 
     Parameters
     ----------
     command : function/str
         The command or function to execute.
-    args : tuple/dict
+    args : tuple/dict, optional
         Optional arguments to add to command, particularly useful for
         functions.
-    kwargs : dict
+    kwargs : dict, optional
         Optional keyword arguments to pass to the command, only used for
         functions.
-    name : str
-        Optional name of the job. If not defined, guessed. If a job of the same
-        name is already queued, an integer job number (not the queue number)
-        will be added, ie.  <name>.1
-    qtype : str
+    name : str, optional
+        Optional name of the job. If not defined, guessed. If a job of the
+        same name is already queued, an integer job number (not the queue
+        number) will be added, ie.  <name>.1
+    qtype : str, optional
         Override the default queue type
-    profile : str
+    profile : str, optional
         The name of a profile saved in the conf
+    queue : fyrd.queue.Queue, optional
+        An already initiated Queue class to use.
     kwds
         *All other keywords are parsed into cluster keywords by the options
         system.* For available keywords see `fyrd.option_help()`
@@ -83,7 +85,7 @@ def submit(command, args=None, kwargs=None, name=None, qtype=None,
     _batch.check_queue()  # Make sure the queue.MODE is usable
 
     job = Job(command=command, args=args, kwargs=kwargs, name=name,
-              qtype=qtype, profile=profile, **kwds)
+              qtype=qtype, profile=profile, queue=queue, **kwds)
 
     job.write()
     job.submit()
@@ -98,27 +100,29 @@ def submit(command, args=None, kwargs=None, name=None, qtype=None,
 
 
 def make_job(command, args=None, kwargs=None, name=None, qtype=None,
-             profile=None, **kwds):
+             profile=None, queue=None, **kwds):
     """Make a job compatible with the chosen cluster but do not submit.
 
     Parameters
     ----------
     command : function/str
         The command or function to execute.
-    args : tuple/dict
+    args : tuple/dict, optional
         Optional arguments to add to command, particularly useful for
         functions.
-    kwargs : dict
+    kwargs : dict, optional
         Optional keyword arguments to pass to the command, only used for
         functions.
-    name : str
-        Optional name of the job. If not defined, guessed. If a job of the same
-        name is already queued, an integer job number (not the queue number)
-        will be added, ie.  <name>.1
-    qtype : str
+    name : str, optional
+        Optional name of the job. If not defined, guessed. If a job of the
+        same name is already queued, an integer job number (not the queue
+        number) will be added, ie.  <name>.1
+    qtype : str, optional
         Override the default queue type
-    profile : str
+    profile : str, optional
         The name of a profile saved in the conf
+    queue : fyrd.queue.Queue, optional
+        An already initiated Queue class to use.
     kwds
         *All other keywords are parsed into cluster keywords by the options
         system.* For available keywords see `fyrd.option_help()`
@@ -131,34 +135,36 @@ def make_job(command, args=None, kwargs=None, name=None, qtype=None,
     _batch.check_queue()  # Make sure the queue.MODE is usable
 
     job = Job(command=command, args=args, kwargs=kwargs, name=name,
-              qtype=qtype, profile=profile, **kwds)
+              qtype=qtype, profile=profile, queue=queue, **kwds)
 
     # Return the path to the script
     return job
 
 
 def make_job_file(command, args=None, kwargs=None, name=None, qtype=None,
-                  profile=None, **kwds):
+                  profile=None, queue=None, **kwds):
     """Make a job file compatible with the chosen cluster.
 
     Parameters
     ----------
     command : function/str
         The command or function to execute.
-    args : tuple/dict
+    args : tuple/dict, optional
         Optional arguments to add to command, particularly useful for
         functions.
-    kwargs : dict
+    kwargs : dict, optional
         Optional keyword arguments to pass to the command, only used for
         functions.
-    name : str
-        Optional name of the job. If not defined, guessed. If a job of the same
-        name is already queued, an integer job number (not the queue number)
-        will be added, ie.  <name>.1
-    qtype : str
+    name : str, optional
+        Optional name of the job. If not defined, guessed. If a job of the
+        same name is already queued, an integer job number (not the queue
+        number) will be added, ie.  <name>.1
+    qtype : str, optional
         Override the default queue type
-    profile : str
+    profile : str, optional
         The name of a profile saved in the conf
+    queue : fyrd.queue.Queue, optional
+        An already initiated Queue class to use.
     kwds
         *All other keywords are parsed into cluster keywords by the options
         system.* For available keywords see `fyrd.option_help()`
@@ -172,7 +178,7 @@ def make_job_file(command, args=None, kwargs=None, name=None, qtype=None,
     _batch.check_queue()  # Make sure the queue.MODE is usable
 
     job = Job(command=command, args=args, kwargs=kwargs, name=name,
-              qtype=qtype, profile=profile, **kwds)
+              qtype=qtype, profile=profile, queue=queue, **kwds)
 
     job = job.write()
 
@@ -376,8 +382,12 @@ def clean_dir(directory=None, suffix=None, qtype=None, confirm=False,
 ###############################################################################
 
 
-def wait(jobs, notify=True):
+def wait(jobs, notify=True, queue=None):
     """Wait for jobs to finish.
+
+    Only works on user jobs by default. To work on jobs so someone else,
+    initialize a fyrd.queue.Queue class with their user info and pass as an
+    argument to queue.
 
     Parameters
     ----------
@@ -390,18 +400,24 @@ def wait(jobs, notify=True):
         If a string is passed, notification is forced and the string must
         be the to address.
         False means no notification
+    queue : fyrd.queue.Queue, optional
+        An already initiated Queue class to use.
 
     Returns
     -------
     success : bool
         True if all jobs successful, false otherwise
     """
-    q = _queue.Queue()
+    q = queue if queue else _queue.default_queue()
     return q.wait(jobs, notify=notify)
 
 
-def get(jobs):
+def get(jobs, queue=None):
     """Get results of jobs when they complete.
+
+    Only works on user jobs by default. To work on jobs so someone else,
+    initialize a fyrd.queue.Queue class with their user info and pass as an
+    argument to queue.
 
     Parameters
     ----------
@@ -411,9 +427,11 @@ def get(jobs):
     -------
     list
         Outputs (STDOUT or return value) of jobs
+    queue : fyrd.queue.Queue, optional
+        An already initiated Queue class to use.
 
     .. note:: This function also modifies the input Job objects, so they will
               contain all outputs and state information.
     """
-    q = _queue.Queue()
+    q = queue if queue else _queue.default_queue()
     return q.get(jobs)

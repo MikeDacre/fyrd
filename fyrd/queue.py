@@ -59,6 +59,7 @@ UNCERTAIN_STATES = _batch.UNCERTAIN_STATES
 ALL_STATES       = _batch.ALL_STATES
 DONE_STATES      = _batch.DONE_STATES
 
+
 ###############################################################################
 #                               The Queue Class                               #
 ###############################################################################
@@ -172,9 +173,8 @@ class Queue(object):
 
         # Will contain a dict of QueueJob objects indexed by ID
         self.jobs = {}
-        """All jobs currently in this queue."""
 
-        self._update()
+        self.last_update = None
 
     ####################
     #  Public Methods  #
@@ -511,7 +511,9 @@ class Queue(object):
 
     def update(self):
         """Refresh the list of jobs from the server, limit queries."""
-        if int(_time()) - self.last_update > self.queue_update_time:
+        if not self.last_update:
+            self._update()
+        elif int(_time()) - self.last_update > self.queue_update_time:
             self._update()
         else:
             _logme.log('Skipping update as last update too recent', 'debug')
@@ -693,8 +695,17 @@ class Queue(object):
 
     def __iter__(self):
         """Allow us to be iterable."""
+        self.update()
+        return self
+
+    def __next__(self):
+        """Loop through jobs."""
         for jb in self.jobs.values():
-            yield jb
+            return jb
+
+    def next(self):
+        """Wrapper for __next__."""
+        return self.__next__
 
     def __len__(self):
         """Length is the total job count."""
@@ -702,6 +713,7 @@ class Queue(object):
 
     def __repr__(self):
         """For debugging."""
+        self.update()
         self._updating = True
         if self.user:
             outstr = 'Queue<jobs:{};completed:{};pending:{};user={}>'.format(
@@ -714,6 +726,7 @@ class Queue(object):
 
     def __str__(self):
         """A list of keys."""
+        self.update()
         return str(list(self.jobs.keys()))
 
 
@@ -957,3 +970,18 @@ class QueueError(Exception):
     """Simple Exception wrapper."""
 
     pass
+
+#########################################
+#  A default Queue Object for the User  #
+#########################################
+
+_default_queues = None
+
+def default_queue(qtype=None):
+    """Return a default batch system."""
+    global _default_queues
+    if not _default_queues:
+        _default_queues = {}
+    if qtype not in _default_queues:
+        _default_queues[qtype] = Queue('self', qtype=qtype)
+    return _default_queues[qtype]

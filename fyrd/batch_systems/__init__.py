@@ -34,6 +34,8 @@ UNCERTAIN_STATES = ['preempted', 'stopped',
 ALL_STATES = GOOD_STATES + ACTIVE_STATES + BAD_STATES + UNCERTAIN_STATES
 DONE_STATES = GOOD_STATES + BAD_STATES
 
+_default_batches = None
+
 
 def get_batch_system(qtype=None):
     """Return a batch_system module."""
@@ -43,7 +45,14 @@ def get_batch_system(qtype=None):
             'qtype value {0} is not recognized, '.format(qtype) +
             'should be one of {0}'.format(DEFINED_SYSTEMS)
         )
-    return _import('fyrd.batch_systems.{}'.format(qtype))
+    global _default_batches
+    if not _default_batches:
+        _default_batches = {}
+    if not qtype in _default_batches:
+        _default_batches[qtype] = _import(
+            'fyrd.batch_systems.{}'.format(qtype)
+        )
+    return _default_batches[qtype]
 
 
 #################################
@@ -51,7 +60,7 @@ def get_batch_system(qtype=None):
 #################################
 
 
-def get_cluster_environment():
+def get_cluster_environment(overwrite=False):
     """Detect the local cluster environment and set MODE globally.
 
     Detect the current batch system by looking for command line utilities.
@@ -59,11 +68,19 @@ def get_cluster_environment():
 
     Paths to files can also be set in the config file.
 
+    Parameters
+    ----------
+    overwrite : bool, optional
+        If True, run checks anyway, otherwise just accept MODE if it is
+        already set.
+
     Returns
     -------
     MODE : str
     """
     global MODE
+    if not overwrite and MODE and MODE in list(DEFINED_SYSTEMS):
+        return MODE
     from .. import conf as _conf
     conf_queue = _conf.get_option('queue', 'queue_type', 'auto')
     if conf_queue not in list(DEFINED_SYSTEMS) + ['auto']:
@@ -83,11 +100,7 @@ def get_cluster_environment():
         elif _run.which(qsub_cmnd):
             MODE = 'torque'
         else:
-            from fyrd.batch_systems import local
-            if local.queue_test(warn=False):
-                MODE = 'local'
-            else:
-                MODE = None
+            MODE = 'local'
     else:
         MODE = conf_queue
     if MODE is None:

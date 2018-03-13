@@ -234,7 +234,7 @@ class Job(object):
     clean_outputs = _conf.get_option('jobs', 'clean_outputs')
 
     def __init__(self, command, args=None, kwargs=None, name=None, qtype=None,
-                 profile=None, **kwds):
+                 profile=None, queue=None, **kwds):
         """Initialization function arguments.
 
         Parameters
@@ -255,6 +255,8 @@ class Job(object):
             Override the default queue type
         profile : str, optional
             The name of a profile saved in the conf
+        queue : fyrd.queue.Queue, optional
+            An already initiated Queue class to use.
         kwds
             *All other keywords are parsed into cluster keywords by the options
             system.* For available keywords see `fyrd.option_help()`
@@ -271,8 +273,9 @@ class Job(object):
         self.uuid = str(_uuid()).split('-')[0]
 
         # Path handling
-        [kwds, self.runpath,
-         self.outpath, self.scriptpath] = _conf.get_job_paths(kwds)
+        [
+            kwds, self.runpath, self.outpath, self.scriptpath
+        ] = _conf.get_job_paths(kwds)
 
         # Save command
         self.command = command
@@ -282,18 +285,26 @@ class Job(object):
 
         # Get environment
         if not _batch.MODE:
-            _batch.MODE = _batch.get_cluster_environment()
-        self.qtype = qtype if qtype else _batch.MODE
-        self.queue = _queue.Queue(user='self', qtype=self.qtype)
-        self.batch = _batch.get_batch_system(self.qtype)
+            _batch.get_cluster_environment()
+        if not qtype:
+            qtype = _batch.MODE
+        if queue:
+            if not isinstance(queue, _queue.Queue):
+                raise TypeError(
+                    'queue must be fyrd.queue.Queue is {0}'.format(type(queue))
+                )
+            self.queue = queue
+        else:
+            self.queue = _queue.default_queue(qtype)
+        self.batch = _batch.get_batch_system(qtype)
+        self.qtype = qtype
+
         self.state = 'Not_Submitted'
 
         # Save keywords for posterity and parsing
         self.kwds = kwds
 
         self.name = self._update_name(name)
-
-        self.initialize()
 
     ##########################################################################
     #                             Public Methods                             #
@@ -1558,6 +1569,9 @@ class Job(object):
 
     def __repr__(self):
         """Return simple job information."""
+        if not self.initialized:
+            self.initialize()
+        self.update()
         outstr = "Job:{name}<{mode}:{qtype}".format(
             name=self.name, mode=self.kind, qtype=self.qtype)
         if self.submitted:

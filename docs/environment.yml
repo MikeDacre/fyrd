@@ -1,0 +1,13 @@
+name: fyrd-docs
+channels:
+    - conda-forge
+dependencies:
+    - python=3.6
+    - sphinx
+    - psutil
+    - Pyro4
+    - sqlalchemy
+    - dill
+    - tabulate
+    - pip:
+        - tqdm

@@ -1,10 +1,8 @@
 # Requirements for Fyrd
 dill>=0.2.5
-tabulate>=0.7.7
-six>=1.10.0
-tblib>=1.3.0
-tqdm>=4.15.0
-versioneer>=0.18
-Pyro4>=4.62
-sqlalchemy>=1.1.13
 psutil>=5.2
+Pyro4>=4.70
+six>=1.11.0
+tqdm>=4.19.0
+tabulate>=0.8.2
+sqlalchemy>=1.2.0

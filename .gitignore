@@ -1,6 +1,9 @@
 # Ipython
 .ipynb_checkpoints
 
+# Vim
+.*neomake*
+
 # Apple's junk
 .DS_Store
 

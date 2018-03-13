@@ -1,21 +1,33 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import os
+"""
+Instructions to build Fyrd Sphinx documentation.
+"""
 import sys
+import os
+from os import path as pth
+from re import match as rematch
+
+import six
+
+DIR = pth.abspath(os.curdir)
+sys.path.insert(0, pth.dirname(pth.dirname(DIR)))
+
 import fyrd
 
 # -- General configuration ------------------------------------------------
 
 project   = 'Fyrd'
-copyright = '2017, Michael Dacre <mike.dacre@gmail.com>'
+copyright = '2018, Michael Dacre <mike.dacre@gmail.com>'
 author    = 'Michael Dacre <mike.dacre@gmail.com>'
-version   = '0.6'
-release   = fyrd.version
-#  release   = '0.6.2b1'
+version   = rematch('\d+\.\d+\.\d+', fyrd.__version__).group()
+release   = fyrd.__version__
 language  = 'en'
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
+
+on_rtd = os.environ.get('READTHEDOCS') == 'True'
 
 if 'latex' in sys.argv:
     master_doc = 'simple_index'
@@ -27,6 +39,7 @@ source_encoding = 'utf-8'
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
+    'sphinx.ext.intersphinx',
     'sphinx.ext.doctest',
     'sphinx.ext.todo',
     'sphinx.ext.coverage',
@@ -34,8 +47,23 @@ extensions = [
     'sphinx.ext.viewcode',
 ]
 
+napoleon_use_admonition_for_examples = True
+
+intersphinx_mapping = {
+    'sphinx': ('http://www.sphinx-doc.org/en/master/', None),
+    'Pyro4': ('https://pythonhosted.org/Pyro4/', None),
+    'SQLAlchemy': ('http://docs.sqlalchemy.org/en/latest/', None),
+}
+if six.PY3:
+    intersphinx_mapping['python'] = ('https://docs.python.org/3.6/', None)
+else:
+    intersphinx_mapping['python'] = ('https://docs.python.org/2.7/', None)
+
+
 # Autodoc configuration
+autodoc_default_flags = ['show_inheritance', 'autosummary']
 autoclass_content = 'both'
+autodata_content = 'call'
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -76,12 +104,8 @@ todo_include_todos = True
 
 # -- Options for HTML output ----------------------------------------------
 
-on_rtd = os.environ.get('READTHEDOCS') == 'True'
-if on_rtd:
-    html_theme = 'default'
-else:
+if not on_rtd:
     html_theme = 'alabaster'
-    #  html_theme = 'nature'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the

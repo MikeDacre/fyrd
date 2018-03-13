@@ -15,7 +15,7 @@ def test_queue_inspection():
         cfile = fyrd.conf.CONFIG_FILE
         fyrd.conf.CONFIG_FILE = 'conftest'
         fyrd.conf.create_config()
-        fyrd.batch_systems.get_cluster_environment()
+    fyrd.batch_systems.get_cluster_environment(overwrite=True)
     if fyrd.run.which('sbatch'):
         assert fyrd.batch_systems.MODE == 'slurm'
     elif fyrd.run.which('qsub'):
@@ -24,10 +24,10 @@ def test_queue_inspection():
         assert fyrd.batch_systems.MODE == 'local'
     if queue_type != 'auto':
         fyrd.conf.CONFIG_FILE = cfile
+        fyrd.batch_systems.get_cluster_environment(overwrite=True)
+    if os.path.exists('conftest'):
         os.remove('conftest')
-        fyrd.batch_systems.get_cluster_environment()
     assert env == fyrd.batch_systems.MODE
-
 
 
 @pytest.mark.skipif(not env,
