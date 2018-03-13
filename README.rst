@@ -9,6 +9,11 @@ environment!
 Learn more at https://fyrd.science, https://fyrd.rtfd.com, and
 https://github.com/MikeDacre/fyrd
 
+*Note:* Development is currently primarily on the 0.6.2 branch. The master
+branch reflects the highest 0.6.1 version, which is technically more stable than
+0.6.2, but which has serveral bugs fixed by 0.6.2 as well as a constricted
+feature set. Installing via pip will install the 0.6.2 version.
+
 .. image:: http://i.imgur.com/NNbprZH.png
    :alt: fyrd cluster logo — a Saxon shield remeniscent of those used in fyrds
    :target: https://fyrd.readthedocs.org
