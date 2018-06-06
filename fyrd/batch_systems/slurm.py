@@ -256,7 +256,7 @@ def queue_parser(user=None, partition=None):
     # Parse queue info by length
     squeue = [
         tuple(
-            [k[i:i+200].rstrip() for i in range(0, 4000, 400)]
+            [k[i:i+400].rstrip() for i in range(0, 4000, 400)]
         ) for k in _run.cmd(qargs)[1].split('\n')
     ]
     # SLURM sometimes clears the queue extremely fast, so we use sacct
