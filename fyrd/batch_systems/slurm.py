@@ -250,13 +250,20 @@ def queue_parser(user=None, partition=None):
     exit_code : int or Nonw
     """
     nodequery = _re.compile(r'([^\[,]+)(\[[^\[]+\])?')
-    qargs = ['squeue', '-h', '-O',
-             'jobid:400,arraytaskid:400,name:400,userid:400,partition:400,' +
-             'state:400,nodelist:400,numnodes:400,numcpus:400,exit_code:400']
+    fwdth = 400  # Used for fixed-width parsing of squeue
+    fields = [
+        'jobid', 'arraytaskid', 'name', 'userid', 'partition',
+        'state', 'nodelist', 'numnodes', 'numcpus', 'exit_code'
+    ]
+    flen = len(fields)
+    qargs = [
+        'squeue', '-h', '-O',
+        ','.join(['{0}:{1}'.format(field, fwdth) for field in fields])
+    ]
     # Parse queue info by length
     squeue = [
         tuple(
-            [k[i:i+400].rstrip() for i in range(0, 4000, 400)]
+            [k[i:i+fwdth].rstrip() for i in range(0, fwdth*flen, fwdth)]
         ) for k in _run.cmd(qargs)[1].split('\n')
     ]
     # SLURM sometimes clears the queue extremely fast, so we use sacct
