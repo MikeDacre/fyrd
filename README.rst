@@ -2,6 +2,8 @@
 Fyrd
 ####
 
+*Limited dev time*: I am currently no longer working actively on this project because I left the job where I used it extensively. If anyone wishes to take over development, that would be great, please just add a comment to issue #89.
+
 One liner script and function submission to torque or slurm clusters with
 dependency tracking using python. Uses the same syntax irrespective of cluster
 environment!
