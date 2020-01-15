@@ -8,7 +8,7 @@ One liner script and function submission to torque or slurm clusters with
 dependency tracking using python. Uses the same syntax irrespective of cluster
 environment!
 
-Learn more at https://fyrd.science, https://fyrd.rtfd.com, and
+Learn more at https://fyrd.science, https://fyrd.rtfd.io, and
 https://github.com/MikeDacre/fyrd
 
 *Note:* Development is currently primarily on the 0.6.2 branch. The master
